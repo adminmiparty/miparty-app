@@ -1,0 +1,2 @@
+# miparty-app
+MiParty MVP
