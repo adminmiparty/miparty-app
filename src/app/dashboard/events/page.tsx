@@ -148,6 +148,28 @@ export default function EventsPage() {
     }, 1500)
   }
 
+  const handleShareInvitation = async () => {
+    if (!latestEvent?.public_slug) {
+      return
+    }
+
+    const shareUrl = `https://miparty.net/e/${latestEvent.public_slug}`
+    const shareText = `¡Hola! Te comparto la invitación al cumple de ${latestEvent.child_name} 🎉\nAquí puedes ver los detalles y confirmar asistencia:`
+
+    if (navigator.share) {
+      await navigator.share({
+        title: latestEvent.title,
+        text: shareText,
+        url: shareUrl,
+      })
+      return
+    }
+
+    const whatsappText = `${shareText}\n ${shareUrl}`
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer')
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-8">
       <div className="mx-auto w-full max-w-sm">
@@ -167,23 +189,23 @@ export default function EventsPage() {
           {latestEvent ? (
             <div className="mt-4 space-y-1.5 text-sm">
               <p className="text-lg font-bold text-gray-900">{latestEvent.title}</p>
-              <p className="text-gray-700">{`El ${formatSpanishFullDate(latestEvent.event_date)}`}</p>
+              <p className="text-gray-700">{`📅 El ${formatSpanishFullDate(latestEvent.event_date)}`}</p>
               <p className="text-gray-700">
                 {latestEvent.pickup_time
-                  ? `De ${formatTimeValue(latestEvent.start_time)} a ${formatTimeValue(latestEvent.pickup_time)}`
-                  : `A las ${formatTimeValue(latestEvent.start_time)}`}
+                  ? `🕒 De ${formatTimeValue(latestEvent.start_time)} a ${formatTimeValue(latestEvent.pickup_time)}`
+                  : `🕒 A las ${formatTimeValue(latestEvent.start_time)}`}
               </p>
               <p className="text-gray-700">
-                En {latestEvent.location_name ?? 'ubicación'}
+                📍 En {latestEvent.location_name ?? 'ubicación'}
               </p>
               <p className="text-gray-700">
                 {latestEvent.gift_option === 'bizum_pool' && latestEvent.bizum_phone
-                  ? `Regalo en grupo: ${latestEvent.bizum_phone}`
-                  : getGiftLabel(latestEvent.gift_option)}
+                  ? `🎁 Regalo en grupo: ${latestEvent.bizum_phone}`
+                  : `🎁 ${getGiftLabel(latestEvent.gift_option)}`}
               </p>
               {latestEvent.enable_food_options && latestEventFoodOptions.length > 0 ? (
                 <p className="text-gray-700">
-                  {`Opciones de comida: ${latestEventFoodOptions.map((option) => option.label).join(', ')}`}
+                  {`🍽️ Opciones de comida: ${latestEventFoodOptions.map((option) => option.label).join(', ')}`}
                 </p>
               ) : null}
               {latestEvent.organizer_notes ? (
@@ -191,7 +213,7 @@ export default function EventsPage() {
               ) : null}
               <Link
                 href={`/dashboard/events/${latestEvent.id}/edit`}
-                className="mt-2 inline-flex items-center justify-center rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
+                className="mt-2 inline-flex items-center justify-center rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-normal text-gray-800 transition hover:bg-gray-50"
               >
                 Editar evento
               </Link>
@@ -201,23 +223,32 @@ export default function EventsPage() {
           {latestPublicSlug ? (
             <div className="mt-4 rounded-lg border border-yellow-100 bg-yellow-50 p-3">
               <p className="mb-2 text-xs font-medium text-gray-700">Enlace para compartir</p>
-              <div className="rounded-md border border-yellow-200 bg-white px-3 py-2 text-sm text-gray-900">
-                {`miparty.net/e/${latestPublicSlug}`}
+              <div className="flex items-center gap-2 rounded-md border border-yellow-200 bg-white px-2 py-2">
+                <p className="min-w-0 flex-1 truncate text-sm text-gray-900">{`miparty.net/e/${latestPublicSlug}`}</p>
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  aria-label="Copiar enlace"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-base text-gray-700 transition hover:bg-gray-50"
+                >
+                  📋
+                </button>
               </div>
               <button
                 type="button"
-                onClick={handleCopyLink}
-                className="mt-2 inline-flex items-center justify-center rounded-lg bg-yellow-400 px-3 py-2 text-sm font-semibold text-gray-900 transition hover:bg-yellow-500"
+                onClick={handleShareInvitation}
+                className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-yellow-400 px-3 py-2 text-sm font-semibold text-gray-900 transition hover:bg-yellow-500"
               >
-                {copied ? 'Enlace copiado' : 'Copiar enlace'}
+                Compartir invitación
               </button>
+              {copied ? <p className="mt-2 text-xs text-gray-600">Enlace copiado</p> : null}
             </div>
           ) : null}
 
           <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <a
               href="#mis-eventos"
-              className="inline-flex items-center justify-center rounded-lg bg-yellow-400 px-4 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-yellow-500"
+              className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
             >
               Ver mis eventos
             </a>
