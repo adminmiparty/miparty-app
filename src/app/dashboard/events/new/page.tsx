@@ -268,7 +268,9 @@ export default function NewEventPage() {
   const [pickupTime, setPickupTime] = useState('')
 
   const [locationName, setLocationName] = useState('')
-  const [address, setAddress] = useState('')
+  const [locationStreet, setLocationStreet] = useState('')
+  const [locationCity, setLocationCity] = useState('')
+  const [locationPostal, setLocationPostal] = useState('')
   const [googleMapsUrl, setGoogleMapsUrl] = useState('')
 
   const [giftOption, setGiftOption] = useState<GiftOption>('regalo_libre')
@@ -445,7 +447,10 @@ export default function NewEventPage() {
     const trimmedChildName = childName.trim()
     const trimmedEventTitle = eventTitle.trim()
     const trimmedLocationName = locationName.trim()
-    const trimmedAddress = address.trim()
+    const trimmedLocationStreet = locationStreet.trim()
+    const trimmedLocationCity = locationCity.trim()
+    const trimmedLocationPostal = locationPostal.trim()
+    const combinedAddress = `${trimmedLocationStreet}, ${trimmedLocationPostal} ${trimmedLocationCity}`
     const trimmedGoogleMapsUrl = googleMapsUrl.trim()
     const trimmedBizumPhoneNumber = bizumPhoneNumber.trim()
 
@@ -485,8 +490,8 @@ export default function NewEventPage() {
       return
     }
 
-    if (!trimmedLocationName || !trimmedAddress) {
-      setError('El nombre del lugar y la dirección son obligatorios.')
+    if (!trimmedLocationName || !trimmedLocationStreet || !trimmedLocationCity || !trimmedLocationPostal) {
+      setError('El nombre del lugar, la dirección, la ciudad y el código postal son obligatorios.')
       return
     }
 
@@ -524,6 +529,10 @@ export default function NewEventPage() {
 
     const publicSlug = generatePublicSlug(trimmedEventTitle)
     console.log('event insert food toggle', { foodEnabled })
+    const query = encodeURIComponent(`${trimmedLocationStreet}, ${trimmedLocationPostal} ${trimmedLocationCity}, Spain`)
+    const generatedMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`
+    const generatedGoogleMapsUrl = generatedMapsUrl
+    const finalGoogleMapsUrl = trimmedGoogleMapsUrl || generatedGoogleMapsUrl
 
     const { data: insertedEvent, error: eventError } = await supabase
       .from('events')
@@ -536,8 +545,8 @@ export default function NewEventPage() {
         start_time: startTime,
         pickup_time: pickupTime || null,
         location_name: trimmedLocationName,
-        location_address: trimmedAddress,
-        google_maps_url: trimmedGoogleMapsUrl || null,
+        location_address: combinedAddress,
+        google_maps_url: finalGoogleMapsUrl,
         gift_option: giftOption,
         bizum_phone: giftOption === 'bizum_pool' ? `${bizumCountryCode}${trimmedBizumPhoneNumber}` : null,
         enable_food_options: foodEnabled,
@@ -817,18 +826,50 @@ export default function NewEventPage() {
               </div>
 
               <div>
-                <label htmlFor="address" className="mb-1.5 block text-sm font-medium text-gray-900">
+                <label htmlFor="locationStreet" className="mb-1.5 block text-sm font-medium text-gray-900">
                   Dirección *
                 </label>
                 <input
-                  id="address"
+                  id="locationStreet"
                   type="text"
-                  value={address}
-                  onChange={(event) => setAddress(event.target.value)}
+                  value={locationStreet}
+                  onChange={(event) => setLocationStreet(event.target.value)}
                   required
-                  placeholder="Calle, número y ciudad"
+                  placeholder="Calle y número"
                   className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="locationCity" className="mb-1.5 block text-sm font-medium text-gray-900">
+                    Ciudad *
+                  </label>
+                  <input
+                    id="locationCity"
+                    type="text"
+                    value={locationCity}
+                    onChange={(event) => setLocationCity(event.target.value)}
+                    required
+                    placeholder="Ej. Madrid"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="locationPostal" className="mb-1.5 block text-sm font-medium text-gray-900">
+                    Código postal *
+                  </label>
+                  <input
+                    id="locationPostal"
+                    type="text"
+                    value={locationPostal}
+                    onChange={(event) => setLocationPostal(event.target.value)}
+                    required
+                    placeholder="Ej. 28001"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  />
+                </div>
               </div>
 
               <div>
@@ -843,6 +884,9 @@ export default function NewEventPage() {
                   placeholder="https://maps.google.com/..."
                   className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
                 />
+                <p className="mt-1 text-xs text-gray-400">
+                  Si lo dejas vacío, generaremos un enlace usando la dirección, ciudad y código postal.
+                </p>
               </div>
             </div>
 

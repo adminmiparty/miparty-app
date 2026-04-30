@@ -20,6 +20,8 @@ type LatestEvent = {
   start_time: string
   pickup_time: string | null
   location_name: string | null
+  location_address: string | null
+  google_maps_url: string | null
   gift_option: 'sin_regalo' | 'regalo_libre' | 'bizum_pool'
   bizum_phone: string | null
   organizer_notes: string | null
@@ -109,7 +111,7 @@ export default function EventsPage() {
       const { data: latestEvent } = await supabase
         .from('events')
         .select(
-          'id, public_slug, title, child_name, event_date, start_time, pickup_time, location_name, gift_option, bizum_phone, organizer_notes, enable_food_options'
+          'id, public_slug, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_notes, enable_food_options'
         )
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
@@ -210,7 +212,32 @@ export default function EventsPage() {
                   ? `🕒 ${formatTimeValue(latestEvent.start_time)} a ${formatTimeValue(latestEvent.pickup_time)}`
                   : `🕒 A las ${formatTimeValue(latestEvent.start_time)}`}
               </p>
-              <p className="text-gray-700">{`📍 ${latestEvent.location_name ?? 'ubicación'}`}</p>
+              {latestEvent.google_maps_url ? (
+                <>
+                  <a
+                    href={latestEvent.google_maps_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block no-underline"
+                  >
+                    <p className="text-gray-700">{`📍 ${latestEvent.location_name ?? 'ubicación'}`}</p>
+                    <p className="text-sm text-gray-500">{latestEvent.location_address ?? ''}</p>
+                  </a>
+                  <a
+                    href={latestEvent.google_maps_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-xs text-gray-400 no-underline"
+                  >
+                    Ver en Google Maps ↗
+                  </a>
+                </>
+              ) : (
+                <div>
+                  <p className="text-gray-700">{`📍 ${latestEvent.location_name ?? 'ubicación'}`}</p>
+                  <p className="text-sm text-gray-500">{latestEvent.location_address ?? ''}</p>
+                </div>
+              )}
               <p className="text-gray-700">
                 {latestEvent.gift_option === 'regalo_libre'
                   ? '🎁 Regalo libre'
@@ -228,7 +255,10 @@ export default function EventsPage() {
                 </p>
               ) : null}
               {latestEvent.organizer_notes ? (
-                <p className="text-gray-500 italic">{latestEvent.organizer_notes}</p>
+                <div>
+                  <p className="text-gray-700">📓 Mensaje para los invitados</p>
+                  <p className="text-sm text-gray-400 italic">{latestEvent.organizer_notes}</p>
+                </div>
               ) : null}
               <Link
                 href={`/dashboard/events/${latestEvent.id}/edit`}
