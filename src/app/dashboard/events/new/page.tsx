@@ -137,12 +137,15 @@ type InlineTimePickerProps = {
   value: string
   onChange: (value: string) => void
   optional?: boolean
+  minHour?: number
 }
 
-function InlineTimePicker({ value, onChange, optional = false }: InlineTimePickerProps) {
+function InlineTimePicker({ value, onChange, optional = false, minHour = 1 }: InlineTimePickerProps) {
   const parsed = value ? parse24hTime(value) : null
-  const selectedHour = parsed?.hour ?? ''
-  const selectedMinutes = parsed?.minutes ?? ''
+  const [optionalHour, setOptionalHour] = useState(parsed?.hour ?? '')
+  const [optionalMinutes, setOptionalMinutes] = useState(parsed?.minutes ?? '')
+  const selectedHour = optional ? optionalHour : parsed?.hour ?? ''
+  const selectedMinutes = optional ? optionalMinutes : parsed?.minutes ?? '00'
 
   useEffect(() => {
     if (!optional && !value) {
@@ -150,9 +153,23 @@ function InlineTimePicker({ value, onChange, optional = false }: InlineTimePicke
     }
   }, [optional, onChange, value])
 
+  useEffect(() => {
+    if (!optional) {
+      return
+    }
+    if (!value) {
+      return
+    }
+    const nextParsed = parse24hTime(value)
+    setOptionalHour(nextParsed.hour)
+    setOptionalMinutes(nextParsed.minutes)
+  }, [optional, value])
+
   const handleHourChange = (nextHour: string) => {
     if (optional) {
+      setOptionalHour(nextHour)
       if (!nextHour) {
+        setOptionalMinutes('')
         onChange('')
         return
       }
@@ -168,7 +185,11 @@ function InlineTimePicker({ value, onChange, optional = false }: InlineTimePicke
 
   const handleMinutesChange = (nextMinutes: string) => {
     if (optional) {
-      if (!selectedHour || !nextMinutes) {
+      setOptionalMinutes(nextMinutes)
+      if (!selectedHour) {
+        return
+      }
+      if (!nextMinutes) {
         onChange('')
         return
       }
@@ -186,11 +207,13 @@ function InlineTimePicker({ value, onChange, optional = false }: InlineTimePicke
         className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
       >
         {optional ? <option value="">--</option> : null}
-        {Array.from({ length: 23 }, (_, index) => String(index + 1)).map((hour) => (
+        {Array.from({ length: 23 }, (_, index) => index + 1)
+          .filter((hour) => hour >= minHour)
+          .map((hour) => (
           <option key={hour} value={hour}>
             {hour}
           </option>
-        ))}
+          ))}
       </select>
 
       <select
@@ -763,7 +786,12 @@ export default function NewEventPage() {
                     <span className="ml-1 text-xs">(opcional)</span>
                   </label>
                   <div id="pickupTime">
-                    <InlineTimePicker value={pickupTime} onChange={setPickupTime} optional />
+                    <InlineTimePicker
+                      value={pickupTime}
+                      onChange={setPickupTime}
+                      optional
+                      minHour={Number.parseInt(startTime.split(':')[0] || '1', 10)}
+                    />
                   </div>
                 </div>
               </div>
@@ -844,11 +872,11 @@ export default function NewEventPage() {
                       onChange={() => setGiftOption('bizum_pool')}
                       className="h-4 w-4 border-gray-300 text-yellow-500 focus:ring-yellow-400"
                     />
-                    Regalo en grupo
+                    Regalo compartido
                   </label>
                 </div>
                 {giftOption === 'bizum_pool' ? (
-                  <div className="grid grid-cols-[130px_1fr] gap-2">
+                  <div className="flex items-center gap-2">
                     <div>
                       <label htmlFor="bizumCountryCode" className="mb-1.5 block text-sm font-medium text-gray-900">
                         País
@@ -857,13 +885,13 @@ export default function NewEventPage() {
                         id="bizumCountryCode"
                         value={bizumCountryCode}
                         onChange={(event) => setBizumCountryCode(event.target.value)}
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                        className="w-28 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
                       >
                         <option value="+34">🇪🇸 +34</option>
                         <option value="+57">🇨🇴 +57</option>
                       </select>
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <label htmlFor="bizumPhone" className="mb-1.5 block text-sm font-medium text-gray-900">
                         Teléfono *
                       </label>
@@ -904,7 +932,7 @@ export default function NewEventPage() {
                         type="text"
                         value={option}
                         onChange={(event) => updateFoodOption(index, event.target.value)}
-                        placeholder={`Opción ${index + 1}`}
+                        placeholder={index === 0 ? 'Ej. Pizza' : `Opción ${index + 1}`}
                         className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
                       />
                       <button

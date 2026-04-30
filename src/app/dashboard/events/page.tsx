@@ -52,7 +52,22 @@ function getGiftLabel(giftOption: LatestEvent['gift_option']) {
   if (giftOption === 'regalo_libre') {
     return 'Regalo libre'
   }
-  return 'Regalo en grupo'
+  return 'Regalo compartido'
+}
+
+function formatFoodOptions(options: string[]) {
+  if (options.length === 0) {
+    return ''
+  }
+  if (options.length === 1) {
+    return options[0]
+  }
+  if (options.length === 2) {
+    return `${options[0]} o ${options[1]}`
+  }
+  const head = options.slice(0, -1).join(', ')
+  const last = options[options.length - 1]
+  return `${head} o ${last}`
 }
 
 export default function EventsPage() {
@@ -189,23 +204,27 @@ export default function EventsPage() {
           {latestEvent ? (
             <div className="mt-4 space-y-1.5 text-sm">
               <p className="text-lg font-bold text-gray-900">{latestEvent.title}</p>
-              <p className="text-gray-700">{`📅 El ${formatSpanishFullDate(latestEvent.event_date)}`}</p>
+              <p className="text-gray-700">{`📅 ${formatSpanishFullDate(latestEvent.event_date)}`}</p>
               <p className="text-gray-700">
                 {latestEvent.pickup_time
-                  ? `🕒 De ${formatTimeValue(latestEvent.start_time)} a ${formatTimeValue(latestEvent.pickup_time)}`
+                  ? `🕒 ${formatTimeValue(latestEvent.start_time)} a ${formatTimeValue(latestEvent.pickup_time)}`
                   : `🕒 A las ${formatTimeValue(latestEvent.start_time)}`}
               </p>
+              <p className="text-gray-700">{`📍 ${latestEvent.location_name ?? 'ubicación'}`}</p>
               <p className="text-gray-700">
-                📍 En {latestEvent.location_name ?? 'ubicación'}
-              </p>
-              <p className="text-gray-700">
-                {latestEvent.gift_option === 'bizum_pool' && latestEvent.bizum_phone
-                  ? `🎁 Regalo en grupo: ${latestEvent.bizum_phone}`
-                  : `🎁 ${getGiftLabel(latestEvent.gift_option)}`}
+                {latestEvent.gift_option === 'regalo_libre'
+                  ? '🎁 Regalo libre'
+                  : latestEvent.gift_option === 'bizum_pool' && latestEvent.bizum_phone
+                    ? latestEvent.bizum_phone.startsWith('+34')
+                      ? `🎁 Hucha al móvil ${latestEvent.bizum_phone.replace(/^\+\d{2}/, '')} (Bizum)`
+                      : latestEvent.bizum_phone.startsWith('+57')
+                        ? `🎁 Nequi al ${latestEvent.bizum_phone.replace(/^\+\d{2}/, '')}`
+                        : `🎁 ${getGiftLabel(latestEvent.gift_option)}`
+                    : `🎁 ${getGiftLabel(latestEvent.gift_option)}`}
               </p>
               {latestEvent.enable_food_options && latestEventFoodOptions.length > 0 ? (
                 <p className="text-gray-700">
-                  {`🍽️ Opciones de comida: ${latestEventFoodOptions.map((option) => option.label).join(', ')}`}
+                  {`🍽️ ${formatFoodOptions(latestEventFoodOptions.map((option) => option.label))}`}
                 </p>
               ) : null}
               {latestEvent.organizer_notes ? (
