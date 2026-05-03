@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { DayPicker, type Matcher } from 'react-day-picker'
-import { format, startOfDay } from 'date-fns'
+import { addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
 import 'react-day-picker/style.css'
@@ -115,6 +115,20 @@ function formatSpanishWeekday(isoDate: string) {
   return date.toLocaleDateString('es-ES', {
     weekday: 'long',
   })
+}
+
+function parseIsoDateToLocal(isoDate: string) {
+  const [yearPart, monthPart, dayPart] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
+  return new Date(yearPart, monthPart - 1, dayPart)
+}
+
+function getChildAgeOnEventDate(birthDate: Date, eventDate: Date) {
+  let age = eventDate.getFullYear() - birthDate.getFullYear()
+  const monthDiff = eventDate.getMonth() - birthDate.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && eventDate.getDate() < birthDate.getDate())) {
+    age -= 1
+  }
+  return age
 }
 
 function parse24hTime(time24h: string) {
@@ -272,6 +286,15 @@ export default function NewEventPage() {
   const [locationCity, setLocationCity] = useState('')
   const [locationPostal, setLocationPostal] = useState('')
   const [googleMapsUrl, setGoogleMapsUrl] = useState('')
+  const [organizerCountryCode, setOrganizerCountryCode] = useState('+34')
+  const [organizerPhoneNumber, setOrganizerPhoneNumber] = useState('')
+  const [organizerProfilePhoneLoaded, setOrganizerProfilePhoneLoaded] = useState(false)
+  const [hasSavedProfilePhone, setHasSavedProfilePhone] = useState(false)
+  const [savePhoneForFuture, setSavePhoneForFuture] = useState(false)
+
+  const [rsvpDeadlineDays, setRsvpDeadlineDays] = useState('')
+  const [birthdayNumber, setBirthdayNumber] = useState('')
+  const [birthdayNumberUserEdited, setBirthdayNumberUserEdited] = useState(false)
 
   const [giftOption, setGiftOption] = useState<GiftOption>('regalo_libre')
   const [bizumCountryCode, setBizumCountryCode] = useState('+34')
@@ -299,6 +322,23 @@ export default function NewEventPage() {
         return new Date(year, month - 1, day)
       })()
     : undefined
+
+  const rsvpDeadlineDaysParsed = useMemo(() => {
+    const trimmed = rsvpDeadlineDays.trim()
+    if (trimmed === '') {
+      return null
+    }
+    const parsed = Number.parseInt(trimmed, 10)
+    return Number.isNaN(parsed) ? null : parsed
+  }, [rsvpDeadlineDays])
+
+  const rsvpDeadlineHintText = useMemo(() => {
+    if (rsvpDeadlineDaysParsed === null || !parsedEventDate || selectedEventDate === undefined) {
+      return null
+    }
+    const deadline = subDays(selectedEventDate, rsvpDeadlineDaysParsed)
+    return `Es decir, hasta el ${format(deadline, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}`
+  }, [rsvpDeadlineDaysParsed, parsedEventDate, selectedEventDate])
 
   const applyAutoEventTitle = (name: string) => {
     if (eventTitleManuallyEdited) {
@@ -330,6 +370,24 @@ export default function NewEventPage() {
           setError(userError?.message ?? 'No se pudo obtener tu sesión. Inicia sesión de nuevo.')
         }
         return
+      }
+
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('phone')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (isMounted) {
+        setOrganizerProfilePhoneLoaded(true)
+        const profilePhone =
+          userProfile?.phone != null && String(userProfile.phone).trim() !== ''
+            ? String(userProfile.phone).trim()
+            : ''
+        setHasSavedProfilePhone(profilePhone !== '')
+        if (profilePhone !== '') {
+          setOrganizerPhoneNumber(profilePhone)
+        }
       }
 
       const { data, error: childrenError } = await supabase
@@ -367,6 +425,34 @@ export default function NewEventPage() {
       isMounted = false
     }
   }, [supabase])
+
+  useEffect(() => {
+    setBirthdayNumberUserEdited(false)
+  }, [birthDay, birthMonth, birthYear, eventDate])
+
+  useEffect(() => {
+    if (birthdayNumberUserEdited) {
+      return
+    }
+    if (!birthDay || !birthMonth || !birthYear || !eventDate.trim()) {
+      setBirthdayNumber('')
+      return
+    }
+    const parsedBirth = formatDisplayToIsoDate(`${birthDay}/${birthMonth}/${birthYear}`)
+    const parsedEvent = formatDisplayToIsoDate(eventDate)
+    if (!parsedBirth || !parsedEvent) {
+      setBirthdayNumber('')
+      return
+    }
+    const birth = parseIsoDateToLocal(parsedBirth)
+    const event = parseIsoDateToLocal(parsedEvent)
+    const age = getChildAgeOnEventDate(birth, event)
+    if (age < 0 || age > 120) {
+      setBirthdayNumber('')
+      return
+    }
+    setBirthdayNumber(String(age))
+  }, [birthDay, birthMonth, birthYear, eventDate, birthdayNumberUserEdited])
 
   const handleChildSelect = (id: string) => {
     setSelectedChildId(id)
@@ -477,10 +563,10 @@ export default function NewEventPage() {
     }
 
     if (parsedChildBirthDate) {
-      const birthYear = Number.parseInt(parsedChildBirthDate.slice(0, 4), 10)
+      const birthYearValue = Number.parseInt(parsedChildBirthDate.slice(0, 4), 10)
       const currentYear = new Date().getFullYear()
-      if (Number.isNaN(birthYear) || birthYear < 2000 || birthYear > currentYear) {
-        setError('La fecha de nacimiento no es válida. El año debe estar entre 2000 y el año actual.')
+      if (Number.isNaN(birthYearValue) || birthYearValue < 1926 || birthYearValue > currentYear) {
+        setError('La fecha de nacimiento no es válida. El año debe estar entre 1926 y el año actual.')
         return
       }
     }
@@ -493,6 +579,34 @@ export default function NewEventPage() {
     if (!trimmedLocationName || !trimmedLocationStreet || !trimmedLocationCity || !trimmedLocationPostal) {
       setError('El nombre del lugar, la dirección, la ciudad y el código postal son obligatorios.')
       return
+    }
+
+    const trimmedOrganizerPhone = organizerPhoneNumber.trim()
+    if (!trimmedOrganizerPhone) {
+      setError('El número de contacto del organizador es obligatorio.')
+      return
+    }
+
+    const rsvpTrimmed = rsvpDeadlineDays.trim()
+    let rsvpDeadlineDaysValue: number | null = null
+    if (rsvpTrimmed !== '') {
+      const rsvpDays = Number.parseInt(rsvpTrimmed, 10)
+      if (Number.isNaN(rsvpDays) || rsvpDays < 0) {
+        setError('Indica un número válido de días para la confirmación, o déjalo vacío.')
+        return
+      }
+      rsvpDeadlineDaysValue = rsvpDays
+    }
+
+    let birthdayNumberValue: number | null = null
+    const birthdayTrimmed = birthdayNumber.trim()
+    if (birthdayTrimmed !== '') {
+      const birthdayParsed = Number.parseInt(birthdayTrimmed, 10)
+      if (Number.isNaN(birthdayParsed) || birthdayParsed < 1) {
+        setError('El número de cumpleaños no es válido.')
+        return
+      }
+      birthdayNumberValue = birthdayParsed
     }
 
     if (pickupTime && pickupTime <= startTime) {
@@ -527,6 +641,19 @@ export default function NewEventPage() {
       return
     }
 
+    const fullOrganizerPhone = `${organizerCountryCode}${trimmedOrganizerPhone}`
+    if (!hasSavedProfilePhone && savePhoneForFuture) {
+      const { error: saveProfilePhoneError } = await supabase
+        .from('users')
+        .upsert({ id: user.id, phone: fullOrganizerPhone })
+
+      if (saveProfilePhoneError) {
+        setError(saveProfilePhoneError.message)
+        setLoading(false)
+        return
+      }
+    }
+
     const publicSlug = generatePublicSlug(trimmedEventTitle)
     console.log('event insert food toggle', { foodEnabled })
     const query = encodeURIComponent(`${trimmedLocationStreet}, ${trimmedLocationPostal} ${trimmedLocationCity}, Spain`)
@@ -549,6 +676,9 @@ export default function NewEventPage() {
         google_maps_url: finalGoogleMapsUrl,
         gift_option: giftOption,
         bizum_phone: giftOption === 'bizum_pool' ? `${bizumCountryCode}${trimmedBizumPhoneNumber}` : null,
+        rsvp_deadline_days: rsvpDeadlineDaysValue,
+        birthday_number: birthdayNumberValue,
+        organizer_phone: fullOrganizerPhone,
         enable_food_options: foodEnabled,
         organizer_notes: notes.trim() || null,
         public_slug: publicSlug,
@@ -707,7 +837,7 @@ export default function NewEventPage() {
                       >
                         <option value="">--</option>
                         {Array.from(
-                          { length: new Date().getFullYear() - 2000 + 1 },
+                          { length: new Date().getFullYear() - 1926 + 1 },
                           (_, index) => String(new Date().getFullYear() - index)
                         ).map((year) => (
                           <option key={year} value={year}>
@@ -719,6 +849,25 @@ export default function NewEventPage() {
                   </div>
                 </>
               ) : null}
+
+              <div>
+                <label htmlFor="birthdayNumber" className="mb-1.5 block text-sm font-medium text-gray-900">
+                  ¿Qué cumpleaños es? 🎂
+                </label>
+                <input
+                  id="birthdayNumber"
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  value={birthdayNumber}
+                  onChange={(event) => {
+                    setBirthdayNumberUserEdited(true)
+                    setBirthdayNumber(event.target.value)
+                  }}
+                  placeholder="Ej. 5"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                />
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -744,36 +893,85 @@ export default function NewEventPage() {
                   Fecha del evento *
                 </label>
                 <div className="flex w-full justify-center">
-                  <DayPicker
-                    mode="single"
-                    month={currentMonth}
-                    onMonthChange={setCurrentMonth}
-                    selected={selectedEventDate}
-                    onSelect={(date) => {
-                      if (!date) {
-                        return
-                      }
-                      setEventDate(format(date, 'dd/MM/yyyy'))
-                      setCurrentMonth(date)
-                    }}
-                    locale={es}
-                    disabled={{ before: startOfDay(new Date()) } as Matcher}
-                    formatters={{
-                      formatWeekdayName: (date) => {
-                        const labels = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
-                        return labels[date.getDay()]
-                      },
-                    }}
-                    className="scale-90 rounded-lg border border-yellow-100 bg-white p-1 text-sm"
-                    classNames={{
-                      day_selected: 'bg-yellow-400 text-gray-900 rounded-md',
-                      day_today: 'text-yellow-700 font-semibold',
-                    }}
-                  />
+                  <div className="w-full rounded-xl border border-gray-200 bg-white p-2 text-gray-900 shadow-sm">
+                    <div className="flex items-center justify-between mb-2 px-1">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+                        className="p-1 hover:bg-gray-100 rounded-full"
+                      >
+                        ‹
+                      </button>
+                      <span className="font-bold text-gray-900 text-base capitalize">
+                        {format(currentMonth, 'MMMM yyyy', { locale: es })}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                        className="p-1 hover:bg-gray-100 rounded-full"
+                      >
+                        ›
+                      </button>
+                    </div>
+                    <DayPicker
+                      mode="single"
+                      hideNavigation
+                      month={currentMonth}
+                      onMonthChange={setCurrentMonth}
+                      selected={selectedEventDate}
+                      onSelect={(date) => {
+                        if (!date) {
+                          return
+                        }
+                        setEventDate(format(date, 'dd/MM/yyyy'))
+                        setCurrentMonth(date)
+                      }}
+                      locale={es}
+                      disabled={{ before: startOfDay(new Date()) } as Matcher}
+                      formatters={{
+                        formatWeekdayName: (date) => {
+                          const labels = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
+                          return labels[date.getDay()]
+                        },
+                      }}
+                      className="w-full text-sm text-gray-900"
+                      classNames={{
+                        month_caption: 'hidden',
+                        month_grid: 'w-full',
+                        weeks: 'mt-1',
+                        week: 'mt-1',
+                        selected: 'bg-yellow-400 text-gray-900 rounded-full font-bold',
+                        today: 'text-yellow-600 font-bold',
+                        day_button:
+                          'hover:bg-yellow-300 rounded-full w-full h-full transition-colors',
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2">
+              <div className="mt-6 mb-1">
+                <div className="flex items-center gap-2 flex-nowrap">
+                  <label htmlFor="rsvpDeadlineDays" className="whitespace-nowrap text-sm font-medium text-gray-700">
+                    Pueden confirmar hasta
+                  </label>
+                  <input
+                    id="rsvpDeadlineDays"
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={rsvpDeadlineDays}
+                    onChange={(event) => setRsvpDeadlineDays(event.target.value)}
+                    className="w-12 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                  />
+                  <span className="whitespace-nowrap text-sm text-gray-700">días antes del evento</span>
+                </div>
+                {rsvpDeadlineHintText ? (
+                  <p className="mt-2 text-sm text-gray-500">{rsvpDeadlineHintText}</p>
+                ) : null}
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 items-end gap-4 sm:grid-cols-2">
                 <div>
                   <label
                     htmlFor="startTime"
@@ -866,7 +1064,7 @@ export default function NewEventPage() {
                     value={locationPostal}
                     onChange={(event) => setLocationPostal(event.target.value)}
                     required
-                    placeholder="Ej. 28001"
+                    placeholder="00000 si no aplica"
                     className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
                   />
                 </div>
@@ -887,6 +1085,44 @@ export default function NewEventPage() {
                 <p className="mt-1 text-xs text-gray-400">
                   Si lo dejas vacío, generaremos un enlace usando la dirección, ciudad y código postal.
                 </p>
+              </div>
+
+              <div>
+                <label htmlFor="organizerPhone" className="mb-1.5 block text-sm font-medium text-gray-900">
+                  Número de contacto del organizador *
+                </label>
+                <p className="mb-2 text-xs text-gray-500">Los invitados podrán contactarte en este número</p>
+                <div className="flex items-center gap-2">
+                  <select
+                    id="organizerCountryCode"
+                    value={organizerCountryCode}
+                    onChange={(event) => setOrganizerCountryCode(event.target.value)}
+                    className="w-28 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                  >
+                    <option value="+34">🇪🇸 +34</option>
+                    <option value="+57">🇨🇴 +57</option>
+                  </select>
+                  <input
+                    id="organizerPhone"
+                    type="tel"
+                    value={organizerPhoneNumber}
+                    onChange={(event) => setOrganizerPhoneNumber(event.target.value)}
+                    required
+                    placeholder="Ej. 612345678"
+                    className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  />
+                </div>
+                {organizerProfilePhoneLoaded && !hasSavedProfilePhone && organizerPhoneNumber.trim() !== '' ? (
+                  <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-gray-800">
+                    <input
+                      type="checkbox"
+                      checked={savePhoneForFuture}
+                      onChange={(event) => setSavePhoneForFuture(event.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
+                    />
+                    Guardar este número para futuros eventos
+                  </label>
+                ) : null}
               </div>
             </div>
 

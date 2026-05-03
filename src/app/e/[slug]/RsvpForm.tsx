@@ -17,6 +17,7 @@ type Props = {
   locationAddress: string | null
   googleMapsUrl: string | null
   organizerNotes: string | null
+  organizerPhone: string | null
   childName: string
 }
 
@@ -58,6 +59,7 @@ export default function RsvpForm({
   locationAddress,
   googleMapsUrl,
   organizerNotes,
+  organizerPhone,
   childName: eventChildName,
 }: Props) {
   const supabase = createClient()
@@ -156,6 +158,7 @@ export default function RsvpForm({
 
     const trimmedParentName = parentName.trim()
     const trimmedChildName = childName.trim()
+    const trimmedChildLastName = childLastName.trim()
     const trimmedParentEmail = parentEmail.trim()
     const trimmedParentPhone = parentPhone.trim()
     const trimmedFoodPreference = foodPreference.trim()
@@ -172,6 +175,11 @@ export default function RsvpForm({
       return
     }
 
+    if (!trimmedChildLastName) {
+      setError('El apellido es obligatorio.')
+      return
+    }
+
     if (attendance === 'confirmed' && hasFoodOptions && !trimmedFoodPreference) {
       setError('Selecciona una opción de comida.')
       return
@@ -179,12 +187,15 @@ export default function RsvpForm({
 
     setLoading(true)
 
+    const combinedChildName =
+      trimmedChildLastName.length > 0 ? `${trimmedChildName} ${trimmedChildLastName}` : trimmedChildName
+
     const { error: insertError } = await supabase.from('rsvps').insert({
       event_id: eventId,
       guest_parent_name: trimmedParentName,
       guest_parent_email: trimmedParentEmail || null,
       guest_parent_phone: trimmedParentPhone || null,
-      child_name: trimmedChildName,
+      child_name: combinedChildName,
       attendance_status: attendance,
       food_preference: attendance === 'confirmed' && hasFoodOptions ? trimmedFoodPreference || null : null,
       allergy_notes: attendance === 'confirmed' && hasFoodOptions ? trimmedAllergyNotes || null : null,
@@ -344,6 +355,7 @@ END:VCALENDAR`
               <input
                 id="childName"
                 type="text"
+                autoComplete="off"
                 value={childName}
                 onChange={(event) => setChildName(event.target.value)}
                 required
@@ -352,14 +364,15 @@ END:VCALENDAR`
             </div>
 
             <div>
-              <label htmlFor="childLastName" className="mb-1.5 block text-sm font-medium text-gray-400">
-                Apellido (si hace falta)
+              <label htmlFor="childLastName" className="mb-1.5 block text-sm font-medium text-gray-900">
+                Apellido *
               </label>
               <input
                 id="childLastName"
                 type="text"
                 value={childLastName}
                 onChange={(event) => setChildLastName(event.target.value)}
+                required
                 placeholder=""
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
               />

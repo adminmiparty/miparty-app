@@ -2,6 +2,9 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { subDays } from 'date-fns'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
 
 type EventItem = {
@@ -26,6 +29,8 @@ type LatestEvent = {
   bizum_phone: string | null
   organizer_notes: string | null
   enable_food_options: boolean | null
+  birthday_number: number | null
+  rsvp_deadline_days: number | null
 }
 
 type FoodOption = {
@@ -55,6 +60,13 @@ function getGiftLabel(giftOption: LatestEvent['gift_option']) {
     return 'Regalo libre'
   }
   return 'Regalo compartido'
+}
+
+function formatConfirmacionesHastaLabel(eventDateIso: string, daysBefore: number) {
+  const [y, m, d] = eventDateIso.split('-').map((value) => Number.parseInt(value, 10))
+  const eventDay = new Date(y, m - 1, d)
+  const deadline = subDays(eventDay, daysBefore)
+  return `Confirmaciones hasta el ${format(deadline, "EEEE, d 'de' MMMM", { locale: es })}`
 }
 
 function formatFoodOptions(options: string[]) {
@@ -111,7 +123,7 @@ export default function EventsPage() {
       const { data: latestEvent } = await supabase
         .from('events')
         .select(
-          'id, public_slug, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_notes, enable_food_options'
+          'id, public_slug, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_notes, enable_food_options, birthday_number, rsvp_deadline_days'
         )
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
@@ -206,7 +218,19 @@ export default function EventsPage() {
           {latestEvent ? (
             <div className="mt-4 space-y-1.5 text-sm">
               <p className="text-lg font-bold text-gray-900">{latestEvent.title}</p>
+              {latestEvent.birthday_number != null && latestEvent.birthday_number > 0 ? (
+                <p className="text-sm text-gray-500">
+                  {`${latestEvent.birthday_number}º cumpleaños de ${latestEvent.child_name}`}
+                </p>
+              ) : null}
               <p className="text-gray-700">{`📅 ${formatSpanishFullDate(latestEvent.event_date)}`}</p>
+              {latestEvent.rsvp_deadline_days != null &&
+              latestEvent.rsvp_deadline_days > 0 &&
+              Number.isFinite(latestEvent.rsvp_deadline_days) ? (
+                <p className="text-sm text-gray-500">
+                  {formatConfirmacionesHastaLabel(latestEvent.event_date, latestEvent.rsvp_deadline_days)}
+                </p>
+              ) : null}
               <p className="text-gray-700">
                 {latestEvent.pickup_time
                   ? `🕒 ${formatTimeValue(latestEvent.start_time)} a ${formatTimeValue(latestEvent.pickup_time)}`

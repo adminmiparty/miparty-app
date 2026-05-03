@@ -1,3 +1,6 @@
+import { subDays } from 'date-fns'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
 import RsvpForm from './RsvpForm'
 
@@ -15,6 +18,9 @@ type EventDetails = {
   bizum_phone: string | null
   enable_food_options: boolean | null
   organizer_notes: string | null
+  rsvp_deadline_days: number | null
+  organizer_phone: string | null
+  birthday_number: number | null
 }
 
 type FoodOption = {
@@ -67,6 +73,13 @@ function getGiftLine(event: EventDetails) {
   return '🎁 Regalo compartido'
 }
 
+function formatRsvpDeadlineMessage(eventDate: string, daysBefore: number) {
+  const [yearPart, monthPart, dayPart] = eventDate.split('-').map((value) => Number.parseInt(value, 10))
+  const eventDay = new Date(yearPart, monthPart - 1, dayPart)
+  const deadline = subDays(eventDay, daysBefore)
+  return `Puedes confirmar hasta el ${format(deadline, "EEEE, d 'de' MMMM", { locale: es })}`
+}
+
 export default async function PublicEventPage({
   params,
 }: {
@@ -78,7 +91,7 @@ export default async function PublicEventPage({
   const { data: event } = await supabase
     .from('events')
     .select(
-      'id, child_name, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, enable_food_options, organizer_notes'
+      'id, child_name, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, enable_food_options, organizer_notes, rsvp_deadline_days, organizer_phone, birthday_number'
     )
     .eq('public_slug', slug)
     .maybeSingle<EventDetails>()
@@ -108,8 +121,18 @@ export default async function PublicEventPage({
       <div className="mx-auto w-full max-w-md space-y-4">
         <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
           <p className="text-2xl font-bold text-gray-900">{`¡Estás invitado/a al ${event.title}! 🎉`}</p>
+          {event.birthday_number != null && event.birthday_number > 0 ? (
+            <p className="mt-1 text-sm text-gray-500">{`${event.birthday_number}º cumpleaños de ${event.child_name}`}</p>
+          ) : null}
           <div className="mt-3 space-y-1.5 text-sm">
             <p className="text-gray-700">{`📅 ${formatSpanishFullDate(event.event_date)}`}</p>
+            {event.rsvp_deadline_days != null &&
+            event.rsvp_deadline_days > 0 &&
+            Number.isFinite(event.rsvp_deadline_days) ? (
+              <p className="text-sm text-gray-500">
+                {formatRsvpDeadlineMessage(event.event_date, event.rsvp_deadline_days)}
+              </p>
+            ) : null}
             <p className="text-gray-700">
               {event.pickup_time
                 ? `🕒 ${formatTimeValue(event.start_time)} a ${formatTimeValue(event.pickup_time)}`
@@ -165,6 +188,7 @@ export default async function PublicEventPage({
           locationAddress={event.location_address}
           googleMapsUrl={event.google_maps_url}
           organizerNotes={event.organizer_notes}
+          organizerPhone={event.organizer_phone}
           childName={event.child_name}
         />
       </div>
