@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 
 type AttendanceStatus = 'confirmed' | 'declined' | 'maybe'
 
-type Props = {
+type RsvpFormInnerProps = {
   eventId: string
   foodOptions: { label: string }[]
   hasFoodOptions: boolean
@@ -19,6 +19,16 @@ type Props = {
   organizerNotes: string | null
   organizerPhone: string | null
   childName: string
+  isPreview?: boolean
+  rsvpDeadline?: string | null
+}
+
+type RsvpFormProps = RsvpFormInnerProps & {
+  isPreview?: boolean
+}
+
+function capitalizeFirst(str: string) {
+  return str.charAt(0).toUpperCase() + str.slice(1)
 }
 
 function normalizeTime(rawTime: string) {
@@ -47,7 +57,7 @@ function buildCalendarDateTime(dateIso: string, timeValue: string) {
   return `${y}${m}${d}T${hh}${mm}${ss}`
 }
 
-export default function RsvpForm({
+function RsvpFormInner({
   eventId,
   foodOptions,
   hasFoodOptions,
@@ -61,7 +71,9 @@ export default function RsvpForm({
   organizerNotes,
   organizerPhone,
   childName: eventChildName,
-}: Props) {
+  isPreview = false,
+  rsvpDeadline = null,
+}: RsvpFormInnerProps) {
   const supabase = createClient()
   const [attendance, setAttendance] = useState<AttendanceStatus | null>(null)
   const [childName, setChildName] = useState('')
@@ -75,6 +87,7 @@ export default function RsvpForm({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submittedStatus, setSubmittedStatus] = useState<AttendanceStatus | null>(null)
+  const [previewSubmitted, setPreviewSubmitted] = useState(false)
   const [showCalendarOptions, setShowCalendarOptions] = useState(false)
 
   const submitText = useMemo(() => {
@@ -98,10 +111,13 @@ export default function RsvpForm({
       return 'Gracias por avisar 🙌'
     }
     if (attendance === 'maybe') {
-      return 'Sin problema 👍 puedes decidir más tarde'
+      if (rsvpDeadline) {
+        return `Sin problema 👍 puedes decidir más tarde.\nEsperamos tu respuesta hasta el ${capitalizeFirst(rsvpDeadline)}.`
+      }
+      return 'Sin problema 👍 puedes decidir más tarde.'
     }
     return ''
-  }, [attendance])
+  }, [attendance, rsvpDeadline])
 
   const placeholderText = useMemo(() => {
     if (attendance === 'confirmed') {
@@ -150,6 +166,11 @@ export default function RsvpForm({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (isPreview) {
+      setError(null)
+      setPreviewSubmitted(true)
+      return
+    }
     if (!attendance) {
       return
     }
@@ -239,6 +260,18 @@ END:VCALENDAR`
     URL.revokeObjectURL(url)
   }
 
+  const previewSummaryScrollButton = isPreview ? (
+    <button
+      type="button"
+      onClick={() => {
+        window.location.href = '/dashboard/events'
+      }}
+      className="mt-4 w-full rounded-xl border border-yellow-200 bg-yellow-50 py-3 text-sm font-bold text-yellow-800 hover:bg-yellow-100"
+    >
+      Volver a compartir invitación
+    </button>
+  ) : null
+
   if (submittedStatus === 'confirmed') {
     return (
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
@@ -301,8 +334,27 @@ END:VCALENDAR`
     )
   }
 
+  if (isPreview && previewSubmitted) {
+    return (
+      <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
+        <div className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-center text-sm text-yellow-800">
+          👁️ Vista previa — puedes probar las respuestas, pero no se guardará nada
+        </div>
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-xl px-4 py-3 text-sm">
+          Esto es una vista previa. No se ha guardado ninguna respuesta.
+        </div>
+        {previewSummaryScrollButton}
+      </section>
+    )
+  }
+
   return (
     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
+      {isPreview ? (
+        <div className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-center text-sm text-yellow-800">
+          👁️ Vista previa — puedes probar las respuestas, pero no se guardará nada
+        </div>
+      ) : null}
       <h2 className="text-base font-semibold text-gray-900">Confirma tu asistencia</h2>
 
       <div className="mt-3 flex gap-2">
@@ -343,7 +395,9 @@ END:VCALENDAR`
         </button>
       </div>
 
-      {attendance ? <p className="py-2 text-center text-sm text-gray-500">{helperText}</p> : null}
+      {attendance ? (
+        <p className="whitespace-pre-line py-2 text-center text-sm text-gray-500">{helperText}</p>
+      ) : null}
 
       {attendance ? (
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
@@ -463,15 +517,22 @@ END:VCALENDAR`
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
           ) : null}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex w-full items-center justify-center rounded-lg bg-yellow-400 px-3 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-yellow-500 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {loading ? 'Enviando...' : submitText}
-          </button>
+          {!isPreview ? (
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex w-full items-center justify-center rounded-lg bg-yellow-400 px-3 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-yellow-500 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {loading ? 'Enviando...' : submitText}
+            </button>
+          ) : null}
         </form>
       ) : null}
+      {previewSummaryScrollButton}
     </section>
   )
+}
+
+export default function RsvpForm({ isPreview, ...inner }: RsvpFormProps) {
+  return <RsvpFormInner {...inner} isPreview={isPreview} />
 }

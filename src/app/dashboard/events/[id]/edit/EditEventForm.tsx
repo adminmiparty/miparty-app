@@ -13,22 +13,52 @@ type Child = {
   id: string
   name: string
   birth_date: string | null
-  last_name?: string | null
 }
 
 function getChildDropdownDisplayName(child: Child) {
-  const first = child.name.trim()
-  const last = (child.last_name ?? '').trim()
-  if (!last) {
-    return first
-  }
-  if (first.toLowerCase().endsWith(last.toLowerCase())) {
-    return first
-  }
-  return `${first} ${last}`.trim()
+  return child.name.trim()
 }
 
 type GiftOption = 'regalo_libre' | 'bizum_pool'
+
+export type EditEventFormInitialValues = {
+  child_name: string
+  child_birth_date_display: string
+  event_title: string
+  event_date_display: string
+  start_time: string
+  pickup_time: string
+  rsvp_deadline_days_display: string
+  location_name: string
+  location_street: string
+  location_city: string
+  location_postal: string
+  google_maps_url: string
+  gift_option: GiftOption
+  bizum_country_code: string
+  bizum_phone_national: string
+  organizer_country_code: string
+  organizer_phone_national: string
+  food_enabled: boolean
+  food_option_labels: string[]
+  organizer_notes: string
+  birthday_number_display: string
+  event_had_organizer_phone: boolean
+}
+
+function parseE164ForFormClient(full: string): { code: string; national: string } {
+  const t = full.trim()
+  if (!t) {
+    return { code: '+34', national: '' }
+  }
+  if (t.startsWith('+34')) {
+    return { code: '+34', national: t.slice(3).trim() }
+  }
+  if (t.startsWith('+57')) {
+    return { code: '+57', national: t.slice(3).trim() }
+  }
+  return { code: '+34', national: t.replace(/^\+\d{1,3}/, '').trim() }
+}
 const NEW_CHILD_VALUE = '__new__'
 const SPANISH_MONTHS = [
   'Enero',
@@ -259,23 +289,14 @@ function InlineTimePicker({ value, onChange, optional = false, minHour = 1 }: In
   )
 }
 
-function generatePublicSlug(title: string) {
-  const base = title
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-
-  const randomSuffix = Math.random().toString(36).slice(2, 6)
-  return `${base || 'evento'}-${randomSuffix}`
+type EditEventFormProps = {
+  eventId: string
+  initialValues: EditEventFormInitialValues
 }
 
-export default function NewEventPage() {
+export default function EditEventForm({ eventId, initialValues }: EditEventFormProps) {
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const [children, setChildren] = useState<Child[]>([])
   const [childrenLoading, setChildrenLoading] = useState(true)
@@ -288,36 +309,51 @@ export default function NewEventPage() {
   const [birthMonth, setBirthMonth] = useState('')
   const [birthYear, setBirthYear] = useState('')
 
-  const [eventTitle, setEventTitle] = useState('')
-  const [eventTitleManuallyEdited, setEventTitleManuallyEdited] = useState(false)
-  const [eventDate, setEventDate] = useState(() => format(addDays(new Date(), 1), 'dd/MM/yyyy'))
-  const [currentMonth, setCurrentMonth] = useState(() => addDays(new Date(), 1))
-  const [startTime, setStartTime] = useState('')
-  const [pickupTime, setPickupTime] = useState('')
+  const [eventTitle, setEventTitle] = useState(initialValues.event_title)
+  const [eventTitleManuallyEdited, setEventTitleManuallyEdited] = useState(true)
+  const [eventDate, setEventDate] = useState(
+    initialValues.event_date_display || format(addDays(new Date(), 1), 'dd/MM/yyyy')
+  )
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const parsedIso = formatDisplayToIsoDate(initialValues.event_date_display)
+    if (!parsedIso) {
+      return addDays(new Date(), 1)
+    }
+    const [y, m, d] = parsedIso.split('-').map((value) => Number.parseInt(value, 10))
+    return new Date(y, m - 1, d)
+  })
+  const [startTime, setStartTime] = useState(initialValues.start_time || '17:00')
+  const [pickupTime, setPickupTime] = useState(initialValues.pickup_time)
 
-  const [locationName, setLocationName] = useState('')
-  const [locationStreet, setLocationStreet] = useState('')
-  const [locationCity, setLocationCity] = useState('')
-  const [locationPostal, setLocationPostal] = useState('')
-  const [googleMapsUrl, setGoogleMapsUrl] = useState('')
-  const [organizerCountryCode, setOrganizerCountryCode] = useState('+34')
-  const [organizerPhoneNumber, setOrganizerPhoneNumber] = useState('')
+  const [locationName, setLocationName] = useState(initialValues.location_name)
+  const [locationStreet, setLocationStreet] = useState(initialValues.location_street)
+  const [locationCity, setLocationCity] = useState(initialValues.location_city)
+  const [locationPostal, setLocationPostal] = useState(initialValues.location_postal)
+  const [googleMapsUrl, setGoogleMapsUrl] = useState(initialValues.google_maps_url)
+  const [organizerCountryCode, setOrganizerCountryCode] = useState(initialValues.organizer_country_code)
+  const [organizerPhoneNumber, setOrganizerPhoneNumber] = useState(initialValues.organizer_phone_national)
   const [organizerProfilePhoneLoaded, setOrganizerProfilePhoneLoaded] = useState(false)
   const [hasSavedProfilePhone, setHasSavedProfilePhone] = useState(false)
   const [savePhoneForFuture, setSavePhoneForFuture] = useState(false)
 
-  const [rsvpDeadlineDays, setRsvpDeadlineDays] = useState('1')
-  const [birthdayNumber, setBirthdayNumber] = useState('')
-  const [birthdayNumberUserEdited, setBirthdayNumberUserEdited] = useState(false)
+  const [rsvpDeadlineDays, setRsvpDeadlineDays] = useState(
+    initialValues.rsvp_deadline_days_display === '' ? '' : initialValues.rsvp_deadline_days_display
+  )
+  const [birthdayNumber, setBirthdayNumber] = useState(initialValues.birthday_number_display)
+  const [birthdayNumberUserEdited, setBirthdayNumberUserEdited] = useState(
+    initialValues.birthday_number_display.trim() !== ''
+  )
 
-  const [giftOption, setGiftOption] = useState<GiftOption>('regalo_libre')
-  const [bizumCountryCode, setBizumCountryCode] = useState('+34')
-  const [bizumPhoneNumber, setBizumPhoneNumber] = useState('')
+  const [giftOption, setGiftOption] = useState<GiftOption>(initialValues.gift_option)
+  const [bizumCountryCode, setBizumCountryCode] = useState(initialValues.bizum_country_code)
+  const [bizumPhoneNumber, setBizumPhoneNumber] = useState(initialValues.bizum_phone_national)
 
-  const [foodEnabled, setFoodEnabled] = useState(false)
-  const [foodOptions, setFoodOptions] = useState<string[]>([''])
+  const [foodEnabled, setFoodEnabled] = useState(initialValues.food_enabled)
+  const [foodOptions, setFoodOptions] = useState<string[]>(() =>
+    initialValues.food_option_labels.length > 0 ? [...initialValues.food_option_labels] : ['']
+  )
 
-  const [notes, setNotes] = useState('')
+  const [notes, setNotes] = useState(initialValues.organizer_notes)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -404,14 +440,17 @@ export default function NewEventPage() {
             ? String(userProfile.phone).trim()
             : ''
         setHasSavedProfilePhone(profilePhone !== '')
-        if (profilePhone !== '') {
-          setOrganizerPhoneNumber(profilePhone)
+        const keepEventOrganizer = initialValues.event_had_organizer_phone
+        if (!keepEventOrganizer && profilePhone !== '') {
+          const parsed = parseE164ForFormClient(profilePhone)
+          setOrganizerCountryCode(parsed.code)
+          setOrganizerPhoneNumber(parsed.national)
         }
       }
 
       const { data, error: childrenError } = await supabase
         .from('children')
-        .select('id, name, birth_date, last_name')
+        .select('id, name, birth_date')
         .eq('user_id', user.id)
         .order('name', { ascending: true })
 
@@ -422,10 +461,45 @@ export default function NewEventPage() {
         } else {
           const loadedChildren = (data ?? []) as Child[]
           setChildren(loadedChildren)
-          setSelectedChildId('')
-          setChildName('')
-          setChildLastName('')
-          syncChildBirthDateFromDisplayValue('')
+
+          const targetName = initialValues.child_name.trim().toLowerCase()
+          const birthIso =
+            initialValues.child_birth_date_display.trim() === ''
+              ? null
+              : formatDisplayToIsoDate(initialValues.child_birth_date_display)
+
+          let matched: Child | null = null
+          for (const c of loadedChildren) {
+            const display = getChildDropdownDisplayName(c).trim().toLowerCase()
+            if (display !== targetName) {
+              continue
+            }
+            if (birthIso && c.birth_date && c.birth_date !== birthIso) {
+              continue
+            }
+            matched = c
+            break
+          }
+
+          if (matched) {
+            setSelectedChildId(matched.id)
+            setChildName(matched.name)
+            setChildLastName('')
+            syncChildBirthDateFromDisplayValue(
+              matched.birth_date ? formatIsoToDisplayDate(matched.birth_date) : ''
+            )
+          } else {
+            setSelectedChildId(NEW_CHILD_VALUE)
+            const parts = initialValues.child_name.trim().split(/\s+/)
+            setChildName(parts[0] ?? '')
+            setChildLastName(parts.slice(1).join(' '))
+            syncChildBirthDateFromDisplayValue(initialValues.child_birth_date_display)
+          }
+
+          if (initialValues.birthday_number_display.trim() !== '') {
+            setBirthdayNumberUserEdited(true)
+            setBirthdayNumber(initialValues.birthday_number_display)
+          }
         }
         setChildrenLoading(false)
       }
@@ -643,7 +717,7 @@ export default function NewEventPage() {
     }
 
     if (giftOption === 'bizum_pool' && !trimmedBizumPhoneNumber) {
-      setError('Si eliges Regalo Colectivo, el teléfono es obligatorio.')
+      setError('Si eliges Regalo compartido, el teléfono es obligatorio.')
       return
     }
 
@@ -682,17 +756,13 @@ export default function NewEventPage() {
       }
     }
 
-    const publicSlug = generatePublicSlug(trimmedEventTitle)
-    console.log('event insert food toggle', { foodEnabled })
     const query = encodeURIComponent(`${trimmedLocationStreet}, ${trimmedLocationPostal} ${trimmedLocationCity}, Spain`)
     const generatedMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`
-    const generatedGoogleMapsUrl = generatedMapsUrl
-    const finalGoogleMapsUrl = trimmedGoogleMapsUrl || generatedGoogleMapsUrl
+    const finalGoogleMapsUrl = trimmedGoogleMapsUrl || generatedMapsUrl
 
-    const { data: insertedEvent, error: eventError } = await supabase
+    const { error: eventError } = await supabase
       .from('events')
-      .insert({
-        user_id: user.id,
+      .update({
         child_name: trimmedChildName,
         child_birth_date: parsedChildBirthDate || null,
         title: trimmedEventTitle,
@@ -709,20 +779,27 @@ export default function NewEventPage() {
         organizer_phone: fullOrganizerPhone,
         enable_food_options: foodEnabled,
         organizer_notes: notes.trim() || null,
-        public_slug: publicSlug,
       })
-      .select('id')
-      .single()
+      .eq('id', eventId)
+      .eq('user_id', user.id)
 
-    if (eventError || !insertedEvent) {
-      setError(eventError?.message ?? 'No se pudo crear el evento.')
+    if (eventError) {
+      setError(eventError.message ?? 'No se pudo guardar el evento.')
+      setLoading(false)
+      return
+    }
+
+    const { error: deleteFoodError } = await supabase.from('event_food_options').delete().eq('event_id', eventId)
+
+    if (deleteFoodError) {
+      setError(deleteFoodError.message)
       setLoading(false)
       return
     }
 
     if (foodEnabled && normalizedFoodOptions.length > 0) {
       const optionRows = normalizedFoodOptions.map((option) => ({
-        event_id: insertedEvent.id,
+        event_id: eventId,
         label: option,
       }))
 
@@ -735,20 +812,6 @@ export default function NewEventPage() {
       }
     }
 
-    if (isNewChildSelection) {
-      const { error: childInsertError } = await supabase.from('children').insert({
-        user_id: user.id,
-        name: trimmedChildName,
-        birth_date: parsedChildBirthDate || null,
-      })
-
-      if (childInsertError) {
-        setError(childInsertError.message)
-        setLoading(false)
-        return
-      }
-    }
-
     router.push('/dashboard/events')
   }
 
@@ -756,8 +819,8 @@ export default function NewEventPage() {
     <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-6">
       <div className="mx-auto w-full max-w-sm pb-8">
         <div className="mb-5 flex items-center justify-between">
-          <Link href="/dashboard" className="inline-flex items-center text-sm font-medium text-yellow-600 hover:text-yellow-700">
-            ← Volver al panel
+          <Link href="/dashboard/events" className="inline-flex items-center text-sm font-medium text-yellow-600 hover:text-yellow-700">
+            ← Volver a mis eventos
           </Link>
           <p className="font-bold text-yellow-500">MiParty</p>
         </div>
@@ -774,7 +837,8 @@ export default function NewEventPage() {
 
         <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
           <div className="mb-5">
-            <p className="text-sm text-gray-500">Completa los datos y crea tu evento en minutos.</p>
+            <h1 className="text-lg font-semibold text-gray-900">Editar evento</h1>
+            <p className="mt-1 text-sm text-gray-500">Actualiza los datos de tu evento.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -1357,7 +1421,7 @@ export default function NewEventPage() {
               disabled={loading}
               className="w-full rounded-lg bg-yellow-400 px-4 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-yellow-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? 'Creando evento...' : 'Crear evento'}
+              {loading ? 'Guardando...' : 'Guardar cambios'}
             </button>
           </form>
         </section>

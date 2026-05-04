@@ -37,6 +37,10 @@ type FoodOption = {
   label: string
 }
 
+function capitalizeFirst(str: string) {
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
 function formatSpanishFullDate(isoDate: string) {
   const [year, month, day] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
   const date = new Date(year, month - 1, day)
@@ -218,12 +222,7 @@ export default function EventsPage() {
           {latestEvent ? (
             <div className="mt-4 space-y-1.5 text-sm">
               <p className="text-lg font-bold text-gray-900">{latestEvent.title}</p>
-              {latestEvent.birthday_number != null && latestEvent.birthday_number > 0 ? (
-                <p className="text-sm text-gray-500">
-                  {`${latestEvent.birthday_number}º cumpleaños de ${latestEvent.child_name}`}
-                </p>
-              ) : null}
-              <p className="text-gray-700">{`📅 ${formatSpanishFullDate(latestEvent.event_date)}`}</p>
+              <p className="text-gray-700">{`📅 ${capitalizeFirst(formatSpanishFullDate(latestEvent.event_date))}`}</p>
               {latestEvent.rsvp_deadline_days != null &&
               latestEvent.rsvp_deadline_days > 0 &&
               Number.isFinite(latestEvent.rsvp_deadline_days) ? (
@@ -245,13 +244,13 @@ export default function EventsPage() {
                     className="block no-underline"
                   >
                     <p className="text-gray-700">{`📍 ${latestEvent.location_name ?? 'ubicación'}`}</p>
-                    <p className="text-sm text-gray-500">{latestEvent.location_address ?? ''}</p>
+                    <p className="pl-6 text-sm text-gray-500">{latestEvent.location_address ?? ''}</p>
                   </a>
                   <a
                     href={latestEvent.google_maps_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block text-xs text-gray-400 no-underline"
+                    className="block pl-6 text-xs text-gray-400 no-underline"
                   >
                     Ver en Google Maps ↗
                   </a>
@@ -259,7 +258,7 @@ export default function EventsPage() {
               ) : (
                 <div>
                   <p className="text-gray-700">{`📍 ${latestEvent.location_name ?? 'ubicación'}`}</p>
-                  <p className="text-sm text-gray-500">{latestEvent.location_address ?? ''}</p>
+                  <p className="pl-6 text-sm text-gray-500">{latestEvent.location_address ?? ''}</p>
                 </div>
               )}
               <p className="text-gray-700">
@@ -281,7 +280,7 @@ export default function EventsPage() {
               {latestEvent.organizer_notes ? (
                 <div>
                   <p className="text-gray-700">📓 Mensaje para los invitados</p>
-                  <p className="text-sm text-gray-400 italic">{latestEvent.organizer_notes}</p>
+                  <p className="mt-2 text-sm text-gray-400 italic">{latestEvent.organizer_notes}</p>
                 </div>
               ) : null}
               <Link
@@ -307,6 +306,12 @@ export default function EventsPage() {
                   📋
                 </button>
               </div>
+              <Link
+                href={`/e/${latestPublicSlug}?preview=true`}
+                className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"
+              >
+                Ver invitación
+              </Link>
               <button
                 type="button"
                 onClick={handleShareInvitation}
