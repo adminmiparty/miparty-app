@@ -311,13 +311,21 @@ export default function NewEventPage() {
   const [giftOption, setGiftOption] = useState<GiftOption>('regalo_libre')
   const [bizumCountryCode, setBizumCountryCode] = useState('+34')
   const [bizumPhoneNumber, setBizumPhoneNumber] = useState('')
+  const [showGift, setShowGift] = useState(false)
+  const [giftActivated, setGiftActivated] = useState(false)
 
   const [foodEnabled, setFoodEnabled] = useState(false)
   const [foodOptions, setFoodOptions] = useState<string[]>([''])
+  const [showFood, setShowFood] = useState(false)
+  const [foodActivated, setFoodActivated] = useState(false)
 
   const [invitationImageUrl, setInvitationImageUrl] = useState<string | null>(null)
   const [imageUploading, setImageUploading] = useState(false)
+  const [showImage, setShowImage] = useState(false)
+  const [imageActivated, setImageActivated] = useState(false)
   const [notes, setNotes] = useState('')
+  const [showNotes, setShowNotes] = useState(false)
+  const [notesActivated, setNotesActivated] = useState(false)
   const [invitationTheme, setInvitationTheme] = useState<ThemeKey>('yellow')
 
   const [loading, setLoading] = useState(false)
@@ -729,16 +737,18 @@ export default function NewEventPage() {
       return
     }
 
-    if (giftOption === 'bizum_pool' && !trimmedBizumPhoneNumber) {
+    const isGiftActive = showGift || giftActivated
+    if (isGiftActive && giftOption === 'bizum_pool' && !trimmedBizumPhoneNumber) {
       setError('Si eliges Regalo Colectivo, el teléfono es obligatorio.')
       return
     }
 
-    const normalizedFoodOptions = foodEnabled
+    const isFoodActive = showFood || foodActivated
+    const normalizedFoodOptions = isFoodActive && foodEnabled
       ? foodOptions.map((option) => option.trim()).filter((option) => option.length > 0)
       : []
 
-    if (foodEnabled && normalizedFoodOptions.length === 0) {
+    if (isFoodActive && foodEnabled && normalizedFoodOptions.length === 0) {
       setError('Añade al menos una opción de comida o desactiva esta sección.')
       return
     }
@@ -770,7 +780,7 @@ export default function NewEventPage() {
     }
 
     const publicSlug = generatePublicSlug(trimmedEventTitle)
-    console.log('event insert food toggle', { foodEnabled })
+    console.log('event insert food toggle', { foodEnabled, isFoodActive })
     const query = encodeURIComponent(`${trimmedLocationStreet}, ${trimmedLocationPostal} ${trimmedLocationCity}, Spain`)
     const generatedMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`
     const generatedGoogleMapsUrl = generatedMapsUrl
@@ -789,15 +799,16 @@ export default function NewEventPage() {
         location_name: trimmedLocationName,
         location_address: combinedAddress,
         google_maps_url: finalGoogleMapsUrl,
-        gift_option: giftOption,
-        bizum_phone: giftOption === 'bizum_pool' ? `${bizumCountryCode}${trimmedBizumPhoneNumber}` : null,
+        gift_option: isGiftActive ? giftOption : 'regalo_libre',
+        bizum_phone:
+          isGiftActive && giftOption === 'bizum_pool' ? `${bizumCountryCode}${trimmedBizumPhoneNumber}` : null,
         rsvp_deadline_days: rsvpDeadlineDaysValue,
         birthday_number: birthdayNumberValue,
         organizer_phone: fullOrganizerPhone,
-        enable_food_options: foodEnabled,
-        organizer_notes: notes.trim() || null,
+        enable_food_options: isFoodActive ? foodEnabled : false,
+        organizer_notes: showNotes || notesActivated ? notes.trim() || null : null,
         invitation_theme: invitationTheme,
-        invitation_image_url: invitationImageUrl,
+        invitation_image_url: showImage || imageActivated ? invitationImageUrl : null,
         public_slug: publicSlug,
       })
       .select('id')
@@ -809,7 +820,7 @@ export default function NewEventPage() {
       return
     }
 
-    if (foodEnabled && normalizedFoodOptions.length > 0) {
+    if (isFoodActive && foodEnabled && normalizedFoodOptions.length > 0) {
       const optionRows = normalizedFoodOptions.map((option) => ({
         event_id: insertedEvent.id,
         label: option,
@@ -1326,161 +1337,279 @@ export default function NewEventPage() {
               </div>
             </div>
 
-            <div className="space-y-4">
-              <h2 className="text-base font-semibold text-gray-900">Regalo</h2>
-
-              <fieldset className="space-y-3">
-                <div className="flex flex-wrap gap-4">
-                  <label className="flex items-center gap-2 text-sm text-gray-800">
-                    <input
-                      type="radio"
-                      name="giftOption"
-                      value="regalo_libre"
-                      checked={giftOption === 'regalo_libre'}
-                      onChange={() => setGiftOption('regalo_libre')}
-                      className={`h-4 w-4 border-gray-300 ${activePreviewTheme.selection}`}
-                    />
-                    Regalo libre
-                  </label>
-
-                  <label className="flex items-center gap-2 text-sm text-gray-800">
-                    <input
-                      type="radio"
-                      name="giftOption"
-                      value="bizum_pool"
-                      checked={giftOption === 'bizum_pool'}
-                      onChange={() => setGiftOption('bizum_pool')}
-                      className={`h-4 w-4 border-gray-300 ${activePreviewTheme.selection}`}
-                    />
-                    Regalo compartido
-                  </label>
+            {!showGift ? (
+              <div className="border border-gray-200 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Regalo</p>
+                    <p className="text-xs text-gray-400">Añade información de regalo opcional.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowGift(true)
+                      setGiftActivated(true)
+                    }}
+                    className="text-sm text-yellow-600 font-medium hover:underline"
+                  >
+                    Añadir
+                  </button>
                 </div>
-                {giftOption === 'bizum_pool' ? (
-                  <div className="flex items-center gap-2">
-                    <div>
-                      <label htmlFor="bizumCountryCode" className="mb-1.5 block text-sm font-medium text-gray-900">
-                        País
-                      </label>
-                      <select
-                        id="bizumCountryCode"
-                        value={bizumCountryCode}
-                        onChange={(event) => setBizumCountryCode(event.target.value)}
-                        className="w-28 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
-                      >
-                        <option value="+34">🇪🇸 +34</option>
-                        <option value="+57">🇨🇴 +57</option>
-                      </select>
-                    </div>
-                    <div className="flex-1">
-                      <label htmlFor="bizumPhone" className="mb-1.5 block text-sm font-medium text-gray-900">
-                        Teléfono *
-                      </label>
+              </div>
+            ) : (
+              <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-gray-900">Regalo</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowGift(false)}
+                    className="text-xs text-gray-400 hover:text-gray-600"
+                  >
+                    Quitar
+                  </button>
+                </div>
+                <fieldset className="space-y-3">
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2 text-sm text-gray-800">
                       <input
-                        id="bizumPhone"
-                        type="tel"
-                        value={bizumPhoneNumber}
-                        onChange={(event) => setBizumPhoneNumber(event.target.value)}
-                        required
-                        placeholder="Ej. 612345678"
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                        type="radio"
+                        name="giftOption"
+                        value="regalo_libre"
+                        checked={giftOption === 'regalo_libre'}
+                        onChange={() => setGiftOption('regalo_libre')}
+                        className={`h-4 w-4 border-gray-300 ${activePreviewTheme.selection}`}
                       />
+                      Regalo libre
+                    </label>
+
+                    <label className="flex items-center gap-2 text-sm text-gray-800">
+                      <input
+                        type="radio"
+                        name="giftOption"
+                        value="bizum_pool"
+                        checked={giftOption === 'bizum_pool'}
+                        onChange={() => setGiftOption('bizum_pool')}
+                        className={`h-4 w-4 border-gray-300 ${activePreviewTheme.selection}`}
+                      />
+                      Regalo compartido
+                    </label>
+                  </div>
+                  {giftOption === 'bizum_pool' ? (
+                    <div className="flex items-center gap-2">
+                      <div>
+                        <label htmlFor="bizumCountryCode" className="mb-1.5 block text-sm font-medium text-gray-900">
+                          País
+                        </label>
+                        <select
+                          id="bizumCountryCode"
+                          value={bizumCountryCode}
+                          onChange={(event) => setBizumCountryCode(event.target.value)}
+                          className="w-28 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                        >
+                          <option value="+34">🇪🇸 +34</option>
+                          <option value="+57">🇨🇴 +57</option>
+                        </select>
+                      </div>
+                      <div className="flex-1">
+                        <label htmlFor="bizumPhone" className="mb-1.5 block text-sm font-medium text-gray-900">
+                          Teléfono *
+                        </label>
+                        <input
+                          id="bizumPhone"
+                          type="tel"
+                          value={bizumPhoneNumber}
+                          onChange={(event) => setBizumPhoneNumber(event.target.value)}
+                          required
+                          placeholder="Ej. 612345678"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                        />
+                      </div>
                     </div>
+                  ) : null}
+                </fieldset>
+              </div>
+            )}
+
+            {!showFood ? (
+              <div className="border border-gray-200 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Opciones de comida</p>
+                    <p className="text-xs text-gray-400">Añade opciones de comida si lo necesitas.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowFood(true)
+                      setFoodActivated(true)
+                    }}
+                    className="text-sm text-yellow-600 font-medium hover:underline"
+                  >
+                    Añadir
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-gray-900">Opciones de comida</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowFood(false)}
+                    className="text-xs text-gray-400 hover:text-gray-600"
+                  >
+                    Quitar
+                  </button>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-gray-800">
+                  <input
+                    type="checkbox"
+                    checked={foodEnabled}
+                    onChange={(event) => toggleFoodOptions(event.target.checked)}
+                    className={`h-4 w-4 rounded border-gray-300 ${activePreviewTheme.selection}`}
+                  />
+                  Añadir opciones de comida
+                </label>
+
+                {foodEnabled ? (
+                  <div className="space-y-3">
+                    {foodOptions.map((option, index) => (
+                      <div key={`food-option-${index}`} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={option}
+                          onChange={(event) => updateFoodOption(index, event.target.value)}
+                          placeholder={index === 0 ? 'Ej. Pizza' : `Opción ${index + 1}`}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeFoodOption(index)}
+                          className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={addFoodOption}
+                      className="w-full rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2.5 text-sm font-medium text-yellow-700 transition hover:bg-yellow-100"
+                    >
+                      Añadir opción
+                    </button>
                   </div>
                 ) : null}
-
-              </fieldset>
-            </div>
-
-            <div className="space-y-4">
-              <h2 className="text-base font-semibold text-gray-900">Opciones de comida</h2>
-
-              <label className="flex items-center gap-2 text-sm text-gray-800">
-                <input
-                  type="checkbox"
-                  checked={foodEnabled}
-                  onChange={(event) => toggleFoodOptions(event.target.checked)}
-                  className={`h-4 w-4 rounded border-gray-300 ${activePreviewTheme.selection}`}
-                />
-                Añadir opciones de comida
-              </label>
-
-              {foodEnabled ? (
-                <div className="space-y-3">
-                  {foodOptions.map((option, index) => (
-                    <div key={`food-option-${index}`} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={option}
-                        onChange={(event) => updateFoodOption(index, event.target.value)}
-                        placeholder={index === 0 ? 'Ej. Pizza' : `Opción ${index + 1}`}
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeFoodOption(index)}
-                        className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
-                      >
-                        Quitar
-                      </button>
-                    </div>
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={addFoodOption}
-                    className="w-full rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2.5 text-sm font-medium text-yellow-700 transition hover:bg-yellow-100"
-                  >
-                    Añadir opción
-                  </button>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="space-y-4">
-              <h2 className="text-base font-semibold text-gray-900">Imagen de la invitación</h2>
-              <p className="text-sm text-gray-600">
-                Puedes subir una imagen creada en Canva, ChatGPT u otra herramienta.
-              </p>
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={handleInvitationImageChange}
-                disabled={imageUploading}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
-              />
-              {imageUploading ? <p className="text-sm text-gray-500">Subiendo imagen...</p> : null}
-              {invitationImageUrl ? (
-                <div className="space-y-2">
-                  <img
-                    src={invitationImageUrl}
-                    alt="Invitación"
-                    className="w-full rounded-xl object-cover max-h-64"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setInvitationImageUrl(null)}
-                    className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
-                  >
-                    Quitar imagen
-                  </button>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="space-y-4">
-              <h2 className="text-base font-semibold text-gray-900">Notas para los invitados</h2>
-
-              <div>
-                <textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                  rows={4}
-                  placeholder="Información útil o mensaje especial para tus invitados"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
-                />
               </div>
-            </div>
+            )}
+
+            {!showImage ? (
+              <div className="border border-gray-200 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Imagen de la invitación</p>
+                    <p className="text-xs text-gray-400">
+                      Puedes subir una imagen creada en Canva, ChatGPT u otra herramienta.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowImage(true)
+                      setImageActivated(true)
+                    }}
+                    className="text-sm text-yellow-600 font-medium hover:underline"
+                  >
+                    Añadir
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-gray-900">Imagen de la invitación</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowImage(false)}
+                    className="text-xs text-gray-400 hover:text-gray-600"
+                  >
+                    Quitar
+                  </button>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Puedes subir una imagen creada en Canva, ChatGPT u otra herramienta.
+                </p>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleInvitationImageChange}
+                  disabled={imageUploading}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+                {imageUploading ? <p className="text-sm text-gray-500">Subiendo imagen...</p> : null}
+                {invitationImageUrl ? (
+                  <div className="space-y-2">
+                    <img
+                      src={invitationImageUrl}
+                      alt="Invitación"
+                      className="w-full rounded-xl object-cover max-h-64"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setInvitationImageUrl(null)}
+                      className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                    >
+                      Quitar imagen
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {!showNotes ? (
+              <div className="border border-gray-200 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Notas para los invitados</p>
+                    <p className="text-xs text-gray-400">Añade un mensaje opcional para tus invitados.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNotes(true)
+                      setNotesActivated(true)
+                    }}
+                    className="text-sm text-yellow-600 font-medium hover:underline"
+                  >
+                    Añadir
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-gray-900">Notas para los invitados</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowNotes(false)}
+                    className="text-xs text-gray-400 hover:text-gray-600"
+                  >
+                    Quitar
+                  </button>
+                </div>
+                <div>
+                  <textarea
+                    id="notes"
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    rows={4}
+                    placeholder="Información útil o mensaje especial para tus invitados"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
