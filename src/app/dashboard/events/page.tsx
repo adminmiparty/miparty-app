@@ -6,6 +6,7 @@ import { subDays } from 'date-fns'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
+import { getTheme } from '@/lib/themes'
 
 type EventItem = {
   id: string
@@ -31,6 +32,7 @@ type LatestEvent = {
   enable_food_options: boolean | null
   birthday_number: number | null
   rsvp_deadline_days: number | null
+  invitation_theme: string | null
 }
 
 type FoodOption = {
@@ -97,6 +99,39 @@ export default function EventsPage() {
   const [latestEvent, setLatestEvent] = useState<LatestEvent | null>(null)
   const [latestEventFoodOptions, setLatestEventFoodOptions] = useState<FoodOption[]>([])
   const [copied, setCopied] = useState(false)
+  const theme = getTheme(latestEvent?.invitation_theme)
+  const pageBgMap: Record<string, string> = {
+    yellow: 'from-yellow-50 to-white',
+    pink: 'from-pink-50 to-white',
+    blue: 'from-blue-50 to-white',
+    green: 'from-green-50 to-white',
+    purple: 'from-purple-50 to-white',
+  }
+  const shareButtonClassMap: Record<string, string> = {
+    yellow: 'bg-yellow-400 hover:bg-yellow-500 text-gray-900',
+    pink: 'bg-pink-400 hover:bg-pink-500 text-white',
+    blue: 'bg-blue-400 hover:bg-blue-500 text-white',
+    green: 'bg-green-400 hover:bg-green-500 text-white',
+    purple: 'bg-purple-400 hover:bg-purple-500 text-white',
+  }
+  const progressAccentMap: Record<string, string> = {
+    yellow: 'bg-yellow-400',
+    pink: 'bg-pink-400',
+    blue: 'bg-blue-400',
+    green: 'bg-green-400',
+    purple: 'bg-purple-400',
+  }
+  const themeKeyByLabel: Record<string, string> = {
+    Amarillo: 'yellow',
+    Rosa: 'pink',
+    Azul: 'blue',
+    Verde: 'green',
+    Lila: 'purple',
+  }
+  const resolvedThemeKey = latestEvent?.invitation_theme ?? themeKeyByLabel[theme.label] ?? 'yellow'
+  const pageBg = pageBgMap[resolvedThemeKey] ?? pageBgMap.yellow
+  const shareButtonClass = shareButtonClassMap[resolvedThemeKey] ?? shareButtonClassMap.yellow
+  const progressAccentClass = progressAccentMap[resolvedThemeKey] ?? progressAccentMap.yellow
 
   useEffect(() => {
     let isMounted = true
@@ -127,7 +162,7 @@ export default function EventsPage() {
       const { data: latestEvent } = await supabase
         .from('events')
         .select(
-          'id, public_slug, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_notes, enable_food_options, birthday_number, rsvp_deadline_days'
+          'id, public_slug, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_notes, enable_food_options, birthday_number, rsvp_deadline_days, invitation_theme'
         )
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
@@ -204,14 +239,14 @@ export default function EventsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-8">
+    <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-8`}>
       <div className="mx-auto w-full max-w-sm">
         <div className="mb-4 rounded-xl border border-yellow-100 bg-white/80 p-3">
           <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
             <span>Paso 2 de 2 — Compartir invitación</span>
           </div>
           <div className="h-2 w-full rounded-full bg-yellow-100">
-            <div className="h-2 w-full rounded-full bg-yellow-400" />
+            <div className={`h-2 w-full rounded-full ${progressAccentClass}`} />
           </div>
         </div>
 
@@ -315,7 +350,7 @@ export default function EventsPage() {
               <button
                 type="button"
                 onClick={handleShareInvitation}
-                className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-yellow-400 px-3 py-2 text-sm font-semibold text-gray-900 transition hover:bg-yellow-500"
+                className={`mt-3 inline-flex w-full items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold transition ${shareButtonClass}`}
               >
                 Compartir invitación
               </button>

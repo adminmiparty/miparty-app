@@ -129,6 +129,12 @@ export default function SignupPage() {
                 value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
                 required
+                onInvalid={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
+                }}
+                onInput={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('')
+                }}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
                 placeholder="Tu nombre"
               />
@@ -145,6 +151,12 @@ export default function SignupPage() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
+                onInvalid={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
+                }}
+                onInput={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('')
+                }}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
                 placeholder="tu@email.com"
               />
@@ -162,6 +174,12 @@ export default function SignupPage() {
                 onChange={(event) => setPassword(event.target.value)}
                 minLength={6}
                 required
+                onInvalid={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
+                }}
+                onInput={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('')
+                }}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
                 placeholder="Minimo 6 caracteres"
               />

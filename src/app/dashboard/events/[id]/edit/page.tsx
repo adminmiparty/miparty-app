@@ -1,5 +1,6 @@
 import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { type ThemeKey } from '@/lib/themes'
 import EditEventForm, { type EditEventFormInitialValues } from './EditEventForm'
 
 function formatIsoToDisplayDate(isoDate: string | null) {
@@ -19,19 +20,31 @@ function parseLocationAddress(combined: string | null): {
   postal: string
   city: string
 } {
-  if (!combined?.trim()) {
-    return { street: '', postal: '', city: '' }
+  let locationStreet = ''
+  let locationCity = ''
+  let locationPostal = ''
+
+  if (combined) {
+    const postalMatch = combined.match(/(\d{5})/)
+    if (postalMatch && postalMatch.index !== undefined) {
+      locationPostal = postalMatch[1]
+      // Everything before the postal code = street
+      locationStreet = combined
+        .slice(0, postalMatch.index)
+        .replace(/,\s*$/, '') // remove trailing comma
+        .trim()
+      // Everything after the postal code = city
+      locationCity = combined
+        .slice(postalMatch.index + 5)
+        .replace(/^[\s,]+/, '') // remove leading comma/spaces
+        .trim()
+    } else {
+      // No postal code found — put everything in street
+      locationStreet = combined
+    }
   }
-  const locationAddress = combined.trim()
-  // location_address format: "street, postal city"
-  // Example: "C. del Tomillar 12-30, 28042 Madrid"
-  const parts = locationAddress.split(',')
-  const street = parts[0]?.trim() ?? ''
-  const postalCity = parts.slice(1).join(',').trim() // everything after first comma
-  const postalCityParts = postalCity.split(' ').filter(Boolean)
-  const postal = postalCityParts[0] ?? ''
-  const city = postalCityParts.slice(1).join(' ') ?? ''
-  return { street, postal, city }
+
+  return { street: locationStreet, postal: locationPostal, city: locationCity }
 }
 
 function parseE164ForForm(full: string | null): { code: string; national: string } {
@@ -80,6 +93,8 @@ type DbEventRow = {
   organizer_phone: string | null
   enable_food_options: boolean | null
   organizer_notes: string | null
+  invitation_theme: ThemeKey | null
+  invitation_image_url: string | null
 }
 
 function normalizeGiftOption(raw: string | null): EditEventFormInitialValues['gift_option'] {
@@ -104,7 +119,7 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
   const { data: event, error: eventError } = await supabase
     .from('events')
     .select(
-      'id, user_id, child_name, child_birth_date, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes'
+      'id, user_id, child_name, child_birth_date, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url'
     )
     .eq('id', id)
     .eq('user_id', user.id)
@@ -155,7 +170,14 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
         ? String(event.birthday_number)
         : '',
     event_had_organizer_phone: organizer.national.trim() !== '',
+    invitation_theme: event.invitation_theme ?? 'yellow',
   }
 
-  return <EditEventForm eventId={event.id} initialValues={initialValues} />
+  return (
+    <EditEventForm
+      eventId={event.id}
+      initialValues={initialValues}
+      initialInvitationImageUrl={event.invitation_image_url}
+    />
+  )
 }

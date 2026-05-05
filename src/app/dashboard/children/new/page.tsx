@@ -10,6 +10,7 @@ export default function NewChildPage() {
   const supabase = createClient()
 
   const [name, setName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [birthDate, setBirthDate] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -33,6 +34,7 @@ export default function NewChildPage() {
     const { error: insertError } = await supabase.from('children').insert({
       user_id: user.id,
       name: name.trim(),
+      last_name: lastName.trim() || null,
       birth_date: birthDate,
     })
 
@@ -65,20 +67,36 @@ export default function NewChildPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="childName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                Nombre del niño o de la niña
-              </label>
-              <input
-                id="childName"
-                type="text"
-                autoComplete="name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
-                placeholder="Ej. Sofía"
-              />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="childName" className="mb-1.5 block text-sm font-medium text-gray-900">
+                  Nombre del niño o de la niña
+                </label>
+                <input
+                  id="childName"
+                  type="text"
+                  autoComplete="name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  required
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  placeholder="Ej. Sofía"
+                />
+              </div>
+              <div>
+                <label htmlFor="childLastName" className="mb-1.5 block text-sm font-medium text-gray-900">
+                  Apellido del niño/a
+                </label>
+                <input
+                  id="childLastName"
+                  type="text"
+                  autoComplete="family-name"
+                  value={lastName}
+                  onChange={(event) => setLastName(event.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  placeholder="Ej. García"
+                />
+              </div>
             </div>
 
             <div>

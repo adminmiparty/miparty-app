@@ -1,3 +1,5 @@
+import { type getTheme } from '@/lib/themes'
+
 export type EventRecapProps = {
   title: string
   childName: string
@@ -14,6 +16,8 @@ export type EventRecapProps = {
   foodOptions: { label: string }[]
   hasFoodOptions: boolean
   organizerNotes: string | null
+  invitationImageUrl?: string | null
+  theme: ReturnType<typeof getTheme>
 }
 
 function formatTimeValue(time: string) {
@@ -52,6 +56,8 @@ export default function EventRecap({
   foodOptions,
   hasFoodOptions,
   organizerNotes,
+  invitationImageUrl,
+  theme: _theme,
 }: EventRecapProps) {
   const headline =
     birthdayNumber != null && birthdayNumber > 0 && Number.isFinite(birthdayNumber)
@@ -60,7 +66,14 @@ export default function EventRecap({
 
   return (
     <>
-      <p className="text-2xl font-bold text-gray-900">{headline}</p>
+      {invitationImageUrl ? (
+        <img
+          src={invitationImageUrl}
+          alt="Invitación"
+          className="w-full rounded-xl object-cover max-h-72 mb-4"
+        />
+      ) : null}
+      <p className="text-center text-2xl font-bold text-gray-900">{headline}</p>
       <div className="mt-3 space-y-1.5 text-sm">
         <p className="text-gray-700">{`📅 ${eventDate}`}</p>
         {rsvpDeadline ? (

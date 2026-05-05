@@ -1,7 +1,9 @@
 'use client'
 
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { getTheme } from '@/lib/themes'
 
 type AttendanceStatus = 'confirmed' | 'declined' | 'maybe'
 
@@ -21,6 +23,7 @@ type RsvpFormInnerProps = {
   childName: string
   isPreview?: boolean
   rsvpDeadline?: string | null
+  theme?: ReturnType<typeof getTheme>
 }
 
 type RsvpFormProps = RsvpFormInnerProps & {
@@ -73,7 +76,10 @@ function RsvpFormInner({
   childName: eventChildName,
   isPreview = false,
   rsvpDeadline = null,
+  theme,
 }: RsvpFormInnerProps) {
+  const router = useRouter()
+  const activeTheme = theme ?? getTheme()
   const supabase = createClient()
   const [attendance, setAttendance] = useState<AttendanceStatus | null>(null)
   const [childName, setChildName] = useState('')
@@ -89,6 +95,16 @@ function RsvpFormInner({
   const [submittedStatus, setSubmittedStatus] = useState<AttendanceStatus | null>(null)
   const [previewSubmitted, setPreviewSubmitted] = useState(false)
   const [showCalendarOptions, setShowCalendarOptions] = useState(false)
+  const childNameInputRef = useRef<HTMLInputElement | null>(null)
+  const formFieldsRef = useRef<HTMLFormElement | null>(null)
+  const messageRef = useRef<HTMLTextAreaElement>(null)
+
+  function handleMessageInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const el = e.target
+    el.style.height = 'auto'
+    el.style.height = el.scrollHeight + 'px'
+    setExtraNotes(e.target.value)
+  }
 
   const submitText = useMemo(() => {
     if (attendance === 'confirmed') {
@@ -105,7 +121,7 @@ function RsvpFormInner({
 
   const helperText = useMemo(() => {
     if (attendance === 'confirmed') {
-      return '🎉 ¡Genial! Confirma los detalles abajo'
+      return '🎉 ¡Genial! Confirma los detalles abajo.'
     }
     if (attendance === 'declined') {
       return 'Gracias por avisar 🙌'
@@ -264,13 +280,31 @@ END:VCALENDAR`
     <button
       type="button"
       onClick={() => {
-        window.location.href = '/dashboard/events'
+        router.push('/dashboard/events')
       }}
-      className="mt-4 w-full rounded-xl border border-yellow-200 bg-yellow-50 py-3 text-sm font-bold text-yellow-800 hover:bg-yellow-100"
+      className="mt-3 mb-3 w-full rounded-lg border border-yellow-500 bg-white py-3 text-sm font-bold text-gray-900 transition hover:bg-yellow-50"
     >
-      Volver a compartir invitación
+      Volver y compartir invitación
     </button>
   ) : null
+
+  const previewHelperBlock = isPreview ? (
+    <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm text-center rounded-xl px-4 py-3 whitespace-pre-line">
+      {'👁️ Vista previa — así podrán responder tus invitados.\nPuedes probarlo con tranquilidad — nada se guardará.'}
+    </div>
+  ) : null
+
+  const handleAttendanceSelect = (nextStatus: AttendanceStatus) => {
+    const shouldDeselect = attendance === nextStatus
+    setAttendance(shouldDeselect ? null : nextStatus)
+    if (!shouldDeselect) {
+      setTimeout(() => {
+        const scrollTarget = formFieldsRef.current ?? childNameInputRef.current
+        scrollTarget?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        childNameInputRef.current?.focus()
+      }, 50)
+    }
+  }
 
   if (submittedStatus === 'confirmed') {
     return (
@@ -334,36 +368,20 @@ END:VCALENDAR`
     )
   }
 
-  if (isPreview && previewSubmitted) {
-    return (
-      <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
-        <div className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-center text-sm text-yellow-800">
-          👁️ Vista previa — puedes probar las respuestas, pero no se guardará nada
-        </div>
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-xl px-4 py-3 text-sm">
-          Esto es una vista previa. No se ha guardado ninguna respuesta.
-        </div>
-        {previewSummaryScrollButton}
-      </section>
-    )
-  }
-
   return (
     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
-      {isPreview ? (
-        <div className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-center text-sm text-yellow-800">
-          👁️ Vista previa — puedes probar las respuestas, pero no se guardará nada
-        </div>
-      ) : null}
+      {previewSummaryScrollButton}
+      {previewHelperBlock}
+      {isPreview ? <div className="mt-5" /> : null}
       <h2 className="text-base font-semibold text-gray-900">Confirma tu asistencia</h2>
 
       <div className="mt-3 flex gap-2">
         <button
           type="button"
-          onClick={() => setAttendance('confirmed')}
+          onClick={() => handleAttendanceSelect('confirmed')}
           className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
             attendance === 'confirmed'
-              ? 'border-yellow-400 bg-yellow-400 text-gray-900'
+              ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
               : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
           }`}
         >
@@ -372,10 +390,10 @@ END:VCALENDAR`
 
         <button
           type="button"
-          onClick={() => setAttendance('declined')}
+          onClick={() => handleAttendanceSelect('declined')}
           className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
             attendance === 'declined'
-              ? 'border-yellow-400 bg-yellow-400 text-gray-900'
+              ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
               : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
           }`}
         >
@@ -384,10 +402,10 @@ END:VCALENDAR`
 
         <button
           type="button"
-          onClick={() => setAttendance('maybe')}
+          onClick={() => handleAttendanceSelect('maybe')}
           className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
             attendance === 'maybe'
-              ? 'border-yellow-400 bg-yellow-400 text-gray-900'
+              ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
               : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
           }`}
         >
@@ -395,12 +413,12 @@ END:VCALENDAR`
         </button>
       </div>
 
-      {attendance ? (
-        <p className="whitespace-pre-line py-2 text-center text-sm text-gray-500">{helperText}</p>
-      ) : null}
+      <div className="h-10 flex items-center justify-center py-2 text-center text-gray-500">
+        <p className={`whitespace-pre-line ${attendance === 'maybe' ? 'text-xs' : 'text-sm'}`}>{helperText}</p>
+      </div>
 
       {attendance ? (
-        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+        <form ref={formFieldsRef} onSubmit={handleSubmit} className="mt-4 space-y-3">
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label htmlFor="childName" className="mb-1.5 block text-sm font-medium text-gray-900">
@@ -408,12 +426,19 @@ END:VCALENDAR`
               </label>
               <input
                 id="childName"
+                ref={childNameInputRef}
                 type="text"
                 autoComplete="off"
                 value={childName}
                 onChange={(event) => setChildName(event.target.value)}
                 required
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                onInvalid={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
+                }}
+                onInput={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('')
+                }}
+                className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ${activeTheme.accent} transition focus:border-gray-300 focus:ring-2`}
               />
             </div>
 
@@ -427,8 +452,14 @@ END:VCALENDAR`
                 value={childLastName}
                 onChange={(event) => setChildLastName(event.target.value)}
                 required
+                onInvalid={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
+                }}
+                onInput={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('')
+                }}
                 placeholder=""
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ${activeTheme.accent} transition placeholder:text-gray-400 focus:border-gray-300 focus:ring-2`}
               />
             </div>
           </div>
@@ -463,7 +494,7 @@ END:VCALENDAR`
                 value={allergyNotes}
                 onChange={(event) => setAllergyNotes(event.target.value)}
                 placeholder="Ej. Sin gluten, alergia a frutos secos..."
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ${activeTheme.accent} transition placeholder:text-gray-400 focus:border-gray-300 focus:ring-2`}
               />
             </div>
           ) : null}
@@ -478,7 +509,13 @@ END:VCALENDAR`
               value={parentName}
               onChange={(event) => setParentName(event.target.value)}
               required
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+              onInvalid={(e) => {
+                (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
+              }}
+              onInput={(e) => {
+                (e.target as HTMLInputElement).setCustomValidity('')
+              }}
+              className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ${activeTheme.accent} transition focus:border-gray-300 focus:ring-2`}
             />
           </div>
 
@@ -493,7 +530,13 @@ END:VCALENDAR`
                 value={parentPhone}
                 onChange={(event) => setParentPhone(event.target.value)}
                 required
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                onInvalid={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
+                }}
+                onInput={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('')
+                }}
+                className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ${activeTheme.accent} transition focus:border-gray-300 focus:ring-2`}
               />
             </div>
           ) : null}
@@ -503,13 +546,14 @@ END:VCALENDAR`
               Mensaje para el organizador (opcional)
             </label>
             <textarea
+              ref={messageRef}
               id="extraNotes"
               value={extraNotes}
-              onChange={(event) => setExtraNotes(event.target.value)}
+              onChange={handleMessageInput}
               placeholder={placeholderText}
-              rows={2}
-              style={{ resize: 'none' }}
-              className="h-16 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+              rows={4}
+              style={{ minHeight: '100px', maxHeight: '250px', resize: 'none' }}
+              className={`h-10 w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ${activeTheme.accent} transition placeholder:text-gray-400 focus:border-gray-300 focus:ring-2`}
             />
           </div>
 
@@ -521,14 +565,22 @@ END:VCALENDAR`
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex w-full items-center justify-center rounded-lg bg-yellow-400 px-3 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-yellow-500 disabled:cursor-not-allowed disabled:opacity-70"
+              className={`inline-flex w-full items-center justify-center rounded-lg ${activeTheme.button} px-3 py-2.5 text-sm font-semibold text-gray-900 transition ${activeTheme.buttonHover} disabled:cursor-not-allowed disabled:opacity-70`}
             >
               {loading ? 'Enviando...' : submitText}
             </button>
           ) : null}
         </form>
       ) : null}
-      {previewSummaryScrollButton}
+      {isPreview && attendance ? (
+        <button
+          type="button"
+          disabled
+          className="w-full bg-gray-200 text-gray-400 font-semibold py-3 rounded-xl text-sm cursor-not-allowed opacity-60"
+        >
+          {submitText}
+        </button>
+      ) : null}
     </section>
   )
 }

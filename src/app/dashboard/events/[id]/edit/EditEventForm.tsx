@@ -1,22 +1,29 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { type ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
 import { DayPicker, type Matcher } from 'react-day-picker'
 import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
+import { themes, type ThemeKey } from '@/lib/themes'
 import 'react-day-picker/style.css'
 
 type Child = {
   id: string
   name: string
   birth_date: string | null
+  last_name: string | null
 }
 
 function getChildDropdownDisplayName(child: Child) {
-  return child.name.trim()
+  const first = child.name.trim()
+  const last = (child.last_name ?? '').trim()
+  if (!last) {
+    return first
+  }
+  return `${first} ${last}`.trim()
 }
 
 type GiftOption = 'regalo_libre' | 'bizum_pool'
@@ -44,6 +51,7 @@ export type EditEventFormInitialValues = {
   organizer_notes: string
   birthday_number_display: string
   event_had_organizer_phone: boolean
+  invitation_theme: ThemeKey
 }
 
 function parseE164ForFormClient(full: string): { code: string; national: string } {
@@ -292,9 +300,14 @@ function InlineTimePicker({ value, onChange, optional = false, minHour = 1 }: In
 type EditEventFormProps = {
   eventId: string
   initialValues: EditEventFormInitialValues
+  initialInvitationImageUrl?: string | null
 }
 
-export default function EditEventForm({ eventId, initialValues }: EditEventFormProps) {
+export default function EditEventForm({
+  eventId,
+  initialValues,
+  initialInvitationImageUrl = null,
+}: EditEventFormProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
@@ -353,10 +366,49 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
     initialValues.food_option_labels.length > 0 ? [...initialValues.food_option_labels] : ['']
   )
 
+  const [invitationImageUrl, setInvitationImageUrl] = useState<string | null>(initialInvitationImageUrl)
+  const [imageUploading, setImageUploading] = useState(false)
   const [notes, setNotes] = useState(initialValues.organizer_notes)
+  const [invitationTheme, setInvitationTheme] = useState<ThemeKey>(initialValues.invitation_theme)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const previewThemeClasses: Record<ThemeKey, { card: string; button: string; selection: string }> = {
+    yellow: {
+      card: 'bg-yellow-50 border-yellow-200',
+      button: 'bg-yellow-500 hover:bg-yellow-600',
+      selection: 'text-yellow-500 focus:ring-yellow-400',
+    },
+    pink: {
+      card: 'bg-pink-50 border-pink-200',
+      button: 'bg-pink-500 hover:bg-pink-600',
+      selection: 'text-pink-500 focus:ring-pink-400',
+    },
+    blue: {
+      card: 'bg-blue-50 border-blue-200',
+      button: 'bg-blue-500 hover:bg-blue-600',
+      selection: 'text-blue-500 focus:ring-blue-400',
+    },
+    green: {
+      card: 'bg-green-50 border-green-200',
+      button: 'bg-green-500 hover:bg-green-600',
+      selection: 'text-green-500 focus:ring-green-400',
+    },
+    purple: {
+      card: 'bg-purple-50 border-purple-200',
+      button: 'bg-purple-500 hover:bg-purple-600',
+      selection: 'text-purple-500 focus:ring-purple-400',
+    },
+  }
+  const activePreviewTheme = previewThemeClasses[invitationTheme]
+  const themeCalendarClasses: Record<string, string> = {
+    yellow: 'bg-yellow-400 text-gray-900',
+    pink: 'bg-pink-400 text-white',
+    blue: 'bg-blue-400 text-white',
+    green: 'bg-green-400 text-white',
+    purple: 'bg-purple-400 text-white',
+  }
 
   const hasChildren = children.length > 0
 
@@ -450,7 +502,7 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
 
       const { data, error: childrenError } = await supabase
         .from('children')
-        .select('id, name, birth_date')
+        .select('id, name, last_name, birth_date')
         .eq('user_id', user.id)
         .order('name', { ascending: true })
 
@@ -483,7 +535,7 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
 
           if (matched) {
             setSelectedChildId(matched.id)
-            setChildName(matched.name)
+            setChildName(getChildDropdownDisplayName(matched))
             setChildLastName('')
             syncChildBirthDateFromDisplayValue(
               matched.birth_date ? formatIsoToDisplayDate(matched.birth_date) : ''
@@ -614,6 +666,56 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
     if (enabled && foodOptions.length === 0) {
       setFoodOptions([''])
     }
+  }
+
+  const handleInvitationImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      setError('La imagen debe ser JPG, PNG o WEBP.')
+      event.target.value = ''
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('La imagen no puede superar 5MB.')
+      event.target.value = ''
+      return
+    }
+
+    setError(null)
+    setImageUploading(true)
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      setError(userError?.message ?? 'No se pudo obtener tu sesión. Vuelve a iniciar sesión.')
+      setImageUploading(false)
+      event.target.value = ''
+      return
+    }
+
+    const path = `${user.id}/${Date.now()}_${file.name}`
+    const { error: uploadError } = await supabase.storage.from('event-images').upload(path, file, { upsert: true })
+
+    if (uploadError) {
+      setError(uploadError.message)
+      setImageUploading(false)
+      event.target.value = ''
+      return
+    }
+
+    const { data } = supabase.storage.from('event-images').getPublicUrl(path)
+    setInvitationImageUrl(data.publicUrl)
+    setImageUploading(false)
+    event.target.value = ''
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -779,6 +881,8 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
         organizer_phone: fullOrganizerPhone,
         enable_food_options: foodEnabled,
         organizer_notes: notes.trim() || null,
+        invitation_theme: invitationTheme,
+        invitation_image_url: invitationImageUrl,
       })
       .eq('id', eventId)
       .eq('user_id', user.id)
@@ -835,13 +939,24 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
           </div>
         </div>
 
-        <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
+        <section className={`rounded-2xl border p-5 shadow-xl ${activePreviewTheme.card}`}>
           <div className="mb-5">
             <h1 className="text-lg font-semibold text-gray-900">Editar evento</h1>
             <p className="mt-1 text-sm text-gray-500">Actualiza los datos de tu evento.</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form
+            onSubmit={handleSubmit}
+            onInvalidCapture={(e) => {
+              ;(e.target as HTMLInputElement | HTMLTextAreaElement).setCustomValidity(
+                'Por favor, completa este campo.'
+              )
+            }}
+            onInputCapture={(e) => {
+              ;(e.target as HTMLInputElement | HTMLTextAreaElement).setCustomValidity('')
+            }}
+            className="space-y-6"
+          >
             <div className="space-y-4">
               <h2 className="text-base font-semibold text-gray-900">¿Para quién es el cumple?</h2>
 
@@ -1094,10 +1209,12 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
                         month_grid: 'w-full',
                         weeks: 'mt-1',
                         week: 'mt-1',
-                        selected: 'bg-yellow-400 text-gray-900 rounded-full font-bold',
-                        today: 'text-yellow-600 font-bold',
                         day_button:
                           'hover:bg-yellow-300 rounded-full w-full h-full transition-colors',
+                      }}
+                      modifiersClassNames={{
+                        selected: `${themeCalendarClasses[invitationTheme] ?? themeCalendarClasses.yellow} rounded-full font-semibold`,
+                        today: 'font-bold text-gray-900',
                       }}
                     />
                   </div>
@@ -1279,7 +1396,7 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
                       type="checkbox"
                       checked={savePhoneForFuture}
                       onChange={(event) => setSavePhoneForFuture(event.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
+                      className={`h-4 w-4 rounded border-gray-300 ${activePreviewTheme.selection}`}
                     />
                     Guardar este número para futuros eventos
                   </label>
@@ -1299,7 +1416,7 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
                       value="regalo_libre"
                       checked={giftOption === 'regalo_libre'}
                       onChange={() => setGiftOption('regalo_libre')}
-                      className="h-4 w-4 border-gray-300 text-yellow-500 focus:ring-yellow-400"
+                      className={`h-4 w-4 border-gray-300 ${activePreviewTheme.selection}`}
                     />
                     Regalo libre
                   </label>
@@ -1311,7 +1428,7 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
                       value="bizum_pool"
                       checked={giftOption === 'bizum_pool'}
                       onChange={() => setGiftOption('bizum_pool')}
-                      className="h-4 w-4 border-gray-300 text-yellow-500 focus:ring-yellow-400"
+                      className={`h-4 w-4 border-gray-300 ${activePreviewTheme.selection}`}
                     />
                     Regalo compartido
                   </label>
@@ -1360,7 +1477,7 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
                   type="checkbox"
                   checked={foodEnabled}
                   onChange={(event) => toggleFoodOptions(event.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
+                  className={`h-4 w-4 rounded border-gray-300 ${activePreviewTheme.selection}`}
                 />
                 Añadir opciones de comida
               </label>
@@ -1398,6 +1515,37 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
             </div>
 
             <div className="space-y-4">
+              <h2 className="text-base font-semibold text-gray-900">Imagen de la invitación</h2>
+              <p className="text-sm text-gray-600">
+                Puedes subir una imagen creada en Canva, ChatGPT u otra herramienta.
+              </p>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleInvitationImageChange}
+                disabled={imageUploading}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              {imageUploading ? <p className="text-sm text-gray-500">Subiendo imagen...</p> : null}
+              {invitationImageUrl ? (
+                <div className="space-y-2">
+                  <img
+                    src={invitationImageUrl}
+                    alt="Invitación"
+                    className="w-full rounded-xl object-cover max-h-64"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setInvitationImageUrl(null)}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                  >
+                    Quitar imagen
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-4">
               <h2 className="text-base font-semibold text-gray-900">Notas para los invitados</h2>
 
               <div>
@@ -1412,6 +1560,29 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
               </div>
             </div>
 
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Tonalidad de la invitación
+              </label>
+              <p className="text-xs text-gray-400">Elige el estilo visual de tu invitación.</p>
+              <div className="flex justify-center items-center gap-3 py-2">
+                {(Object.entries(themes) as [ThemeKey, typeof themes.yellow][]).map(([key, theme]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-label={theme.label}
+                    title={theme.label}
+                    onClick={() => setInvitationTheme(key)}
+                    className={`w-7 h-7 rounded-full cursor-pointer transition ${theme.swatch} ${
+                      invitationTheme === key
+                        ? 'ring-2 ring-offset-2 ring-gray-800'
+                        : 'ring-1 ring-offset-1 ring-gray-300'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+
             {error ? (
               <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
             ) : null}
@@ -1419,7 +1590,7 @@ export default function EditEventForm({ eventId, initialValues }: EditEventFormP
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-yellow-400 px-4 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-yellow-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-gray-900 transition disabled:cursor-not-allowed disabled:opacity-60 ${activePreviewTheme.button}`}
             >
               {loading ? 'Guardando...' : 'Guardar cambios'}
             </button>

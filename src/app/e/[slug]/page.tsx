@@ -2,6 +2,7 @@ import { subDays } from 'date-fns'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
+import { getTheme } from '@/lib/themes'
 import EventRecap from './EventRecap'
 import RsvpForm from './RsvpForm'
 
@@ -22,6 +23,8 @@ type EventDetails = {
   rsvp_deadline_days: number | null
   organizer_phone: string | null
   birthday_number: number | null
+  invitation_theme: string | null
+  invitation_image_url: string | null
 }
 
 type FoodOption = {
@@ -69,7 +72,7 @@ export default async function PublicEventPage({
   const { data: event } = await supabase
     .from('events')
     .select(
-      'id, child_name, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, enable_food_options, organizer_notes, rsvp_deadline_days, organizer_phone, birthday_number'
+      'id, child_name, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, enable_food_options, organizer_notes, rsvp_deadline_days, organizer_phone, birthday_number, invitation_theme, invitation_image_url'
     )
     .eq('public_slug', slug)
     .maybeSingle<EventDetails>()
@@ -100,9 +103,10 @@ export default async function PublicEventPage({
     Number.isFinite(event.rsvp_deadline_days)
       ? formatRsvpDeadlineLabel(event.event_date, event.rsvp_deadline_days)
       : null
+  const theme = getTheme(event.invitation_theme)
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-8">
+    <main className={`min-h-screen bg-gradient-to-b ${theme.pageBg} px-4 py-8`}>
       <div className="mx-auto w-full max-w-md space-y-4">
         {isPreview ? (
           <div className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-center text-sm text-yellow-800">
@@ -129,6 +133,8 @@ export default async function PublicEventPage({
             foodOptions={foodOptions}
             hasFoodOptions={Boolean(event.enable_food_options)}
             organizerNotes={event.organizer_notes}
+            invitationImageUrl={event.invitation_image_url}
+            theme={theme}
           />
         </div>
 
@@ -148,6 +154,7 @@ export default async function PublicEventPage({
           childName={event.child_name}
           isPreview={isPreview}
           rsvpDeadline={rsvpDeadline}
+          theme={theme}
         />
       </div>
     </main>
