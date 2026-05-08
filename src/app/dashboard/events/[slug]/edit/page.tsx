@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { type ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
 import { DayPicker, type Matcher } from 'react-day-picker'
 import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
@@ -27,46 +27,6 @@ function getChildDropdownDisplayName(child: Child) {
 }
 
 type GiftOption = 'regalo_libre' | 'bizum_pool'
-
-export type EditEventFormInitialValues = {
-  child_name: string
-  child_birth_date_display: string
-  event_title: string
-  event_date_display: string
-  start_time: string
-  pickup_time: string
-  rsvp_deadline_days_display: string
-  location_name: string
-  location_street: string
-  location_city: string
-  location_postal: string
-  google_maps_url: string
-  gift_option: GiftOption
-  bizum_country_code: string
-  bizum_phone_national: string
-  organizer_country_code: string
-  organizer_phone_national: string
-  food_enabled: boolean
-  food_option_labels: string[]
-  organizer_notes: string
-  birthday_number_display: string
-  event_had_organizer_phone: boolean
-  invitation_theme: ThemeKey
-}
-
-function parseE164ForFormClient(full: string): { code: string; national: string } {
-  const t = full.trim()
-  if (!t) {
-    return { code: '+34', national: '' }
-  }
-  if (t.startsWith('+34')) {
-    return { code: '+34', national: t.slice(3).trim() }
-  }
-  if (t.startsWith('+57')) {
-    return { code: '+57', national: t.slice(3).trim() }
-  }
-  return { code: '+34', national: t.replace(/^\+\d{1,3}/, '').trim() }
-}
 const NEW_CHILD_VALUE = '__new__'
 const SPANISH_MONTHS = [
   'Enero',
@@ -297,19 +257,96 @@ function InlineTimePicker({ value, onChange, optional = false, minHour = 1 }: In
   )
 }
 
-type EditEventFormProps = {
-  eventId: string
-  initialValues: EditEventFormInitialValues
-  initialInvitationImageUrl?: string | null
+type EventRow = {
+  id: string
+  user_id: string
+  child_name: string
+  child_birth_date: string | null
+  title: string
+  event_date: string
+  start_time: string
+  pickup_time: string | null
+  location_name: string | null
+  location_address: string | null
+  google_maps_url: string | null
+  gift_option: 'sin_regalo' | 'regalo_libre' | 'bizum_pool' | null
+  bizum_phone: string | null
+  rsvp_deadline_days: number | null
+  birthday_number: number | null
+  organizer_phone: string | null
+  enable_food_options: boolean | null
+  organizer_notes: string | null
+  invitation_theme: string | null
+  invitation_image_url: string | null
+  invitation_image_fit: 'contain' | 'cover' | null
+  invitation_image_position: string | null
+  invitation_image_zoom: number | null
+  public_slug: string
 }
 
-export default function EditEventForm({
-  eventId,
-  initialValues,
-  initialInvitationImageUrl = null,
-}: EditEventFormProps) {
+function parseStoredLocationAddress(address: string) {
+  const segments = address.split(',').map((part) => part.trim())
+  if (segments.length >= 2) {
+    const street = segments[0] ?? ''
+    const tail = segments.slice(1).join(', ').trim()
+    const tailMatch = tail.match(/^(\S+)\s+(.+)$/)
+    if (tailMatch) {
+      return { street, postal: tailMatch[1], city: tailMatch[2] }
+    }
+    return { street, postal: '', city: tail }
+  }
+  return { street: address.trim(), postal: '', city: '' }
+}
+
+function splitBizumPhone(full: string | null) {
+  if (!full || full.trim() === '') {
+    return { code: '+34' as const, number: '' }
+  }
+  const trimmed = full.trim()
+  if (trimmed.startsWith('+57')) {
+    return { code: '+57' as const, number: trimmed.slice(3) }
+  }
+  if (trimmed.startsWith('+34')) {
+    return { code: '+34' as const, number: trimmed.slice(3) }
+  }
+  return { code: '+34' as const, number: trimmed.replace(/^\+\d{1,3}/, '') }
+}
+
+function splitOrganizerPhone(full: string | null) {
+  if (!full || full.trim() === '') {
+    return { code: '+34' as const, number: '' }
+  }
+  const trimmed = full.trim()
+  if (trimmed.startsWith('+57')) {
+    return { code: '+57' as const, number: trimmed.slice(3) }
+  }
+  if (trimmed.startsWith('+34')) {
+    return { code: '+34' as const, number: trimmed.slice(3) }
+  }
+  return { code: '+34' as const, number: trimmed.replace(/^\+\d{1,3}/, '') }
+}
+
+function parseInvitationPosition(position: string | null) {
+  if (!position || position.trim() === '') {
+    return { x: 50, y: 50 }
+  }
+  const parts = position.trim().split(/\s+/)
+  const x = Number.parseFloat((parts[0] ?? '50').replace('%', ''))
+  const y = Number.parseFloat((parts[1] ?? '50').replace('%', ''))
+  return {
+    x: Number.isFinite(x) ? x : 50,
+    y: Number.isFinite(y) ? y : 50,
+  }
+}
+
+export default function EditEventPage() {
   const router = useRouter()
-  const supabase = useMemo(() => createClient(), [])
+  const params = useParams()
+  const slugParam = params?.slug
+  const slug = typeof slugParam === 'string' ? slugParam : Array.isArray(slugParam) ? slugParam[0] : ''
+  const supabase = createClient()
+  const searchParams = useSearchParams()
+  const themeParam = searchParams.get('theme') as ThemeKey | null
 
   const [children, setChildren] = useState<Child[]>([])
   const [childrenLoading, setChildrenLoading] = useState(true)
@@ -322,65 +359,104 @@ export default function EditEventForm({
   const [birthMonth, setBirthMonth] = useState('')
   const [birthYear, setBirthYear] = useState('')
 
-  const [eventTitle, setEventTitle] = useState(initialValues.event_title)
-  const [eventTitleManuallyEdited, setEventTitleManuallyEdited] = useState(true)
-  const [eventDate, setEventDate] = useState(
-    initialValues.event_date_display || format(addDays(new Date(), 1), 'dd/MM/yyyy')
-  )
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const parsedIso = formatDisplayToIsoDate(initialValues.event_date_display)
-    if (!parsedIso) {
-      return addDays(new Date(), 1)
-    }
-    const [y, m, d] = parsedIso.split('-').map((value) => Number.parseInt(value, 10))
-    return new Date(y, m - 1, d)
-  })
-  const [startTime, setStartTime] = useState(initialValues.start_time || '17:00')
-  const [pickupTime, setPickupTime] = useState(initialValues.pickup_time)
+  const [eventTitle, setEventTitle] = useState('')
+  const [eventTitleManuallyEdited, setEventTitleManuallyEdited] = useState(false)
+  const [eventDate, setEventDate] = useState(() => format(addDays(new Date(), 1), 'dd/MM/yyyy'))
+  const [currentMonth, setCurrentMonth] = useState(() => addDays(new Date(), 1))
+  const [startTime, setStartTime] = useState('')
+  const [pickupTime, setPickupTime] = useState('')
 
-  const [locationName, setLocationName] = useState(initialValues.location_name)
-  const [locationStreet, setLocationStreet] = useState(initialValues.location_street)
-  const [locationCity, setLocationCity] = useState(initialValues.location_city)
-  const [locationPostal, setLocationPostal] = useState(initialValues.location_postal)
-  const [googleMapsUrl, setGoogleMapsUrl] = useState(initialValues.google_maps_url)
-  const [organizerCountryCode, setOrganizerCountryCode] = useState(initialValues.organizer_country_code)
-  const [organizerPhoneNumber, setOrganizerPhoneNumber] = useState(initialValues.organizer_phone_national)
+  const [locationName, setLocationName] = useState('')
+  const [locationStreet, setLocationStreet] = useState('')
+  const [locationCity, setLocationCity] = useState('')
+  const [locationPostal, setLocationPostal] = useState('')
+  const [googleMapsUrl, setGoogleMapsUrl] = useState('')
+  const [organizerCountryCode, setOrganizerCountryCode] = useState('+34')
+  const [organizerPhoneNumber, setOrganizerPhoneNumber] = useState('')
   const [organizerProfilePhoneLoaded, setOrganizerProfilePhoneLoaded] = useState(false)
   const [hasSavedProfilePhone, setHasSavedProfilePhone] = useState(false)
   const [savePhoneForFuture, setSavePhoneForFuture] = useState(false)
 
-  const [rsvpDeadlineDays, setRsvpDeadlineDays] = useState(
-    initialValues.rsvp_deadline_days_display === '' ? '' : initialValues.rsvp_deadline_days_display
-  )
-  const [birthdayNumber, setBirthdayNumber] = useState(initialValues.birthday_number_display)
-  const [birthdayNumberUserEdited, setBirthdayNumberUserEdited] = useState(
-    initialValues.birthday_number_display.trim() !== ''
-  )
+  const [rsvpDeadlineDays, setRsvpDeadlineDays] = useState('1')
+  const [birthdayNumber, setBirthdayNumber] = useState('')
+  const [birthdayNumberUserEdited, setBirthdayNumberUserEdited] = useState(false)
 
-  const [giftOption, setGiftOption] = useState<GiftOption>(initialValues.gift_option)
-  const [bizumCountryCode, setBizumCountryCode] = useState(initialValues.bizum_country_code)
-  const [bizumPhoneNumber, setBizumPhoneNumber] = useState(initialValues.bizum_phone_national)
-  const [showGift, setShowGift] = useState(initialValues.gift_option != null)
-  const [giftActivated, setGiftActivated] = useState(initialValues.gift_option != null)
+  const [giftOption, setGiftOption] = useState<GiftOption>('regalo_libre')
+  const [bizumCountryCode, setBizumCountryCode] = useState('+34')
+  const [bizumPhoneNumber, setBizumPhoneNumber] = useState('')
+  const [showGift, setShowGift] = useState(false)
 
-  const [foodEnabled, setFoodEnabled] = useState(initialValues.food_enabled)
-  const [foodOptions, setFoodOptions] = useState<string[]>(() =>
-    initialValues.food_option_labels.length > 0 ? [...initialValues.food_option_labels] : ['']
-  )
-  const [showFood, setShowFood] = useState(Boolean(initialValues.food_enabled))
-  const [foodActivated, setFoodActivated] = useState(Boolean(initialValues.food_enabled))
+  const [foodEnabled, setFoodEnabled] = useState(false)
+  const [foodOptions, setFoodOptions] = useState<string[]>([''])
+  const [showFood, setShowFood] = useState(false)
 
-  const [invitationImageUrl, setInvitationImageUrl] = useState<string | null>(initialInvitationImageUrl)
+  const [invitationImageUrl, setInvitationImageUrl] = useState<string | null>(null)
+  const [imageFit, setImageFit] = useState<'contain' | 'cover'>('contain')
+  const [imagePosX, setImagePosX] = useState(50)
+  const [imagePosY, setImagePosY] = useState(50)
+  const [imageZoom, setImageZoom] = useState(1)
   const [imageUploading, setImageUploading] = useState(false)
-  const [showImage, setShowImage] = useState(Boolean(initialInvitationImageUrl))
-  const [imageActivated, setImageActivated] = useState(Boolean(initialInvitationImageUrl))
-  const [notes, setNotes] = useState(initialValues.organizer_notes)
-  const [showNotes, setShowNotes] = useState(initialValues.organizer_notes.trim() !== '')
-  const [notesActivated, setNotesActivated] = useState(initialValues.organizer_notes.trim() !== '')
-  const [invitationTheme, setInvitationTheme] = useState<ThemeKey>(initialValues.invitation_theme)
+  const [showImage, setShowImage] = useState(false)
+  const [notes, setNotes] = useState('')
+  const [showNotes, setShowNotes] = useState(false)
+  const [invitationTheme, setInvitationTheme] = useState<ThemeKey>(() => {
+    const raw = themeParam ?? 'default'
+    if (raw === 'default') return 'yellow'
+    if (raw === 'yellow' || raw === 'pink' || raw === 'blue' || raw === 'green' || raw === 'purple') return raw
+    return 'yellow'
+  })
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [eventId, setEventId] = useState<string | null>(null)
+  const pageBgMap: Record<string, string> = {
+    yellow: 'from-yellow-50 to-white',
+    pink: 'from-pink-50 to-white',
+    blue: 'from-blue-50 to-white',
+    green: 'from-green-50 to-white',
+    purple: 'from-purple-50 to-white',
+  }
+  const buttonMap: Record<string, string> = {
+    yellow: 'bg-yellow-400 hover:bg-yellow-500 text-gray-900',
+    pink: 'bg-pink-400 hover:bg-pink-500 text-white',
+    blue: 'bg-blue-400 hover:bg-blue-500 text-white',
+    green: 'bg-green-400 hover:bg-green-500 text-gray-900',
+    purple: 'bg-purple-400 hover:bg-purple-500 text-white',
+  }
+  const progressAccentMap: Record<string, string> = {
+    yellow: 'bg-yellow-400',
+    pink: 'bg-pink-400',
+    blue: 'bg-blue-400',
+    green: 'bg-green-400',
+    purple: 'bg-purple-400',
+  }
+  const zoomSliderThemeMap: Record<ThemeKey, { thumbClass: string; fillColor: string }> = {
+    yellow: {
+      thumbClass:
+        '[&::-webkit-slider-thumb]:bg-yellow-500 [&::-moz-range-thumb]:bg-yellow-500',
+      fillColor: '#f59e0b',
+    },
+    pink: {
+      thumbClass:
+        '[&::-webkit-slider-thumb]:bg-pink-500 [&::-moz-range-thumb]:bg-pink-500',
+      fillColor: '#ec4899',
+    },
+    blue: {
+      thumbClass:
+        '[&::-webkit-slider-thumb]:bg-blue-500 [&::-moz-range-thumb]:bg-blue-500',
+      fillColor: '#3b82f6',
+    },
+    green: {
+      thumbClass:
+        '[&::-webkit-slider-thumb]:bg-green-500 [&::-moz-range-thumb]:bg-green-500',
+      fillColor: '#22c55e',
+    },
+    purple: {
+      thumbClass:
+        '[&::-webkit-slider-thumb]:bg-purple-500 [&::-moz-range-thumb]:bg-purple-500',
+      fillColor: '#a855f7',
+    },
+  }
 
   const previewThemeClasses: Record<ThemeKey, { card: string; button: string; selection: string }> = {
     yellow: {
@@ -410,6 +486,9 @@ export default function EditEventForm({
     },
   }
   const activePreviewTheme = previewThemeClasses[invitationTheme]
+  const pageBg = pageBgMap[invitationTheme] ?? pageBgMap.yellow
+  const submitButtonClass = buttonMap[invitationTheme] ?? buttonMap.yellow
+  const progressAccentClass = progressAccentMap[invitationTheme] ?? progressAccentMap.yellow
   const themeCalendarClasses: Record<string, string> = {
     yellow: 'bg-yellow-400 text-gray-900',
     pink: 'bg-pink-400 text-white',
@@ -468,10 +547,33 @@ export default function EditEventForm({
   }, [birthdayNumber, childName, eventTitleManuallyEdited])
 
   useEffect(() => {
+    if (!slug) {
+      router.replace('/dashboard')
+      return
+    }
+
     let isMounted = true
 
-    const loadChildren = async () => {
+    const loadEventAndChildren = async () => {
       setChildrenLoading(true)
+
+      const applyBirthFromDisplay = (displayValue: string) => {
+        const parts = displayValue.split('/')
+        if (parts.length === 3) {
+          const d = parts[0] ?? ''
+          const m = parts[1] ?? ''
+          const y = parts[2] ?? ''
+          setBirthDay(d)
+          setBirthMonth(m)
+          setBirthYear(y)
+          setChildBirthDate(`${d}/${m}/${y}`)
+        } else {
+          setBirthDay('')
+          setBirthMonth('')
+          setBirthYear('')
+          setChildBirthDate('')
+        }
+      }
 
       const {
         data: { user },
@@ -487,6 +589,28 @@ export default function EditEventForm({
         return
       }
 
+      const { data: eventRow, error: eventError } = await supabase
+        .from('events')
+        .select(
+          'id, user_id, child_name, child_birth_date, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, public_slug'
+        )
+        .eq('public_slug', slug)
+        .maybeSingle<EventRow>()
+
+      if (eventError || !eventRow) {
+        router.replace('/dashboard')
+        return
+      }
+
+      if (eventRow.user_id !== user.id) {
+        router.replace('/dashboard')
+        return
+      }
+
+      if (isMounted) {
+        setEventId(eventRow.id)
+      }
+
       const { data: userProfile } = await supabase
         .from('users')
         .select('phone')
@@ -500,77 +624,161 @@ export default function EditEventForm({
             ? String(userProfile.phone).trim()
             : ''
         setHasSavedProfilePhone(profilePhone !== '')
-        const keepEventOrganizer = initialValues.event_had_organizer_phone
-        if (!keepEventOrganizer && profilePhone !== '') {
-          const parsed = parseE164ForFormClient(profilePhone)
-          setOrganizerCountryCode(parsed.code)
-          setOrganizerPhoneNumber(parsed.national)
-        }
       }
+
+      const organizerParts = splitOrganizerPhone(eventRow.organizer_phone)
+      if (isMounted) {
+        setOrganizerCountryCode(organizerParts.code)
+        setOrganizerPhoneNumber(organizerParts.number)
+      }
+
+      const { data: foodOptionRows } = await supabase
+        .from('event_food_options')
+        .select('label')
+        .eq('event_id', eventRow.id)
+        .order('created_at', { ascending: true })
 
       const { data, error: childrenError } = await supabase
         .from('children')
-        .select('id, name, last_name, birth_date')
+        .select('id, name, birth_date, last_name')
         .eq('user_id', user.id)
         .order('name', { ascending: true })
 
-      if (isMounted) {
-        if (childrenError) {
-          setChildren([])
-          setError(childrenError.message)
-        } else {
-          const loadedChildren = (data ?? []) as Child[]
-          setChildren(loadedChildren)
-
-          const targetName = initialValues.child_name.trim().toLowerCase()
-          const birthIso =
-            initialValues.child_birth_date_display.trim() === ''
-              ? null
-              : formatDisplayToIsoDate(initialValues.child_birth_date_display)
-
-          let matched: Child | null = null
-          for (const c of loadedChildren) {
-            const display = getChildDropdownDisplayName(c).trim().toLowerCase()
-            if (display !== targetName) {
-              continue
-            }
-            if (birthIso && c.birth_date && c.birth_date !== birthIso) {
-              continue
-            }
-            matched = c
-            break
-          }
-
-          if (matched) {
-            setSelectedChildId(matched.id)
-            setChildName(getChildDropdownDisplayName(matched))
-            setChildLastName('')
-            syncChildBirthDateFromDisplayValue(
-              matched.birth_date ? formatIsoToDisplayDate(matched.birth_date) : ''
-            )
-          } else {
-            setSelectedChildId(NEW_CHILD_VALUE)
-            const parts = initialValues.child_name.trim().split(/\s+/)
-            setChildName(parts[0] ?? '')
-            setChildLastName(parts.slice(1).join(' '))
-            syncChildBirthDateFromDisplayValue(initialValues.child_birth_date_display)
-          }
-
-          if (initialValues.birthday_number_display.trim() !== '') {
-            setBirthdayNumberUserEdited(true)
-            setBirthdayNumber(initialValues.birthday_number_display)
-          }
-        }
-        setChildrenLoading(false)
+      if (!isMounted) {
+        return
       }
+
+      if (childrenError) {
+        setChildren([])
+        setError(childrenError.message)
+        setChildrenLoading(false)
+        return
+      }
+
+      const loadedChildren = (data ?? []) as Child[]
+      setChildren(loadedChildren)
+
+      const matchedChild = loadedChildren.find(
+        (child) => getChildDropdownDisplayName(child).trim() === eventRow.child_name.trim()
+      )
+
+      if (matchedChild) {
+        setSelectedChildId(matchedChild.id)
+        setChildName(getChildDropdownDisplayName(matchedChild))
+        setChildLastName('')
+        applyBirthFromDisplay(matchedChild.birth_date ? formatIsoToDisplayDate(matchedChild.birth_date) : '')
+      } else {
+        setSelectedChildId(NEW_CHILD_VALUE)
+        const nameParts = eventRow.child_name.trim().split(/\s+/)
+        if (nameParts.length >= 2) {
+          setChildName(nameParts[0] ?? '')
+          setChildLastName(nameParts.slice(1).join(' '))
+        } else {
+          setChildName(eventRow.child_name.trim())
+          setChildLastName('')
+        }
+        applyBirthFromDisplay(
+          eventRow.child_birth_date ? formatIsoToDisplayDate(eventRow.child_birth_date) : ''
+        )
+      }
+
+      setEventTitle(eventRow.title)
+      setEventTitleManuallyEdited(true)
+      setEventDate(formatIsoToDisplayDate(eventRow.event_date))
+      setCurrentMonth(parseIsoDateToLocal(eventRow.event_date))
+      setStartTime(eventRow.start_time ? eventRow.start_time.slice(0, 5) : '')
+      setPickupTime(eventRow.pickup_time ? eventRow.pickup_time.slice(0, 5) : '')
+
+      const loc = parseStoredLocationAddress(eventRow.location_address ?? '')
+      setLocationName(eventRow.location_name ?? '')
+      setLocationStreet(loc.street)
+      setLocationCity(loc.city)
+      setLocationPostal(loc.postal)
+      setGoogleMapsUrl(eventRow.google_maps_url ?? '')
+
+      setRsvpDeadlineDays(
+        eventRow.rsvp_deadline_days != null && Number.isFinite(eventRow.rsvp_deadline_days)
+          ? String(eventRow.rsvp_deadline_days)
+          : '1'
+      )
+      setBirthdayNumber(eventRow.birthday_number != null ? String(eventRow.birthday_number) : '')
+      setBirthdayNumberUserEdited(true)
+
+      const gift = eventRow.gift_option
+      if (gift === 'bizum_pool') {
+        setShowGift(true)
+        setGiftOption('bizum_pool')
+        const bizum = splitBizumPhone(eventRow.bizum_phone)
+        setBizumCountryCode(bizum.code)
+        setBizumPhoneNumber(bizum.number)
+      } else if (gift === 'sin_regalo') {
+        setShowGift(false)
+        setGiftOption('regalo_libre')
+        setBizumPhoneNumber('')
+        setBizumCountryCode('+34')
+      } else {
+        setShowGift(true)
+        setGiftOption('regalo_libre')
+        setBizumPhoneNumber('')
+        setBizumCountryCode('+34')
+      }
+
+      const foodLabels = (foodOptionRows ?? []).map((row) => String((row as { label: string }).label))
+      if (eventRow.enable_food_options && foodLabels.length > 0) {
+        setShowFood(true)
+        setFoodEnabled(true)
+        setFoodOptions(foodLabels)
+      } else if (eventRow.enable_food_options) {
+        setShowFood(true)
+        setFoodEnabled(true)
+        setFoodOptions([''])
+      } else {
+        setShowFood(false)
+        setFoodEnabled(false)
+        setFoodOptions([''])
+      }
+
+      if (eventRow.organizer_notes) {
+        setShowNotes(true)
+        setNotes(eventRow.organizer_notes)
+      } else {
+        setShowNotes(false)
+        setNotes('')
+      }
+
+      if (eventRow.invitation_image_url) {
+        setShowImage(true)
+        setInvitationImageUrl(eventRow.invitation_image_url)
+        setImageFit(eventRow.invitation_image_fit === 'cover' ? 'cover' : 'contain')
+        const pos = parseInvitationPosition(eventRow.invitation_image_position)
+        setImagePosX(pos.x)
+        setImagePosY(pos.y)
+        setImageZoom(
+          eventRow.invitation_image_zoom != null && Number.isFinite(Number(eventRow.invitation_image_zoom))
+            ? Number(eventRow.invitation_image_zoom)
+            : 1
+        )
+      } else {
+        setShowImage(false)
+        setInvitationImageUrl(null)
+      }
+
+      const themeKey = eventRow.invitation_theme
+      if (themeKey === 'yellow' || themeKey === 'pink' || themeKey === 'blue' || themeKey === 'green' || themeKey === 'purple') {
+        setInvitationTheme(themeKey)
+      } else {
+        setInvitationTheme('yellow')
+      }
+
+      setChildrenLoading(false)
     }
 
-    void loadChildren()
+    void loadEventAndChildren()
 
     return () => {
       isMounted = false
     }
-  }, [supabase])
+  }, [supabase, slug, router])
 
   useEffect(() => {
     setBirthdayNumberUserEdited(false)
@@ -621,7 +829,7 @@ export default function EditEventForm({
       return
     }
 
-    setChildName(child.name)
+    setChildName(getChildDropdownDisplayName(child))
     syncChildBirthDateFromDisplayValue(child.birth_date ? formatIsoToDisplayDate(child.birth_date) : '')
   }
 
@@ -667,13 +875,6 @@ export default function EditEventForm({
 
   const removeFoodOption = (index: number) => {
     setFoodOptions((previous) => previous.filter((_, idx) => idx !== index))
-  }
-
-  const toggleFoodOptions = (enabled: boolean) => {
-    setFoodEnabled(enabled)
-    if (enabled && foodOptions.length === 0) {
-      setFoodOptions([''])
-    }
   }
 
   const handleInvitationImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -725,6 +926,7 @@ export default function EditEventForm({
     setImageUploading(false)
     event.target.value = ''
   }
+  const handleImageUpload = handleInvitationImageChange
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -743,7 +945,7 @@ export default function EditEventForm({
     const trimmedBizumPhoneNumber = bizumPhoneNumber.trim()
 
     if (selectedChildId === '') {
-      setError('Selecciona un hijo/a o la opción Nuevo hijo/a.')
+      setError('Selecciona un hijo/a o añade un nuevo perfil.')
       return
     }
 
@@ -826,19 +1028,24 @@ export default function EditEventForm({
       return
     }
 
-    const isGiftActive = showGift || giftActivated
+    const isGiftActive = showGift
     if (isGiftActive && giftOption === 'bizum_pool' && !trimmedBizumPhoneNumber) {
-      setError('Si eliges Regalo compartido, el teléfono es obligatorio.')
+      setError('Si eliges Regalo Colectivo, el teléfono es obligatorio.')
       return
     }
 
-    const isFoodActive = showFood || foodActivated
+    const isFoodActive = showFood
     const normalizedFoodOptions = isFoodActive && foodEnabled
       ? foodOptions.map((option) => option.trim()).filter((option) => option.length > 0)
       : []
 
     if (isFoodActive && foodEnabled && normalizedFoodOptions.length === 0) {
       setError('Añade al menos una opción de comida o desactiva esta sección.')
+      return
+    }
+
+    if (!eventId) {
+      setError('No se pudo cargar el evento.')
       return
     }
 
@@ -870,7 +1077,8 @@ export default function EditEventForm({
 
     const query = encodeURIComponent(`${trimmedLocationStreet}, ${trimmedLocationPostal} ${trimmedLocationCity}, Spain`)
     const generatedMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`
-    const finalGoogleMapsUrl = trimmedGoogleMapsUrl || generatedMapsUrl
+    const generatedGoogleMapsUrl = generatedMapsUrl
+    const finalGoogleMapsUrl = trimmedGoogleMapsUrl || generatedGoogleMapsUrl
 
     const { error: eventError } = await supabase
       .from('events')
@@ -891,12 +1099,14 @@ export default function EditEventForm({
         birthday_number: birthdayNumberValue,
         organizer_phone: fullOrganizerPhone,
         enable_food_options: isFoodActive ? foodEnabled : false,
-        organizer_notes: showNotes || notesActivated ? notes.trim() || null : null,
-        invitation_theme: invitationTheme,
-        invitation_image_url: showImage || imageActivated ? invitationImageUrl : null,
+        organizer_notes: showNotes ? notes.trim() || null : null,
+        invitation_theme: invitationTheme ?? 'yellow',
+        invitation_image_url: showImage ? (invitationImageUrl ?? null) : null,
+        invitation_image_fit: showImage ? imageFit : null,
+        invitation_image_position: showImage ? `${imagePosX}% ${imagePosY}%` : null,
+        invitation_image_zoom: showImage ? imageZoom : null,
       })
       .eq('id', eventId)
-      .eq('user_id', user.id)
 
     if (eventError) {
       setError(eventError.message ?? 'No se pudo guardar el evento.')
@@ -927,33 +1137,49 @@ export default function EditEventForm({
       }
     }
 
-    router.push('/dashboard/events')
+    if (isNewChildSelection) {
+      const { error: childInsertError } = await supabase.from('children').insert({
+        user_id: user.id,
+        name: trimmedNombre,
+        last_name: trimmedApellido || null,
+        birth_date: parsedChildBirthDate || null,
+      })
+
+      if (childInsertError) {
+        setError(childInsertError.message)
+        setLoading(false)
+        return
+      }
+    }
+
+    localStorage.setItem('lastEventTheme', invitationTheme)
+    router.push(`/dashboard/events/${slug}`)
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-6">
+    <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-6`}>
       <div className="mx-auto w-full max-w-sm pb-8">
         <div className="mb-5 flex items-center justify-between">
-          <Link href="/dashboard/events" className="inline-flex items-center text-sm font-medium text-yellow-600 hover:text-yellow-700">
-            ← Volver a mis eventos
+          <Link href="/dashboard" className="inline-flex items-center text-sm font-medium text-yellow-600 hover:text-yellow-700">
+            ← Volver al panel
           </Link>
           <p className="font-bold text-yellow-500">MiParty</p>
         </div>
 
         <div className="mb-4 rounded-xl border border-yellow-100 bg-white/80 p-3">
           <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
-            <span>Paso 1 de 2 — Crear evento</span>
+            <span>Paso 1 de 2 — Editar evento</span>
             <span>2: Compartir invitación</span>
           </div>
           <div className="h-2 w-full rounded-full bg-yellow-100">
-            <div className="h-2 w-1/2 rounded-full bg-yellow-400" />
+            <div className={`h-2 w-1/2 rounded-full ${progressAccentClass}`} />
           </div>
         </div>
 
         <section className={`rounded-2xl border p-5 shadow-xl ${activePreviewTheme.card}`}>
           <div className="mb-5">
-            <h1 className="text-lg font-semibold text-gray-900">Editar evento</h1>
-            <p className="mt-1 text-sm text-gray-500">Actualiza los datos de tu evento.</p>
+            <h1 className="text-2xl font-bold text-gray-900">Editar evento</h1>
+            <p className="mt-2 text-sm text-gray-500">Actualiza los datos de tu evento.</p>
           </div>
 
           <form
@@ -985,7 +1211,7 @@ export default function EditEventForm({
                     className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
                   >
                     <option value="" className="text-gray-500">
-                      Seleccionar
+                      Selecciona un hijo/a
                     </option>
                     {hasChildren
                       ? children.map((child) => (
@@ -994,8 +1220,14 @@ export default function EditEventForm({
                           </option>
                         ))
                       : null}
-                    <option value={NEW_CHILD_VALUE}>Nuevo hijo/a</option>
                   </select>
+                  <button
+                    type="button"
+                    onClick={() => handleChildSelect(NEW_CHILD_VALUE)}
+                    className="mt-1 text-sm text-yellow-600 hover:underline"
+                  >
+                    + Añadir nuevo perfil
+                  </button>
                 </div>
               ) : null}
 
@@ -1416,32 +1648,34 @@ export default function EditEventForm({
             </div>
 
             {!showGift ? (
-              <div className="border border-gray-200 rounded-xl p-4">
+              <button
+                type="button"
+                onClick={() => setShowGift(true)}
+                className="w-full cursor-pointer rounded-xl border border-gray-200 p-4 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-900">Regalo</p>
                     <p className="text-xs text-gray-400">Añade información de regalo opcional.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowGift(true)
-                      setGiftActivated(true)
-                    }}
-                    className="text-sm text-yellow-600 font-medium hover:underline"
-                  >
+                  <span className="text-sm font-medium text-yellow-600">
                     Añadir
-                  </button>
+                  </span>
                 </div>
-              </div>
+              </button>
             ) : (
               <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-gray-900">Regalo</p>
                   <button
                     type="button"
-                    onClick={() => setShowGift(false)}
-                    className="text-xs text-gray-400 hover:text-gray-600"
+                    onClick={() => {
+                      setShowGift(false)
+                      setGiftOption('regalo_libre')
+                      setBizumPhoneNumber('')
+                      setBizumCountryCode('+34')
+                    }}
+                    className="text-xs text-gray-400 hover:text-gray-600 font-normal"
                   >
                     Quitar
                   </button>
@@ -1509,48 +1743,44 @@ export default function EditEventForm({
             )}
 
             {!showFood ? (
-              <div className="border border-gray-200 rounded-xl p-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFood(true)
+                  setFoodEnabled(true)
+                  if (foodOptions.length === 0) {
+                    setFoodOptions([''])
+                  }
+                }}
+                className="w-full cursor-pointer rounded-xl border border-gray-200 p-4 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-900">Opciones de comida</p>
                     <p className="text-xs text-gray-400">Añade opciones de comida si lo necesitas.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowFood(true)
-                      setFoodActivated(true)
-                    }}
-                    className="text-sm text-yellow-600 font-medium hover:underline"
-                  >
+                  <span className="text-sm font-medium text-yellow-600">
                     Añadir
-                  </button>
+                  </span>
                 </div>
-              </div>
+              </button>
             ) : (
               <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-gray-900">Opciones de comida</p>
                   <button
                     type="button"
-                    onClick={() => setShowFood(false)}
-                    className="text-xs text-gray-400 hover:text-gray-600"
+                    onClick={() => {
+                      setShowFood(false)
+                      setFoodOptions([])
+                      setFoodEnabled(false)
+                    }}
+                    className="text-xs text-gray-400 hover:text-gray-600 font-normal"
                   >
                     Quitar
                   </button>
                 </div>
-                <label className="flex items-center gap-2 text-sm text-gray-800">
-                  <input
-                    type="checkbox"
-                    checked={foodEnabled}
-                    onChange={(event) => toggleFoodOptions(event.target.checked)}
-                    className={`h-4 w-4 rounded border-gray-300 ${activePreviewTheme.selection}`}
-                  />
-                  Añadir opciones de comida
-                </label>
-
-                {foodEnabled ? (
-                  <div className="space-y-3">
+                <div className="space-y-3">
                     {foodOptions.map((option, index) => (
                       <div key={`food-option-${index}`} className="flex items-center gap-2">
                         <input
@@ -1563,9 +1793,12 @@ export default function EditEventForm({
                         <button
                           type="button"
                           onClick={() => removeFoodOption(index)}
-                          className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                          className="text-gray-400 hover:text-gray-700 transition p-1 rounded-full flex-shrink-0"
+                          aria-label="Eliminar opción"
                         >
-                          Quitar
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
                         </button>
                       </div>
                     ))}
@@ -1573,105 +1806,192 @@ export default function EditEventForm({
                     <button
                       type="button"
                       onClick={addFoodOption}
-                      className="w-full rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2.5 text-sm font-medium text-yellow-700 transition hover:bg-yellow-100"
+                      className="w-full bg-white border border-yellow-300 text-yellow-700 hover:bg-yellow-50 rounded-xl py-2 text-sm font-medium transition"
                     >
-                      Añadir opción
+                      + Añadir opción
                     </button>
                   </div>
-                ) : null}
               </div>
             )}
 
             {!showImage ? (
-              <div className="border border-gray-200 rounded-xl p-4">
+              <button
+                type="button"
+                onClick={() => setShowImage(true)}
+                className="w-full cursor-pointer rounded-xl border border-gray-200 p-4 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-900">Imagen de la invitación</p>
                     <p className="text-xs text-gray-400">
-                      Puedes subir una imagen creada en Canva, ChatGPT u otra herramienta.
+                      Puedes subir una imagen creada en Canva, ChatGPT u otra herramienta. Aparecerá en la parte superior de la invitación.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowImage(true)
-                      setImageActivated(true)
-                    }}
-                    className="text-sm text-yellow-600 font-medium hover:underline"
-                  >
+                  <span className="text-sm font-medium text-yellow-600">
                     Añadir
-                  </button>
+                  </span>
                 </div>
-              </div>
+              </button>
             ) : (
               <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-gray-900">Imagen de la invitación</p>
                   <button
                     type="button"
-                    onClick={() => setShowImage(false)}
-                    className="text-xs text-gray-400 hover:text-gray-600"
+                    onClick={() => {
+                      setShowImage(false)
+                      setInvitationImageUrl(null)
+                    }}
+                    className="text-xs text-gray-400 hover:text-gray-600 font-normal"
                   >
                     Quitar
                   </button>
                 </div>
-                <p className="text-sm text-gray-600">
-                  Puedes subir una imagen creada en Canva, ChatGPT u otra herramienta.
-                </p>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={handleInvitationImageChange}
-                  disabled={imageUploading}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
-                />
-                {imageUploading ? <p className="text-sm text-gray-500">Subiendo imagen...</p> : null}
-                {invitationImageUrl ? (
-                  <div className="space-y-2">
-                    <img
-                      src={invitationImageUrl}
-                      alt="Invitación"
-                      className="w-full rounded-xl object-cover max-h-64"
-                    />
+                {!invitationImageUrl ? (
+                  <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl py-6 px-4 cursor-pointer hover:border-yellow-400 hover:bg-yellow-50 transition">
+                    <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-sm font-medium text-gray-700">Subir imagen</span>
+                    <span className="text-xs text-gray-400 mt-1">PNG, JPG o WEBP · máx 5MB</span>
+                    <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handleImageUpload} />
+                  </label>
+                ) : (
+                  <div className="relative w-full">
+                    {(() => {
+                      return (
+                        <>
+                    <div className="relative w-full overflow-hidden rounded-2xl max-h-80">
+                      <img
+                        src={invitationImageUrl}
+                        alt="Vista previa"
+                        style={{
+                          objectPosition: imageFit === 'cover' ? `${imagePosX}% ${imagePosY}%` : undefined,
+                          transform: imageFit === 'cover' ? `scale(${imageZoom})` : undefined,
+                          transformOrigin: `${imagePosX}% ${imagePosY}%`,
+                        }}
+                        className={`w-full max-h-80 transition-transform ${
+                          imageFit === 'cover' ? 'object-cover' : 'object-contain bg-gray-50'
+                        }`}
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => setInvitationImageUrl(null)}
-                      className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                      className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md text-gray-500 hover:text-gray-900 transition"
+                      aria-label="Quitar imagen"
                     >
-                      Quitar imagen
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
+                    <div className="flex gap-2 mt-2">
+                      {(['contain', 'cover'] as const).map((fit) => (
+                        <button
+                          key={fit}
+                          type="button"
+                          onClick={() => setImageFit(fit)}
+                          className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${
+                            imageFit === fit
+                              ? 'border-yellow-400 bg-yellow-50 text-yellow-700'
+                              : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                          }`}
+                        >
+                          {fit === 'contain' ? 'Imagen completa' : 'Ajustar'}
+                        </button>
+                      ))}
+                    </div>
+                    {imageFit === 'cover' && (
+                      <div className="mt-2 flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setImagePosX((p) => Math.max(0, p - 10))}
+                          className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:border-gray-300 flex items-center justify-center text-sm"
+                        >
+                          ←
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setImagePosY((p) => Math.max(0, p - 10))}
+                          className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:border-gray-300 flex items-center justify-center text-sm"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setImagePosY((p) => Math.min(100, p + 10))}
+                          className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:border-gray-300 flex items-center justify-center text-sm"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setImagePosX((p) => Math.min(100, p + 10))}
+                          className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:border-gray-300 flex items-center justify-center text-sm"
+                        >
+                          →
+                        </button>
+                      </div>
+                    )}
+                    {imageFit === 'cover' && (
+                      <div className="mt-2 flex items-center justify-center gap-3">
+                        <span className="text-xs font-medium text-gray-500">Zoom</span>
+                        {(() => {
+                          const zoomProgress = ((imageZoom - 1) / 1.5) * 100
+                          const zoomTheme = zoomSliderThemeMap[invitationTheme] ?? zoomSliderThemeMap.yellow
+                          return (
+                        <input
+                          type="range"
+                          min={1}
+                          max={2.5}
+                          step={0.1}
+                          value={imageZoom}
+                          onChange={(event) => setImageZoom(Number.parseFloat(event.target.value))}
+                          className={`h-2 w-32 cursor-pointer appearance-none rounded-full bg-gray-300 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:ring-2 [&::-webkit-slider-thumb]:ring-white [&::-webkit-slider-thumb]:shadow-sm [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:shadow-sm ${zoomTheme.thumbClass}`}
+                          style={{
+                            background: `linear-gradient(to right, ${zoomTheme.fillColor} 0%, ${zoomTheme.fillColor} ${zoomProgress}%, #d1d5db ${zoomProgress}%, #d1d5db 100%)`,
+                          }}
+                        />
+                          )
+                        })()}
+                        <span className="w-10 text-center text-xs text-gray-400">{imageZoom.toFixed(1)}x</span>
+                      </div>
+                    )}
+                        </>
+                      )
+                    })()}
                   </div>
-                ) : null}
+                )}
               </div>
             )}
 
             {!showNotes ? (
-              <div className="border border-gray-200 rounded-xl p-4">
+              <button
+                type="button"
+                onClick={() => setShowNotes(true)}
+                className="w-full cursor-pointer rounded-xl border border-gray-200 p-4 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-900">Notas para los invitados</p>
                     <p className="text-xs text-gray-400">Añade un mensaje opcional para tus invitados.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowNotes(true)
-                      setNotesActivated(true)
-                    }}
-                    className="text-sm text-yellow-600 font-medium hover:underline"
-                  >
+                  <span className="text-sm font-medium text-yellow-600">
                     Añadir
-                  </button>
+                  </span>
                 </div>
-              </div>
+              </button>
             ) : (
               <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-gray-900">Notas para los invitados</p>
                   <button
                     type="button"
-                    onClick={() => setShowNotes(false)}
-                    className="text-xs text-gray-400 hover:text-gray-600"
+                    onClick={() => {
+                      setShowNotes(false)
+                      setNotes('')
+                    }}
+                    className="text-xs text-gray-400 hover:text-gray-600 font-normal"
                   >
                     Quitar
                   </button>
@@ -1719,7 +2039,7 @@ export default function EditEventForm({
             <button
               type="submit"
               disabled={loading}
-              className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-gray-900 transition disabled:cursor-not-allowed disabled:opacity-60 ${activePreviewTheme.button}`}
+              className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${submitButtonClass}`}
             >
               {loading ? 'Guardando...' : 'Guardar cambios'}
             </button>

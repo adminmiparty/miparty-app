@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { subDays } from 'date-fns'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -25,10 +26,25 @@ type EventDetails = {
   birthday_number: number | null
   invitation_theme: string | null
   invitation_image_url: string | null
+  invitation_image_fit: 'contain' | 'cover' | null
+  invitation_image_position: string | null
+  invitation_image_zoom: number | null
 }
 
 type FoodOption = {
   label: string
+}
+
+const DEFAULT_APP_METADATA: Metadata = {
+  title: 'MiParty — Organiza el cumple perfecto',
+  description: 'Crea tu invitación, comparte el enlace y gestiona las respuestas en un solo lugar.',
+}
+
+type MetadataEventDetails = {
+  title: string
+  event_date: string
+  location_name: string | null
+  invitation_image_url: string | null
 }
 
 function capitalizeFirst(str: string) {
@@ -55,6 +71,44 @@ function formatRsvpDeadlineLabel(eventDate: string, daysBefore: number) {
   return capitalizeFirst(format(deadline, "EEEE, d 'de' MMMM", { locale: es }))
 }
 
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params
+  const supabase = await createClient()
+
+  const { data: event } = await supabase
+    .from('events')
+    .select('title, event_date, location_name, invitation_image_url')
+    .eq('public_slug', slug)
+    .maybeSingle<MetadataEventDetails>()
+
+  if (!event) {
+    return DEFAULT_APP_METADATA
+  }
+
+  const description = `Confirma tu asistencia a ${event.title} el ${event.event_date} en ${event.location_name ?? 'Ubicación por confirmar'}`
+  const title = `${event.title} — MiParty`
+  const metadata: Metadata = {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url: `https://miparty.net/e/${slug}`,
+      siteName: 'MiParty',
+      type: 'website',
+    },
+  }
+
+  if (event.invitation_image_url) {
+    metadata.openGraph = {
+      ...metadata.openGraph,
+      images: [{ url: event.invitation_image_url }],
+    }
+  }
+
+  return metadata
+}
+
 export default async function PublicEventPage({
   params,
   searchParams,
@@ -72,7 +126,7 @@ export default async function PublicEventPage({
   const { data: event } = await supabase
     .from('events')
     .select(
-      'id, child_name, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, enable_food_options, organizer_notes, rsvp_deadline_days, organizer_phone, birthday_number, invitation_theme, invitation_image_url'
+      'id, child_name, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, enable_food_options, organizer_notes, rsvp_deadline_days, organizer_phone, birthday_number, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
     )
     .eq('public_slug', slug)
     .maybeSingle<EventDetails>()
@@ -134,6 +188,9 @@ export default async function PublicEventPage({
             hasFoodOptions={Boolean(event.enable_food_options)}
             organizerNotes={event.organizer_notes}
             invitationImageUrl={event.invitation_image_url}
+            invitationImageFit={event.invitation_image_fit}
+            invitationImagePosition={event.invitation_image_position}
+            invitationImageZoom={event.invitation_image_zoom}
             theme={theme}
           />
         </div>
@@ -155,6 +212,7 @@ export default async function PublicEventPage({
           isPreview={isPreview}
           rsvpDeadline={rsvpDeadline}
           theme={theme}
+          themeKey={event.invitation_theme}
         />
       </div>
     </main>

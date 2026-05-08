@@ -24,6 +24,7 @@ type RsvpFormInnerProps = {
   isPreview?: boolean
   rsvpDeadline?: string | null
   theme?: ReturnType<typeof getTheme>
+  themeKey?: string | null
 }
 
 type RsvpFormProps = RsvpFormInnerProps & {
@@ -77,6 +78,7 @@ function RsvpFormInner({
   isPreview = false,
   rsvpDeadline = null,
   theme,
+  themeKey = null,
 }: RsvpFormInnerProps) {
   const router = useRouter()
   const activeTheme = theme ?? getTheme()
@@ -280,7 +282,8 @@ END:VCALENDAR`
     <button
       type="button"
       onClick={() => {
-        router.push('/dashboard/events')
+        const nextUrl = themeKey ? `/dashboard/events?theme=${encodeURIComponent(themeKey)}` : '/dashboard/events'
+        router.push(nextUrl)
       }}
       className="mt-3 mb-3 w-full rounded-lg border border-yellow-500 bg-white py-3 text-sm font-bold text-gray-900 transition hover:bg-yellow-50"
     >

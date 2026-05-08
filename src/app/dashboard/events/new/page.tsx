@@ -312,24 +312,72 @@ export default function NewEventPage() {
   const [bizumCountryCode, setBizumCountryCode] = useState('+34')
   const [bizumPhoneNumber, setBizumPhoneNumber] = useState('')
   const [showGift, setShowGift] = useState(false)
-  const [giftActivated, setGiftActivated] = useState(false)
 
   const [foodEnabled, setFoodEnabled] = useState(false)
   const [foodOptions, setFoodOptions] = useState<string[]>([''])
   const [showFood, setShowFood] = useState(false)
-  const [foodActivated, setFoodActivated] = useState(false)
 
   const [invitationImageUrl, setInvitationImageUrl] = useState<string | null>(null)
+  const [imageFit, setImageFit] = useState<'contain' | 'cover'>('contain')
+  const [imagePosX, setImagePosX] = useState(50)
+  const [imagePosY, setImagePosY] = useState(50)
+  const [imageZoom, setImageZoom] = useState(1)
   const [imageUploading, setImageUploading] = useState(false)
   const [showImage, setShowImage] = useState(false)
-  const [imageActivated, setImageActivated] = useState(false)
   const [notes, setNotes] = useState('')
   const [showNotes, setShowNotes] = useState(false)
-  const [notesActivated, setNotesActivated] = useState(false)
   const [invitationTheme, setInvitationTheme] = useState<ThemeKey>('yellow')
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const pageBgMap: Record<string, string> = {
+    yellow: 'from-yellow-50 to-white',
+    pink: 'from-pink-50 to-white',
+    blue: 'from-blue-50 to-white',
+    green: 'from-green-50 to-white',
+    purple: 'from-purple-50 to-white',
+  }
+  const buttonMap: Record<string, string> = {
+    yellow: 'bg-yellow-400 hover:bg-yellow-500 text-gray-900',
+    pink: 'bg-pink-400 hover:bg-pink-500 text-white',
+    blue: 'bg-blue-400 hover:bg-blue-500 text-white',
+    green: 'bg-green-400 hover:bg-green-500 text-gray-900',
+    purple: 'bg-purple-400 hover:bg-purple-500 text-white',
+  }
+  const progressAccentMap: Record<string, string> = {
+    yellow: 'bg-yellow-400',
+    pink: 'bg-pink-400',
+    blue: 'bg-blue-400',
+    green: 'bg-green-400',
+    purple: 'bg-purple-400',
+  }
+  const zoomSliderThemeMap: Record<ThemeKey, { thumbClass: string; fillColor: string }> = {
+    yellow: {
+      thumbClass:
+        '[&::-webkit-slider-thumb]:bg-yellow-500 [&::-moz-range-thumb]:bg-yellow-500',
+      fillColor: '#f59e0b',
+    },
+    pink: {
+      thumbClass:
+        '[&::-webkit-slider-thumb]:bg-pink-500 [&::-moz-range-thumb]:bg-pink-500',
+      fillColor: '#ec4899',
+    },
+    blue: {
+      thumbClass:
+        '[&::-webkit-slider-thumb]:bg-blue-500 [&::-moz-range-thumb]:bg-blue-500',
+      fillColor: '#3b82f6',
+    },
+    green: {
+      thumbClass:
+        '[&::-webkit-slider-thumb]:bg-green-500 [&::-moz-range-thumb]:bg-green-500',
+      fillColor: '#22c55e',
+    },
+    purple: {
+      thumbClass:
+        '[&::-webkit-slider-thumb]:bg-purple-500 [&::-moz-range-thumb]:bg-purple-500',
+      fillColor: '#a855f7',
+    },
+  }
 
   const previewThemeClasses: Record<ThemeKey, { card: string; button: string; selection: string }> = {
     yellow: {
@@ -359,6 +407,9 @@ export default function NewEventPage() {
     },
   }
   const activePreviewTheme = previewThemeClasses[invitationTheme]
+  const pageBg = pageBgMap[invitationTheme] ?? pageBgMap.yellow
+  const submitButtonClass = buttonMap[invitationTheme] ?? buttonMap.yellow
+  const progressAccentClass = progressAccentMap[invitationTheme] ?? progressAccentMap.yellow
   const themeCalendarClasses: Record<string, string> = {
     yellow: 'bg-yellow-400 text-gray-900',
     pink: 'bg-pink-400 text-white',
@@ -580,13 +631,6 @@ export default function NewEventPage() {
     setFoodOptions((previous) => previous.filter((_, idx) => idx !== index))
   }
 
-  const toggleFoodOptions = (enabled: boolean) => {
-    setFoodEnabled(enabled)
-    if (enabled && foodOptions.length === 0) {
-      setFoodOptions([''])
-    }
-  }
-
   const handleInvitationImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) {
@@ -636,6 +680,7 @@ export default function NewEventPage() {
     setImageUploading(false)
     event.target.value = ''
   }
+  const handleImageUpload = handleInvitationImageChange
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -654,7 +699,7 @@ export default function NewEventPage() {
     const trimmedBizumPhoneNumber = bizumPhoneNumber.trim()
 
     if (selectedChildId === '') {
-      setError('Selecciona un hijo/a o la opción Nuevo hijo/a.')
+      setError('Selecciona un hijo/a o añade un nuevo perfil.')
       return
     }
 
@@ -737,13 +782,13 @@ export default function NewEventPage() {
       return
     }
 
-    const isGiftActive = showGift || giftActivated
+    const isGiftActive = showGift
     if (isGiftActive && giftOption === 'bizum_pool' && !trimmedBizumPhoneNumber) {
       setError('Si eliges Regalo Colectivo, el teléfono es obligatorio.')
       return
     }
 
-    const isFoodActive = showFood || foodActivated
+    const isFoodActive = showFood
     const normalizedFoodOptions = isFoodActive && foodEnabled
       ? foodOptions.map((option) => option.trim()).filter((option) => option.length > 0)
       : []
@@ -806,12 +851,15 @@ export default function NewEventPage() {
         birthday_number: birthdayNumberValue,
         organizer_phone: fullOrganizerPhone,
         enable_food_options: isFoodActive ? foodEnabled : false,
-        organizer_notes: showNotes || notesActivated ? notes.trim() || null : null,
-        invitation_theme: invitationTheme,
-        invitation_image_url: showImage || imageActivated ? invitationImageUrl : null,
+        organizer_notes: showNotes ? notes.trim() || null : null,
+        invitation_theme: invitationTheme ?? 'yellow',
+        invitation_image_url: showImage ? (invitationImageUrl ?? null) : null,
+        invitation_image_fit: showImage ? imageFit : null,
+        invitation_image_position: showImage ? `${imagePosX}% ${imagePosY}%` : null,
+        invitation_image_zoom: showImage ? imageZoom : null,
         public_slug: publicSlug,
       })
-      .select('id')
+      .select('id, public_slug')
       .single()
 
     if (eventError || !insertedEvent) {
@@ -850,11 +898,12 @@ export default function NewEventPage() {
       }
     }
 
-    router.push('/dashboard/events')
+    localStorage.setItem('lastEventTheme', invitationTheme)
+    router.push(`/dashboard/events/${insertedEvent.public_slug}`)
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-6">
+    <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-6`}>
       <div className="mx-auto w-full max-w-sm pb-8">
         <div className="mb-5 flex items-center justify-between">
           <Link href="/dashboard" className="inline-flex items-center text-sm font-medium text-yellow-600 hover:text-yellow-700">
@@ -869,7 +918,7 @@ export default function NewEventPage() {
             <span>2: Compartir invitación</span>
           </div>
           <div className="h-2 w-full rounded-full bg-yellow-100">
-            <div className="h-2 w-1/2 rounded-full bg-yellow-400" />
+            <div className={`h-2 w-1/2 rounded-full ${progressAccentClass}`} />
           </div>
         </div>
 
@@ -907,7 +956,7 @@ export default function NewEventPage() {
                     className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
                   >
                     <option value="" className="text-gray-500">
-                      Seleccionar
+                      Selecciona un hijo/a
                     </option>
                     {hasChildren
                       ? children.map((child) => (
@@ -916,8 +965,14 @@ export default function NewEventPage() {
                           </option>
                         ))
                       : null}
-                    <option value={NEW_CHILD_VALUE}>Nuevo hijo/a</option>
                   </select>
+                  <button
+                    type="button"
+                    onClick={() => handleChildSelect(NEW_CHILD_VALUE)}
+                    className="mt-1 text-sm text-yellow-600 hover:underline"
+                  >
+                    + Añadir nuevo perfil
+                  </button>
                 </div>
               ) : null}
 
@@ -1338,32 +1393,34 @@ export default function NewEventPage() {
             </div>
 
             {!showGift ? (
-              <div className="border border-gray-200 rounded-xl p-4">
+              <button
+                type="button"
+                onClick={() => setShowGift(true)}
+                className="w-full cursor-pointer rounded-xl border border-gray-200 p-4 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-900">Regalo</p>
                     <p className="text-xs text-gray-400">Añade información de regalo opcional.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowGift(true)
-                      setGiftActivated(true)
-                    }}
-                    className="text-sm text-yellow-600 font-medium hover:underline"
-                  >
+                  <span className="text-sm font-medium text-yellow-600">
                     Añadir
-                  </button>
+                  </span>
                 </div>
-              </div>
+              </button>
             ) : (
               <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-gray-900">Regalo</p>
                   <button
                     type="button"
-                    onClick={() => setShowGift(false)}
-                    className="text-xs text-gray-400 hover:text-gray-600"
+                    onClick={() => {
+                      setShowGift(false)
+                      setGiftOption('regalo_libre')
+                      setBizumPhoneNumber('')
+                      setBizumCountryCode('+34')
+                    }}
+                    className="text-xs text-gray-400 hover:text-gray-600 font-normal"
                   >
                     Quitar
                   </button>
@@ -1431,48 +1488,44 @@ export default function NewEventPage() {
             )}
 
             {!showFood ? (
-              <div className="border border-gray-200 rounded-xl p-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFood(true)
+                  setFoodEnabled(true)
+                  if (foodOptions.length === 0) {
+                    setFoodOptions([''])
+                  }
+                }}
+                className="w-full cursor-pointer rounded-xl border border-gray-200 p-4 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-900">Opciones de comida</p>
                     <p className="text-xs text-gray-400">Añade opciones de comida si lo necesitas.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowFood(true)
-                      setFoodActivated(true)
-                    }}
-                    className="text-sm text-yellow-600 font-medium hover:underline"
-                  >
+                  <span className="text-sm font-medium text-yellow-600">
                     Añadir
-                  </button>
+                  </span>
                 </div>
-              </div>
+              </button>
             ) : (
               <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-gray-900">Opciones de comida</p>
                   <button
                     type="button"
-                    onClick={() => setShowFood(false)}
-                    className="text-xs text-gray-400 hover:text-gray-600"
+                    onClick={() => {
+                      setShowFood(false)
+                      setFoodOptions([])
+                      setFoodEnabled(false)
+                    }}
+                    className="text-xs text-gray-400 hover:text-gray-600 font-normal"
                   >
                     Quitar
                   </button>
                 </div>
-                <label className="flex items-center gap-2 text-sm text-gray-800">
-                  <input
-                    type="checkbox"
-                    checked={foodEnabled}
-                    onChange={(event) => toggleFoodOptions(event.target.checked)}
-                    className={`h-4 w-4 rounded border-gray-300 ${activePreviewTheme.selection}`}
-                  />
-                  Añadir opciones de comida
-                </label>
-
-                {foodEnabled ? (
-                  <div className="space-y-3">
+                <div className="space-y-3">
                     {foodOptions.map((option, index) => (
                       <div key={`food-option-${index}`} className="flex items-center gap-2">
                         <input
@@ -1485,9 +1538,12 @@ export default function NewEventPage() {
                         <button
                           type="button"
                           onClick={() => removeFoodOption(index)}
-                          className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                          className="text-gray-400 hover:text-gray-700 transition p-1 rounded-full flex-shrink-0"
+                          aria-label="Eliminar opción"
                         >
-                          Quitar
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
                         </button>
                       </div>
                     ))}
@@ -1495,105 +1551,192 @@ export default function NewEventPage() {
                     <button
                       type="button"
                       onClick={addFoodOption}
-                      className="w-full rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2.5 text-sm font-medium text-yellow-700 transition hover:bg-yellow-100"
+                      className="w-full bg-white border border-yellow-300 text-yellow-700 hover:bg-yellow-50 rounded-xl py-2 text-sm font-medium transition"
                     >
-                      Añadir opción
+                      + Añadir opción
                     </button>
                   </div>
-                ) : null}
               </div>
             )}
 
             {!showImage ? (
-              <div className="border border-gray-200 rounded-xl p-4">
+              <button
+                type="button"
+                onClick={() => setShowImage(true)}
+                className="w-full cursor-pointer rounded-xl border border-gray-200 p-4 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-900">Imagen de la invitación</p>
                     <p className="text-xs text-gray-400">
-                      Puedes subir una imagen creada en Canva, ChatGPT u otra herramienta.
+                      Puedes subir una imagen creada en Canva, ChatGPT u otra herramienta. Aparecerá en la parte superior de la invitación.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowImage(true)
-                      setImageActivated(true)
-                    }}
-                    className="text-sm text-yellow-600 font-medium hover:underline"
-                  >
+                  <span className="text-sm font-medium text-yellow-600">
                     Añadir
-                  </button>
+                  </span>
                 </div>
-              </div>
+              </button>
             ) : (
               <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-gray-900">Imagen de la invitación</p>
                   <button
                     type="button"
-                    onClick={() => setShowImage(false)}
-                    className="text-xs text-gray-400 hover:text-gray-600"
+                    onClick={() => {
+                      setShowImage(false)
+                      setInvitationImageUrl(null)
+                    }}
+                    className="text-xs text-gray-400 hover:text-gray-600 font-normal"
                   >
                     Quitar
                   </button>
                 </div>
-                <p className="text-sm text-gray-600">
-                  Puedes subir una imagen creada en Canva, ChatGPT u otra herramienta.
-                </p>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={handleInvitationImageChange}
-                  disabled={imageUploading}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
-                />
-                {imageUploading ? <p className="text-sm text-gray-500">Subiendo imagen...</p> : null}
-                {invitationImageUrl ? (
-                  <div className="space-y-2">
-                    <img
-                      src={invitationImageUrl}
-                      alt="Invitación"
-                      className="w-full rounded-xl object-cover max-h-64"
-                    />
+                {!invitationImageUrl ? (
+                  <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl py-6 px-4 cursor-pointer hover:border-yellow-400 hover:bg-yellow-50 transition">
+                    <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-sm font-medium text-gray-700">Subir imagen</span>
+                    <span className="text-xs text-gray-400 mt-1">PNG, JPG o WEBP · máx 5MB</span>
+                    <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handleImageUpload} />
+                  </label>
+                ) : (
+                  <div className="relative w-full">
+                    {(() => {
+                      return (
+                        <>
+                    <div className="relative w-full overflow-hidden rounded-2xl max-h-80">
+                      <img
+                        src={invitationImageUrl}
+                        alt="Vista previa"
+                        style={{
+                          objectPosition: imageFit === 'cover' ? `${imagePosX}% ${imagePosY}%` : undefined,
+                          transform: imageFit === 'cover' ? `scale(${imageZoom})` : undefined,
+                          transformOrigin: `${imagePosX}% ${imagePosY}%`,
+                        }}
+                        className={`w-full max-h-80 transition-transform ${
+                          imageFit === 'cover' ? 'object-cover' : 'object-contain bg-gray-50'
+                        }`}
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => setInvitationImageUrl(null)}
-                      className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                      className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md text-gray-500 hover:text-gray-900 transition"
+                      aria-label="Quitar imagen"
                     >
-                      Quitar imagen
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
+                    <div className="flex gap-2 mt-2">
+                      {(['contain', 'cover'] as const).map((fit) => (
+                        <button
+                          key={fit}
+                          type="button"
+                          onClick={() => setImageFit(fit)}
+                          className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${
+                            imageFit === fit
+                              ? 'border-yellow-400 bg-yellow-50 text-yellow-700'
+                              : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                          }`}
+                        >
+                          {fit === 'contain' ? 'Imagen completa' : 'Ajustar'}
+                        </button>
+                      ))}
+                    </div>
+                    {imageFit === 'cover' && (
+                      <div className="mt-2 flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setImagePosX((p) => Math.max(0, p - 10))}
+                          className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:border-gray-300 flex items-center justify-center text-sm"
+                        >
+                          ←
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setImagePosY((p) => Math.max(0, p - 10))}
+                          className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:border-gray-300 flex items-center justify-center text-sm"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setImagePosY((p) => Math.min(100, p + 10))}
+                          className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:border-gray-300 flex items-center justify-center text-sm"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setImagePosX((p) => Math.min(100, p + 10))}
+                          className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:border-gray-300 flex items-center justify-center text-sm"
+                        >
+                          →
+                        </button>
+                      </div>
+                    )}
+                    {imageFit === 'cover' && (
+                      <div className="mt-2 flex items-center justify-center gap-3">
+                        <span className="text-xs font-medium text-gray-500">Zoom</span>
+                        {(() => {
+                          const zoomProgress = ((imageZoom - 1) / 1.5) * 100
+                          const zoomTheme = zoomSliderThemeMap[invitationTheme] ?? zoomSliderThemeMap.yellow
+                          return (
+                        <input
+                          type="range"
+                          min={1}
+                          max={2.5}
+                          step={0.1}
+                          value={imageZoom}
+                          onChange={(event) => setImageZoom(Number.parseFloat(event.target.value))}
+                          className={`h-2 w-32 cursor-pointer appearance-none rounded-full bg-gray-300 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:ring-2 [&::-webkit-slider-thumb]:ring-white [&::-webkit-slider-thumb]:shadow-sm [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:shadow-sm ${zoomTheme.thumbClass}`}
+                          style={{
+                            background: `linear-gradient(to right, ${zoomTheme.fillColor} 0%, ${zoomTheme.fillColor} ${zoomProgress}%, #d1d5db ${zoomProgress}%, #d1d5db 100%)`,
+                          }}
+                        />
+                          )
+                        })()}
+                        <span className="w-10 text-center text-xs text-gray-400">{imageZoom.toFixed(1)}x</span>
+                      </div>
+                    )}
+                        </>
+                      )
+                    })()}
                   </div>
-                ) : null}
+                )}
               </div>
             )}
 
             {!showNotes ? (
-              <div className="border border-gray-200 rounded-xl p-4">
+              <button
+                type="button"
+                onClick={() => setShowNotes(true)}
+                className="w-full cursor-pointer rounded-xl border border-gray-200 p-4 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-900">Notas para los invitados</p>
                     <p className="text-xs text-gray-400">Añade un mensaje opcional para tus invitados.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowNotes(true)
-                      setNotesActivated(true)
-                    }}
-                    className="text-sm text-yellow-600 font-medium hover:underline"
-                  >
+                  <span className="text-sm font-medium text-yellow-600">
                     Añadir
-                  </button>
+                  </span>
                 </div>
-              </div>
+              </button>
             ) : (
               <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-gray-900">Notas para los invitados</p>
                   <button
                     type="button"
-                    onClick={() => setShowNotes(false)}
-                    className="text-xs text-gray-400 hover:text-gray-600"
+                    onClick={() => {
+                      setShowNotes(false)
+                      setNotes('')
+                    }}
+                    className="text-xs text-gray-400 hover:text-gray-600 font-normal"
                   >
                     Quitar
                   </button>
@@ -1641,7 +1784,7 @@ export default function NewEventPage() {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-gray-900 transition disabled:cursor-not-allowed disabled:opacity-60 ${activePreviewTheme.button}`}
+              className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${submitButtonClass}`}
             >
               {loading ? 'Creando evento...' : 'Crear evento'}
             </button>
