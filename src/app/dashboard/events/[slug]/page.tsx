@@ -30,7 +30,6 @@ type EventDetails = {
 type RsvpItem = {
   id: string
   child_name: string
-  child_last_name: string | null
   guest_parent_name: string
   attendance_status: 'confirmed' | 'declined' | 'maybe' | null
   food_preference: string | null
@@ -147,10 +146,14 @@ export default function EventControlCenterPage() {
       const { data: rsvpRows } = await supabase
         .from('rsvps')
         .select(
-          'id, child_name, child_last_name, guest_parent_name, attendance_status, food_preference, allergy_notes, extra_notes'
+          'id, child_name, guest_parent_name, attendance_status, food_preference, allergy_notes, extra_notes'
         )
         .eq('event_id', eventRow.id)
         .order('created_at', { ascending: false })
+
+      console.log('event id used for rsvp query:', eventRow.id)
+      console.log('rsvp rows returned:', rsvpRows)
+      console.log('rsvp count:', rsvpRows?.length)
 
       if (cancelled) {
         return
@@ -218,20 +221,8 @@ export default function EventControlCenterPage() {
       rsvps
         .filter((rsvp) => (rsvp.allergy_notes ?? '').trim() !== '')
         .map((rsvp) => ({
-          childName: `${rsvp.child_name}${rsvp.child_last_name ? ` ${rsvp.child_last_name}` : ''}`.trim(),
+          childName: rsvp.child_name.trim(),
           note: (rsvp.allergy_notes ?? '').trim(),
-        })),
-    [rsvps]
-  )
-
-  const messageEntries = useMemo(
-    () =>
-      rsvps
-        .filter((rsvp) => (rsvp.extra_notes ?? '').trim() !== '')
-        .map((rsvp) => ({
-          childName: `${rsvp.child_name}${rsvp.child_last_name ? ` ${rsvp.child_last_name}` : ''}`.trim(),
-          parentName: rsvp.guest_parent_name,
-          note: (rsvp.extra_notes ?? '').trim(),
         })),
     [rsvps]
   )
@@ -657,8 +648,7 @@ export default function EventControlCenterPage() {
                       <div className="mt-3 space-y-3">
                         {filteredRsvps.map((rsvp) => {
                           const status = rsvpStatusMeta(rsvp.attendance_status)
-                          const fullChildName =
-                            `${rsvp.child_name}${rsvp.child_last_name ? ` ${rsvp.child_last_name}` : ''}`.trim()
+                          const fullChildName = rsvp.child_name.trim()
                           return (
                             <article key={rsvp.id} className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
                               <div className="flex items-start justify-between gap-2">
@@ -707,8 +697,7 @@ export default function EventControlCenterPage() {
                           ) : (
                             filteredRsvps.map((rsvp) => {
                             const status = rsvpStatusMeta(rsvp.attendance_status)
-                            const fullChildName =
-                              `${rsvp.child_name}${rsvp.child_last_name ? ` ${rsvp.child_last_name}` : ''}`.trim()
+                            const fullChildName = rsvp.child_name.trim()
                             const foodRaw = (rsvp.food_preference ?? '').trim()
                             const foodDisplay = foodRaw ? `🍽️ ${foodRaw}` : ''
                             const allergyRaw = (rsvp.allergy_notes ?? '').trim()
@@ -780,20 +769,6 @@ export default function EventControlCenterPage() {
                 <div className="mt-2 space-y-1 text-sm text-amber-900">
                   {allergyEntries.map((entry, index) => (
                     <p key={`${entry.childName}-${index}`}>{`${entry.childName}: ${entry.note}`}</p>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            {messageEntries.length > 0 ? (
-              <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-xl">
-                <h2 className="text-base font-semibold text-gray-900">Mensajes de familias</h2>
-                <div className="mt-2 space-y-2">
-                  {messageEntries.map((entry, index) => (
-                    <div key={`${entry.parentName}-${index}`} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-                      <p className="text-xs text-gray-500">{`${entry.parentName} · ${entry.childName}`}</p>
-                      <p className="mt-1 text-sm text-gray-700">{entry.note}</p>
-                    </div>
                   ))}
                 </div>
               </section>
