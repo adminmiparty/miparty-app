@@ -7,7 +7,7 @@ import { DayPicker, type Matcher } from 'react-day-picker'
 import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
-import { themes, type ThemeKey } from '@/lib/themes'
+import { getTheme, themes, type ThemeKey } from '@/lib/themes'
 import 'react-day-picker/style.css'
 
 type Child = {
@@ -347,6 +347,7 @@ export default function EditEventPage() {
   const supabase = createClient()
   const searchParams = useSearchParams()
   const themeParam = searchParams.get('theme') as ThemeKey | null
+  const fromShare = searchParams.get('from') === 'share'
 
   const [children, setChildren] = useState<Child[]>([])
   const [childrenLoading, setChildrenLoading] = useState(true)
@@ -399,23 +400,11 @@ export default function EditEventPage() {
   const [showImage, setShowImage] = useState(false)
   const [notes, setNotes] = useState('')
   const [showNotes, setShowNotes] = useState(false)
-  const [invitationTheme, setInvitationTheme] = useState<ThemeKey>(() => {
-    const raw = themeParam ?? 'default'
-    if (raw === 'default') return 'yellow'
-    if (raw === 'yellow' || raw === 'pink' || raw === 'blue' || raw === 'green' || raw === 'purple') return raw
-    return 'yellow'
-  })
+  const [invitationTheme, setInvitationTheme] = useState<ThemeKey>(() => (themeParam ?? 'yellow') as ThemeKey)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [eventId, setEventId] = useState<string | null>(null)
-  const pageBgMap: Record<string, string> = {
-    yellow: 'from-yellow-50 to-white',
-    pink: 'from-pink-50 to-white',
-    blue: 'from-blue-50 to-white',
-    green: 'from-green-50 to-white',
-    purple: 'from-purple-50 to-white',
-  }
   const buttonMap: Record<string, string> = {
     yellow: 'bg-yellow-400 hover:bg-yellow-500 text-gray-900',
     pink: 'bg-pink-400 hover:bg-pink-500 text-white',
@@ -429,6 +418,13 @@ export default function EditEventPage() {
     blue: 'bg-blue-400',
     green: 'bg-green-400',
     purple: 'bg-purple-400',
+  }
+  const progressTrackMap: Record<ThemeKey, string> = {
+    yellow: 'bg-yellow-100',
+    pink: 'bg-pink-100',
+    blue: 'bg-blue-100',
+    green: 'bg-green-100',
+    purple: 'bg-purple-100',
   }
   const zoomSliderThemeMap: Record<ThemeKey, { thumbClass: string; fillColor: string }> = {
     yellow: {
@@ -486,9 +482,19 @@ export default function EditEventPage() {
     },
   }
   const activePreviewTheme = previewThemeClasses[invitationTheme]
-  const pageBg = pageBgMap[invitationTheme] ?? pageBgMap.yellow
+  const pageBg = getTheme(invitationTheme).pageBg
   const submitButtonClass = buttonMap[invitationTheme] ?? buttonMap.yellow
   const progressAccentClass = progressAccentMap[invitationTheme] ?? progressAccentMap.yellow
+  const progressTrackClass = progressTrackMap[invitationTheme] ?? progressTrackMap.yellow
+  const themeDef = themes[invitationTheme] ?? themes.yellow
+  const brandMap: Record<ThemeKey, string> = {
+    yellow: 'text-yellow-500',
+    pink: 'text-pink-500',
+    blue: 'text-blue-500',
+    green: 'text-green-500',
+    purple: 'text-purple-500',
+  }
+  const brandClass = brandMap[invitationTheme] ?? brandMap.yellow
   const themeCalendarClasses: Record<string, string> = {
     yellow: 'bg-yellow-400 text-gray-900',
     pink: 'bg-pink-400 text-white',
@@ -1153,29 +1159,43 @@ export default function EditEventPage() {
     }
 
     localStorage.setItem('lastEventTheme', invitationTheme)
-    router.push(`/dashboard/events/${slug}`)
+    if (fromShare) {
+      router.push(`/dashboard/events/${slug}/share?theme=${invitationTheme ?? 'yellow'}`)
+    } else {
+      router.push(`/dashboard/events/${slug}`)
+    }
   }
 
   return (
-    <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-6`}>
-      <div className="mx-auto w-full max-w-sm pb-8">
-        <div className="mb-5 flex items-center justify-between">
-          <Link href="/dashboard" className="inline-flex items-center text-sm font-medium text-yellow-600 hover:text-yellow-700">
-            ← Volver al panel
-          </Link>
-          <p className="font-bold text-yellow-500">MiParty</p>
-        </div>
-
-        <div className="mb-4 rounded-xl border border-yellow-100 bg-white/80 p-3">
-          <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
-            <span>Paso 1 de 2 — Editar evento</span>
-            <span>2: Compartir invitación</span>
+    <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-8`}>
+      <div
+        className={`sticky top-0 z-50 w-full border-b border-gray-200 ${themeDef.bg}/95 shadow-sm backdrop-blur-sm`}
+      >
+        <div className="mx-auto w-full max-w-md px-4">
+          <div className="flex items-center justify-between gap-3 py-3">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center text-sm font-medium text-gray-900 hover:underline"
+            >
+              ← Volver al panel
+            </Link>
+            <p className={`text-sm font-semibold ${brandClass}`}>MiParty</p>
           </div>
-          <div className="h-2 w-full rounded-full bg-yellow-100">
-            <div className={`h-2 w-1/2 rounded-full ${progressAccentClass}`} />
+          <div className="border-t border-gray-200/60 pb-3 pt-2">
+            <div className="rounded-xl border border-yellow-100 bg-white/80 p-3">
+              <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
+                <span className="text-gray-900 font-semibold">Paso 1 — Crea tu evento</span>
+                <span className="text-gray-400 font-normal">Paso 2 — Revisa tu invitación</span>
+              </div>
+              <div className={`h-2 w-full rounded-full ${progressTrackClass}`}>
+                <div className={`h-2 w-1/2 rounded-full ${progressAccentClass}`} />
+              </div>
+            </div>
           </div>
         </div>
+      </div>
 
+      <div className="mx-auto w-full max-w-md pb-8 pt-4">
         <section className={`rounded-2xl border p-5 shadow-xl ${activePreviewTheme.card}`}>
           <div className="mb-5">
             <h1 className="text-2xl font-bold text-gray-900">Editar evento</h1>

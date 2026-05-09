@@ -1,9 +1,47 @@
 'use client'
 
+import Link from 'next/link'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getTheme } from '@/lib/themes'
+
+const previewBrandMap: Record<
+  'yellow' | 'pink' | 'blue' | 'green' | 'purple',
+  string
+> = {
+  yellow: 'text-yellow-500',
+  pink: 'text-pink-500',
+  blue: 'text-blue-500',
+  green: 'text-green-500',
+  purple: 'text-purple-500',
+}
+
+export function InvitationPreviewTopBar({
+  publicSlug,
+  themeKey,
+}: {
+  publicSlug: string
+  themeKey: string | null
+}) {
+  const theme = getTheme(themeKey)
+  const t =
+    themeKey === 'yellow' || themeKey === 'pink' || themeKey === 'blue' || themeKey === 'green' || themeKey === 'purple'
+      ? themeKey
+      : 'yellow'
+  const backHref = `/dashboard/events/${publicSlug}/share?theme=${encodeURIComponent(t)}`
+  const brandClass = previewBrandMap[t] ?? previewBrandMap.yellow
+
+  return (
+    <div className={`sticky top-0 z-50 mb-4 w-full border-b border-gray-200 ${theme.bg}/95 shadow-sm backdrop-blur-sm`}>
+      <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-3">
+        <Link href={backHref} className="text-sm font-medium text-gray-900 hover:underline">
+          ← Volver
+        </Link>
+        <p className={`text-sm font-semibold ${brandClass}`}>MiParty</p>
+      </div>
+    </div>
+  )
+}
 
 type AttendanceStatus = 'confirmed' | 'declined' | 'maybe'
 
@@ -80,7 +118,6 @@ function RsvpFormInner({
   theme,
   themeKey = null,
 }: RsvpFormInnerProps) {
-  const router = useRouter()
   const activeTheme = theme ?? getTheme()
   const supabase = createClient()
   const [attendance, setAttendance] = useState<AttendanceStatus | null>(null)
@@ -99,6 +136,7 @@ function RsvpFormInner({
   const [showCalendarOptions, setShowCalendarOptions] = useState(false)
   const childNameInputRef = useRef<HTMLInputElement | null>(null)
   const formFieldsRef = useRef<HTMLFormElement | null>(null)
+  const siButtonRef = useRef<HTMLButtonElement>(null)
   const messageRef = useRef<HTMLTextAreaElement>(null)
 
   function handleMessageInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -278,21 +316,8 @@ END:VCALENDAR`
     URL.revokeObjectURL(url)
   }
 
-  const previewSummaryScrollButton = isPreview ? (
-    <button
-      type="button"
-      onClick={() => {
-        const nextUrl = themeKey ? `/dashboard/events?theme=${encodeURIComponent(themeKey)}` : '/dashboard/events'
-        router.push(nextUrl)
-      }}
-      className="mt-3 mb-3 w-full rounded-lg border border-yellow-500 bg-white py-3 text-sm font-bold text-gray-900 transition hover:bg-yellow-50"
-    >
-      Volver y compartir invitación
-    </button>
-  ) : null
-
   const previewHelperBlock = isPreview ? (
-    <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm text-center rounded-xl px-4 py-3 whitespace-pre-line">
+    <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-center text-sm whitespace-pre-line text-yellow-800">
       {'👁️ Vista previa — así podrán responder tus invitados.\nPuedes probarlo con tranquilidad — nada se guardará.'}
     </div>
   ) : null
@@ -301,11 +326,21 @@ END:VCALENDAR`
     const shouldDeselect = attendance === nextStatus
     setAttendance(shouldDeselect ? null : nextStatus)
     if (!shouldDeselect) {
-      setTimeout(() => {
-        const scrollTarget = formFieldsRef.current ?? childNameInputRef.current
-        scrollTarget?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        childNameInputRef.current?.focus()
-      }, 50)
+      if (nextStatus === 'declined' || nextStatus === 'maybe') {
+        setTimeout(() => {
+          window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+        }, 0)
+      } else if (nextStatus === 'confirmed') {
+        setTimeout(() => {
+          if (siButtonRef.current) {
+            siButtonRef.current.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start',
+            })
+          }
+          childNameInputRef.current?.focus()
+        }, 100)
+      }
     }
   }
 
@@ -373,16 +408,15 @@ END:VCALENDAR`
 
   return (
     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
-      {previewSummaryScrollButton}
-      {previewHelperBlock}
-      {isPreview ? <div className="mt-5" /> : null}
+      {isPreview ? <div className="relative z-20 mb-3 pointer-events-auto">{previewHelperBlock}</div> : null}
       <h2 className="text-base font-semibold text-gray-900">Confirma tu asistencia</h2>
 
-      <div className="mt-3 flex gap-2">
+      <div className="relative z-20 mt-3 flex gap-2 pointer-events-auto">
         <button
+          ref={siButtonRef}
           type="button"
           onClick={() => handleAttendanceSelect('confirmed')}
-          className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
+          className={`pointer-events-auto inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
             attendance === 'confirmed'
               ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
               : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
@@ -394,7 +428,7 @@ END:VCALENDAR`
         <button
           type="button"
           onClick={() => handleAttendanceSelect('declined')}
-          className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
+          className={`pointer-events-auto inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
             attendance === 'declined'
               ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
               : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
@@ -406,7 +440,7 @@ END:VCALENDAR`
         <button
           type="button"
           onClick={() => handleAttendanceSelect('maybe')}
-          className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
+          className={`pointer-events-auto inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
             attendance === 'maybe'
               ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
               : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
@@ -416,7 +450,7 @@ END:VCALENDAR`
         </button>
       </div>
 
-      <div className="h-10 flex items-center justify-center py-2 text-center text-gray-500">
+      <div className="flex h-10 items-center justify-center py-2 text-center text-gray-500">
         <p className={`whitespace-pre-line ${attendance === 'maybe' ? 'text-xs' : 'text-sm'}`}>{helperText}</p>
       </div>
 

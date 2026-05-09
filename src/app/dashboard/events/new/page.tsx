@@ -899,7 +899,7 @@ export default function NewEventPage() {
     }
 
     localStorage.setItem('lastEventTheme', invitationTheme)
-    router.push(`/dashboard/events/${insertedEvent.public_slug}`)
+    router.push(`/dashboard/events/${insertedEvent.public_slug}/share?theme=${invitationTheme ?? 'yellow'}`)
   }
 
   return (

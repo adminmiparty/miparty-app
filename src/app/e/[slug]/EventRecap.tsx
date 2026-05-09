@@ -21,6 +21,7 @@ export type EventRecapProps = {
   invitationImagePosition?: string | null
   invitationImageZoom?: number | null
   theme: ReturnType<typeof getTheme>
+  isPreview?: boolean
 }
 
 function formatTimeValue(time: string) {
@@ -68,6 +69,7 @@ export default function EventRecap({
   invitationImagePosition,
   invitationImageZoom,
   theme: _theme,
+  isPreview = false,
 }: EventRecapProps) {
   const headline =
     birthdayNumber != null && birthdayNumber > 0 && Number.isFinite(birthdayNumber)
@@ -77,6 +79,11 @@ export default function EventRecap({
 
   return (
     <>
+      {isPreview ? (
+        <div className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-center text-sm text-yellow-800">
+          👁️ Vista previa — así verán la invitación tus invitados
+        </div>
+      ) : null}
       {invitationImageUrl ? (
         <div className="w-full overflow-hidden rounded-2xl max-h-72 mb-4">
           <img
@@ -125,7 +132,7 @@ export default function EventRecap({
         ) : null}
 
         {organizerNotes ? (
-          <p className="text-sm text-gray-500 italic">{`📓 ${organizerNotes}`}</p>
+          <p className="text-sm text-gray-500 italic">{`📋 ${organizerNotes}`}</p>
         ) : null}
       </div>
     </>

@@ -3,9 +3,27 @@ import { subDays } from 'date-fns'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
-import { getTheme } from '@/lib/themes'
+import { getTheme, type ThemeKey } from '@/lib/themes'
 import EventRecap from './EventRecap'
-import RsvpForm from './RsvpForm'
+import RsvpForm, { InvitationPreviewTopBar } from './RsvpForm'
+
+function pickPreviewNavTheme(urlTheme: string | null | undefined, invitationTheme: string | null): ThemeKey {
+  const u = urlTheme?.trim()
+  if (u === 'yellow' || u === 'pink' || u === 'blue' || u === 'green' || u === 'purple') {
+    return u
+  }
+  const inv = invitationTheme?.trim()
+  if (
+    inv === 'yellow' ||
+    inv === 'pink' ||
+    inv === 'blue' ||
+    inv === 'green' ||
+    inv === 'purple'
+  ) {
+    return inv
+  }
+  return 'yellow'
+}
 
 type EventDetails = {
   id: string
@@ -114,11 +132,14 @@ export default async function PublicEventPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ preview?: string | string[] }>
+  searchParams: Promise<{ preview?: string | string[]; theme?: string | string[] }>
 }) {
   const { slug } = await params
   const resolvedSearchParams = await searchParams
   const previewRaw = resolvedSearchParams?.preview
+  const themeRaw = resolvedSearchParams?.theme
+  const themeFromUrl =
+    typeof themeRaw === 'string' ? themeRaw : Array.isArray(themeRaw) ? themeRaw[0] : null
   const isPreview =
     previewRaw === 'true' || (Array.isArray(previewRaw) && previewRaw[0] === 'true')
   const supabase = await createClient()
@@ -158,15 +179,14 @@ export default async function PublicEventPage({
       ? formatRsvpDeadlineLabel(event.event_date, event.rsvp_deadline_days)
       : null
   const theme = getTheme(event.invitation_theme)
+  const previewNavTheme = pickPreviewNavTheme(themeFromUrl, event.invitation_theme)
 
   return (
     <main className={`min-h-screen bg-gradient-to-b ${theme.pageBg} px-4 py-8`}>
+      {isPreview ? (
+        <InvitationPreviewTopBar publicSlug={slug} themeKey={previewNavTheme} />
+      ) : null}
       <div className="mx-auto w-full max-w-md space-y-4">
-        {isPreview ? (
-          <div className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-center text-sm text-yellow-800">
-            👁️ Vista previa — así verán la invitación tus invitados
-          </div>
-        ) : null}
         <div
           id="invitation-recap"
           className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl"
@@ -186,13 +206,22 @@ export default async function PublicEventPage({
             bizumPhone={event.bizum_phone}
             foodOptions={foodOptions}
             hasFoodOptions={Boolean(event.enable_food_options)}
-            organizerNotes={event.organizer_notes}
+            organizerNotes={null}
             invitationImageUrl={event.invitation_image_url}
             invitationImageFit={event.invitation_image_fit}
             invitationImagePosition={event.invitation_image_position}
             invitationImageZoom={event.invitation_image_zoom}
             theme={theme}
+            isPreview={isPreview}
           />
+          {event.organizer_notes?.trim() ? (
+            <div className="mt-3 space-y-4">
+              <p className="text-sm font-medium not-italic text-gray-800">
+                <span aria-hidden>📋</span> Mensaje para los invitados
+              </p>
+              <p className="whitespace-pre-wrap text-sm italic text-gray-500">{event.organizer_notes}</p>
+            </div>
+          ) : null}
         </div>
 
         <RsvpForm
