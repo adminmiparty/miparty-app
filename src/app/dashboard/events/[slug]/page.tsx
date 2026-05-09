@@ -54,15 +54,15 @@ function formatTimeValue(time: string) {
 
 function rsvpStatusMeta(status: RsvpItem['attendance_status']) {
   if (status === 'confirmed') {
-    return { label: 'Sí asiste', badge: 'bg-green-100 text-green-700 border-green-200' }
+    return { label: 'Confirmado', badge: 'bg-green-100 text-green-700 border-green-200' }
   }
   if (status === 'declined') {
-    return { label: 'No asiste', badge: 'bg-red-100 text-red-700 border-red-200' }
+    return { label: 'No puede', badge: 'bg-red-100 text-red-700 border-red-200' }
   }
   if (status === 'maybe') {
-    return { label: 'Aún no lo sabe', badge: 'bg-amber-100 text-amber-700 border-amber-200' }
+    return { label: 'Aún no sabe', badge: 'bg-amber-100 text-amber-700 border-amber-200' }
   }
-  return { label: 'Sin respuesta', badge: 'bg-gray-100 text-gray-600 border-gray-200' }
+  return { label: 'Pendiente', badge: 'bg-gray-100 text-gray-600 border-gray-200' }
 }
 
 const cellTruncateClass = 'max-w-[10rem] overflow-hidden text-ellipsis whitespace-nowrap md:max-w-[12rem]'
@@ -76,6 +76,7 @@ export default function EventControlCenterPage() {
   const [event, setEvent] = useState<EventDetails | null>(null)
   const [rsvps, setRsvps] = useState<RsvpItem[]>([])
   const [loadError, setLoadError] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
   const [activeFilters, setActiveFilters] = useState<string[]>(['confirmed', 'declined', 'maybe'])
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false)
@@ -108,12 +109,15 @@ export default function EventControlCenterPage() {
 
   useEffect(() => {
     if (!slug) {
+      setLoading(false)
       return
     }
 
     let cancelled = false
 
     const load = async () => {
+      setLoading(true)
+      setLoadError(false)
       const supabase = createClient()
       const {
         data: { user },
@@ -121,6 +125,9 @@ export default function EventControlCenterPage() {
       } = await supabase.auth.getUser()
 
       if (userError || !user) {
+        if (!cancelled) {
+          setLoading(false)
+        }
         router.replace('/login')
         return
       }
@@ -139,7 +146,10 @@ export default function EventControlCenterPage() {
       }
 
       if (eventError || !eventRow) {
-        setLoadError(true)
+        if (!cancelled) {
+          setLoadError(true)
+          setLoading(false)
+        }
         return
       }
 
@@ -151,16 +161,13 @@ export default function EventControlCenterPage() {
         .eq('event_id', eventRow.id)
         .order('created_at', { ascending: false })
 
-      console.log('event id used for rsvp query:', eventRow.id)
-      console.log('rsvp rows returned:', rsvpRows)
-      console.log('rsvp count:', rsvpRows?.length)
-
       if (cancelled) {
         return
       }
 
       setEvent(eventRow)
       setRsvps((rsvpRows ?? []) as RsvpItem[])
+      setLoading(false)
     }
 
     void load()
@@ -314,7 +321,9 @@ export default function EventControlCenterPage() {
     </div>
   )
 
-  if (loadError || (!event && slug)) {
+  if (loading) return null
+
+  if (loadError) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-8">
         <p className="text-center text-sm text-gray-600">No encontramos este evento.</p>
@@ -421,18 +430,18 @@ export default function EventControlCenterPage() {
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-2">
+                <Link
+                  href={`/e/${event.public_slug}?preview=true&theme=${event.invitation_theme ?? 'yellow'}&from=dashboard`}
+                  className="inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"
+                >
+                  Cómo ven la invitación mis invitados
+                </Link>
                 <ShareButton
                   eventTitle={event.title}
                   childName={event.child_name}
                   slug={event.public_slug}
                   className={`inline-flex w-full items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold transition ${primaryButtonClass}`}
                 />
-                <Link
-                  href={`/e/${event.public_slug}?preview=true`}
-                  className="inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"
-                >
-                  Ver cómo la verán tus invitados
-                </Link>
               </div>
             </section>
           </aside>
@@ -449,7 +458,7 @@ export default function EventControlCenterPage() {
                       : 'opacity-50'
                   }`}
                 >
-                  <p className="text-xs text-gray-600">✅ Asisten</p>
+                  <p className="text-xs text-gray-600">✅ Confirmados</p>
                   <p className={`mt-1 text-2xl font-bold ${accentTextClass}`}>{confirmedCount}</p>
                 </button>
                 <button
@@ -461,7 +470,7 @@ export default function EventControlCenterPage() {
                       : 'opacity-50'
                   }`}
                 >
-                  <p className="text-xs text-gray-600">❌ No vienen</p>
+                  <p className="text-xs text-gray-600">❌ No pueden</p>
                   <p className={`mt-1 text-2xl font-bold ${accentTextClass}`}>{declinedCount}</p>
                 </button>
                 <button
@@ -473,7 +482,7 @@ export default function EventControlCenterPage() {
                       : 'opacity-50'
                   }`}
                 >
-                  <p className="text-xs text-gray-600">🤔 Aún no lo saben</p>
+                  <p className="text-xs text-gray-600">🤔 Aún no saben</p>
                   <p className={`mt-1 text-2xl font-bold ${accentTextClass}`}>{maybeCount}</p>
                 </button>
               </div>

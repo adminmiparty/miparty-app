@@ -412,20 +412,6 @@ export default function EditEventPage() {
     green: 'bg-green-400 hover:bg-green-500 text-gray-900',
     purple: 'bg-purple-400 hover:bg-purple-500 text-white',
   }
-  const progressAccentMap: Record<string, string> = {
-    yellow: 'bg-yellow-400',
-    pink: 'bg-pink-400',
-    blue: 'bg-blue-400',
-    green: 'bg-green-400',
-    purple: 'bg-purple-400',
-  }
-  const progressTrackMap: Record<ThemeKey, string> = {
-    yellow: 'bg-yellow-100',
-    pink: 'bg-pink-100',
-    blue: 'bg-blue-100',
-    green: 'bg-green-100',
-    purple: 'bg-purple-100',
-  }
   const zoomSliderThemeMap: Record<ThemeKey, { thumbClass: string; fillColor: string }> = {
     yellow: {
       thumbClass:
@@ -484,8 +470,6 @@ export default function EditEventPage() {
   const activePreviewTheme = previewThemeClasses[invitationTheme]
   const pageBg = getTheme(invitationTheme).pageBg
   const submitButtonClass = buttonMap[invitationTheme] ?? buttonMap.yellow
-  const progressAccentClass = progressAccentMap[invitationTheme] ?? progressAccentMap.yellow
-  const progressTrackClass = progressTrackMap[invitationTheme] ?? progressTrackMap.yellow
   const themeDef = themes[invitationTheme] ?? themes.yellow
   const brandMap: Record<ThemeKey, string> = {
     yellow: 'text-yellow-500',
@@ -1174,23 +1158,12 @@ export default function EditEventPage() {
         <div className="mx-auto w-full max-w-md px-4">
           <div className="flex items-center justify-between gap-3 py-3">
             <Link
-              href="/dashboard"
+              href={`/dashboard/events/${slug}`}
               className="inline-flex items-center text-sm font-medium text-gray-900 hover:underline"
             >
-              ← Volver al panel
+              ← Volver
             </Link>
             <p className={`text-sm font-semibold ${brandClass}`}>MiParty</p>
-          </div>
-          <div className="border-t border-gray-200/60 pb-3 pt-2">
-            <div className="rounded-xl border border-yellow-100 bg-white/80 p-3">
-              <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
-                <span className="text-gray-900 font-semibold">Paso 1 — Crea tu evento</span>
-                <span className="text-gray-400 font-normal">Paso 2 — Revisa tu invitación</span>
-              </div>
-              <div className={`h-2 w-full rounded-full ${progressTrackClass}`}>
-                <div className={`h-2 w-1/2 rounded-full ${progressAccentClass}`} />
-              </div>
-            </div>
           </div>
         </div>
       </div>

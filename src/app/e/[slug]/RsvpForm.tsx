@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getTheme } from '@/lib/themes'
@@ -23,12 +24,16 @@ export function InvitationPreviewTopBar({
   publicSlug: string
   themeKey: string | null
 }) {
+  const searchParams = useSearchParams()
+  const fromParam = searchParams.get('from')
   const theme = getTheme(themeKey)
   const t =
     themeKey === 'yellow' || themeKey === 'pink' || themeKey === 'blue' || themeKey === 'green' || themeKey === 'purple'
       ? themeKey
       : 'yellow'
-  const backHref = `/dashboard/events/${publicSlug}/share?theme=${encodeURIComponent(t)}`
+  const shareHref = `/dashboard/events/${publicSlug}/share?theme=${encodeURIComponent(t)}`
+  const dashboardHref = `/dashboard/events/${publicSlug}`
+  const backHref = fromParam === 'dashboard' ? dashboardHref : shareHref
   const brandClass = previewBrandMap[t] ?? previewBrandMap.yellow
 
   return (
