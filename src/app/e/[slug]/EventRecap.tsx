@@ -5,7 +5,7 @@ export type EventRecapProps = {
   childName: string
   birthdayNumber: number | null
   eventDate: string
-  rsvpDeadline: string | null
+  confirmacionesLine: string
   startTime: string
   pickupTime: string | null
   locationName: string
@@ -74,7 +74,7 @@ export default function EventRecap({
   childName,
   birthdayNumber,
   eventDate,
-  rsvpDeadline,
+  confirmacionesLine,
   startTime,
   pickupTime,
   locationName,
@@ -127,9 +127,7 @@ export default function EventRecap({
       <p className="text-center text-2xl font-bold text-gray-900">{headline}</p>
       <div className="mt-3 space-y-1.5 text-sm">
         <p className="text-gray-700">{`📅 ${eventDate}`}</p>
-        {rsvpDeadline ? (
-          <p className="text-sm text-gray-500">{`Puedes confirmar hasta el ${rsvpDeadline}`}</p>
-        ) : null}
+        <p className="text-sm text-gray-400">{confirmacionesLine}</p>
         <p className="text-gray-700">
           {pickupTime
             ? `🕒 ${formatTimeValue(startTime)} a ${formatTimeValue(pickupTime)}`

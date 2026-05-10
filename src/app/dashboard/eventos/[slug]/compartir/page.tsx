@@ -334,13 +334,13 @@ export default function EventSharePage() {
       ? Number(event.invitation_image_zoom)
       : 1
 
-  const rsvpConfirmacionesLine =
-    event &&
-    event.rsvp_deadline_days != null &&
-    event.rsvp_deadline_days > 0 &&
-    Number.isFinite(event.rsvp_deadline_days)
-      ? formatRsvpConfirmacionesLine(event.event_date, event.rsvp_deadline_days)
-      : null
+  const rsvpConfirmacionesLine = event
+    ? event.rsvp_deadline_days != null &&
+      event.rsvp_deadline_days > 0 &&
+      Number.isFinite(event.rsvp_deadline_days)
+      ? `Confirmaciones hasta el ${formatRsvpConfirmacionesLine(event.event_date, event.rsvp_deadline_days)}`
+      : 'Confirmaciones hasta el día del evento'
+    : ''
 
   const foodLine =
     event?.enable_food_options && foodLabels.length > 0 ? foodLabels.join(' · ') : null
@@ -424,10 +424,8 @@ export default function EventSharePage() {
                   <p className="text-sm text-gray-900">{formatEventDateSpanish(event.event_date)}</p>
                 </div>
 
-                {rsvpConfirmacionesLine ? (
-                  <p className="text-sm text-gray-500">
-                    Confirmaciones hasta el {rsvpConfirmacionesLine}
-                  </p>
+                {event ? (
+                  <p className="text-sm text-gray-500">{rsvpConfirmacionesLine}</p>
                 ) : null}
 
                 <div className="flex gap-2">

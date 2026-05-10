@@ -35,7 +35,7 @@ type EventDetails = {
   location_name: string | null
   location_address: string | null
   google_maps_url: string | null
-  gift_option: 'regalo_libre' | 'bizum_pool'
+  gift_option: 'sin_regalo' | 'regalo_libre' | 'bizum_pool'
   bizum_phone: string | null
   enable_food_options: boolean | null
   organizer_notes: string | null
@@ -87,6 +87,13 @@ function formatRsvpDeadlineLabel(eventDate: string, daysBefore: number) {
   const eventDay = new Date(yearPart, monthPart - 1, dayPart)
   const deadline = subDays(eventDay, daysBefore)
   return capitalizeFirst(format(deadline, "EEEE, d 'de' MMMM", { locale: es }))
+}
+
+function formatRsvpConfirmacionesLineFull(eventDate: string, daysBefore: number) {
+  const [yearPart, monthPart, dayPart] = eventDate.split('-').map((value) => Number.parseInt(value, 10))
+  const eventDay = new Date(yearPart, monthPart - 1, dayPart)
+  const deadline = subDays(eventDay, daysBefore)
+  return capitalizeFirst(format(deadline, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es }))
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -178,6 +185,12 @@ export default async function PublicEventPage({
     Number.isFinite(event.rsvp_deadline_days)
       ? formatRsvpDeadlineLabel(event.event_date, event.rsvp_deadline_days)
       : null
+  const confirmacionesLine =
+    event.rsvp_deadline_days != null &&
+    event.rsvp_deadline_days > 0 &&
+    Number.isFinite(event.rsvp_deadline_days)
+      ? `Confirmaciones hasta el ${formatRsvpConfirmacionesLineFull(event.event_date, event.rsvp_deadline_days)}`
+      : 'Confirmaciones hasta el día del evento'
   const theme = getTheme(event.invitation_theme)
   const previewNavTheme = pickPreviewNavTheme(themeFromUrl, event.invitation_theme)
 
@@ -196,7 +209,7 @@ export default async function PublicEventPage({
             childName={event.child_name}
             birthdayNumber={event.birthday_number}
             eventDate={formatSpanishFullDate(event.event_date)}
-            rsvpDeadline={rsvpDeadline}
+            confirmacionesLine={confirmacionesLine}
             startTime={event.start_time}
             pickupTime={event.pickup_time}
             locationName={event.location_name ?? 'Ubicación'}

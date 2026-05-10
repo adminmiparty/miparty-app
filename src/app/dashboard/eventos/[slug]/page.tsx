@@ -8,6 +8,8 @@ import Link from 'next/link'
 import { Copy, LayoutGrid, Table2 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { User } from '@supabase/supabase-js'
+import { subDays } from 'date-fns'
 import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
 import ShareButton from '@/components/ShareButton'
@@ -25,6 +27,10 @@ type EventDetails = {
   location_address: string | null
   google_maps_url: string | null
   enable_food_options: boolean | null
+  gift_option: 'sin_regalo' | 'regalo_libre' | 'bizum_pool' | null
+  bizum_phone: string | null
+  organizer_notes: string | null
+  rsvp_deadline_days: number | null
   invitation_theme: 'yellow' | 'pink' | 'blue' | 'green' | 'purple' | null
   invitation_image_url: string | null
   invitation_image_fit: 'contain' | 'cover' | null
@@ -57,6 +63,57 @@ function formatTimeValue(time: string) {
   return time.slice(0, 5)
 }
 
+function userFirstDisplayName(user: User): string {
+  const rawMeta = user.user_metadata?.full_name
+  const fullName = typeof rawMeta === 'string' ? rawMeta.trim() : ''
+  if (fullName) {
+    const first = fullName.split(/\s+/).filter(Boolean)[0]
+    if (first) return first
+  }
+  const email = user.email?.trim() ?? ''
+  if (email) {
+    const local = email.split('@')[0] ?? ''
+    const first = local.split(/[._+\s-]/).filter(Boolean)[0]
+    if (first) return first
+  }
+  return 'Invitado'
+}
+
+function formatRsvpConfirmacionesDate(isoDate: string, daysBefore: number) {
+  const [y, m, d] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
+  const eventDay = new Date(y, m - 1, d)
+  const deadline = subDays(eventDay, daysBefore)
+  const raw = deadline.toLocaleDateString('es-ES', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+  return raw.charAt(0).toUpperCase() + raw.slice(1)
+}
+
+function formatDashboardGiftLine(event: {
+  gift_option: EventDetails['gift_option']
+  bizum_phone: string | null
+}): string | null {
+  const g = event.gift_option
+  if (g == null) return null
+  if (g === 'sin_regalo') return '🚫 Sin regalo'
+  if (g === 'regalo_libre') return '🎁 Regalo libre'
+  if (g === 'bizum_pool') {
+    const phone = (event.bizum_phone ?? '').trim()
+    if (!phone) return '🎁 Hucha al móvil'
+    if (phone.startsWith('+34')) {
+      return `🎁 Hucha al móvil ${phone.slice(3)} (Bizum)`
+    }
+    if (phone.startsWith('+52')) {
+      return `🎁 Nequi al celular ${phone.slice(3)}`
+    }
+    return `🎁 Hucha al móvil ${phone}`
+  }
+  return null
+}
+
 function rsvpStatusMeta(status: RsvpItem['attendance_status']) {
   if (status === 'confirmed') {
     return { label: 'Confirmado', badge: 'bg-green-100 text-green-700 border-green-200' }
@@ -77,6 +134,8 @@ export default function EventControlCenterPage() {
     typeof params?.slug === 'string' ? params.slug : Array.isArray(params?.slug) ? (params.slug[0] ?? '') : ''
 
   const [event, setEvent] = useState<EventDetails | null>(null)
+  const [foodOptionLabels, setFoodOptionLabels] = useState<string[]>([])
+  const [navUserFirstName, setNavUserFirstName] = useState('')
   const [rsvps, setRsvps] = useState<RsvpItem[]>([])
   const [loadError, setLoadError] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -135,10 +194,14 @@ export default function EventControlCenterPage() {
         return
       }
 
+      if (!cancelled) {
+        setNavUserFirstName(userFirstDisplayName(user))
+      }
+
       const { data: eventRow, error: eventError } = await supabase
         .from('events')
         .select(
-          'id, user_id, public_slug, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, enable_food_options, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
+          'id, user_id, public_slug, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, enable_food_options, organizer_notes, rsvp_deadline_days, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
         )
         .eq('public_slug', slug)
         .eq('user_id', user.id)
@@ -164,11 +227,23 @@ export default function EventControlCenterPage() {
         .eq('event_id', eventRow.id)
         .order('created_at', { ascending: false })
 
+      let labels: string[] = []
+      if (eventRow.enable_food_options) {
+        const { data: foodRows } = await supabase
+          .from('event_food_options')
+          .select('label')
+          .eq('event_id', eventRow.id)
+        labels = (foodRows ?? [])
+          .map((row: { label: string }) => row.label)
+          .filter((label: string) => String(label).trim() !== '')
+      }
+
       if (cancelled) {
         return
       }
 
       setEvent(eventRow)
+      setFoodOptionLabels(labels)
       setRsvps((rsvpRows ?? []) as RsvpItem[])
       setLoading(false)
     }
@@ -244,6 +319,22 @@ export default function EventControlCenterPage() {
         })),
     [rsvps]
   )
+
+  const confirmacionesLine = useMemo(() => {
+    if (!event) return ''
+    const d = event.rsvp_deadline_days
+    if (d != null && d > 0 && Number.isFinite(d)) {
+      return `Confirmaciones hasta el ${formatRsvpConfirmacionesDate(event.event_date, d)}`
+    }
+    return 'Confirmaciones hasta el día del evento'
+  }, [event])
+
+  const dashboardGiftLine = event ? formatDashboardGiftLine(event) : null
+  const hasLocationDetails =
+    event &&
+    ((event.location_name != null && String(event.location_name).trim() !== '') ||
+      (event.location_address != null && String(event.location_address).trim() !== '') ||
+      (event.google_maps_url != null && String(event.google_maps_url).trim() !== ''))
 
   const themeKey = event?.invitation_theme ?? 'yellow'
   const pageBgMap: Record<string, string> = {
@@ -371,12 +462,17 @@ export default function EventControlCenterPage() {
       <div className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 py-3 md:max-w-6xl">
           <Link
-            href="/dashboard"
+            href="/dashboard/eventos"
             className="inline-flex items-center text-sm font-medium text-gray-600 transition hover:text-gray-900"
           >
-            ← Mis eventos
+            ← Eventos
           </Link>
-          <p className={`text-sm font-bold ${brand.textBrand}`}>MiParty</p>
+          <Link
+            href="/dashboard"
+            className={`text-sm font-bold no-underline ${brand.textBrand}`}
+          >
+            {navUserFirstName ? `MiParty · ${navUserFirstName}` : 'MiParty'}
+          </Link>
         </div>
       </div>
 
@@ -399,6 +495,42 @@ export default function EventControlCenterPage() {
                   ? `🕒 ${formatTimeValue(event.start_time)} a ${formatTimeValue(event.pickup_time)}`
                   : `🕒 A las ${formatTimeValue(event.start_time)}`}
               </p>
+
+              <p className="mt-2 text-sm text-gray-400">{confirmacionesLine}</p>
+
+              {hasLocationDetails ? (
+                <div className="mt-3 space-y-1">
+                  {event.location_name != null && String(event.location_name).trim() !== '' ? (
+                    <p className="text-sm text-gray-700">{`📍 ${event.location_name}`}</p>
+                  ) : null}
+                  {event.location_address != null && String(event.location_address).trim() !== '' ? (
+                    <p className="text-sm text-gray-500">{event.location_address}</p>
+                  ) : null}
+                  {event.google_maps_url != null && String(event.google_maps_url).trim() !== '' ? (
+                    <a
+                      href={event.google_maps_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`inline-block text-sm font-medium no-underline ${accentTextClass}`}
+                    >
+                      Ver en Google Maps ↗
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {dashboardGiftLine ? <p className="mt-3 text-sm text-gray-700">{dashboardGiftLine}</p> : null}
+
+              {event.enable_food_options && foodOptionLabels.length > 0 ? (
+                <p className="mt-3 text-sm text-gray-700">{`🍽️ ${foodOptionLabels.join(' · ')}`}</p>
+              ) : null}
+
+              {event.organizer_notes != null && String(event.organizer_notes).trim() !== '' ? (
+                <div className="mt-3">
+                  <p className="text-sm font-medium text-gray-900">📋 Notas para los invitados</p>
+                  <p className="mt-1 text-sm text-gray-500 italic">{event.organizer_notes.trim()}</p>
+                </div>
+              ) : null}
 
               {event.invitation_image_url ? (
                 <div className={`mt-3 overflow-hidden rounded-2xl border ${accentBorderClass}`}>

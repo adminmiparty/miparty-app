@@ -126,6 +126,13 @@ function formatRsvpDeadlineLabel(eventDate: string, daysBefore: number) {
   return capitalizeFirst(format(deadline, "EEEE, d 'de' MMMM", { locale: es }))
 }
 
+function formatRsvpConfirmacionesLineFull(eventDate: string, daysBefore: number) {
+  const [yearPart, monthPart, dayPart] = eventDate.split('-').map((value) => Number.parseInt(value, 10))
+  const eventDay = new Date(yearPart, monthPart - 1, dayPart)
+  const deadline = subDays(eventDay, daysBefore)
+  return capitalizeFirst(format(deadline, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es }))
+}
+
 function formatTimeValue(time: string) {
   return time.slice(0, 5)
 }
@@ -516,6 +523,15 @@ export default function RsvpEditPage() {
     return formatRsvpDeadlineLabel(eventData.event_date, d)
   }, [eventData])
 
+  const confirmacionesLine = useMemo(() => {
+    if (!eventData) return null
+    const d = eventData.rsvp_deadline_days
+    if (d != null && d > 0 && Number.isFinite(d)) {
+      return `Confirmaciones hasta el ${formatRsvpConfirmacionesLineFull(eventData.event_date, d)}`
+    }
+    return 'Confirmaciones hasta el día del evento'
+  }, [eventData])
+
   const giftLine = useMemo(
     () => getGiftLine(eventData?.gift_option ?? null, eventData?.bizum_phone ?? null),
     [eventData],
@@ -730,8 +746,8 @@ export default function RsvpEditPage() {
                 </h1>
                 <div className="space-y-2 text-sm">
                   <p className="text-gray-800">{`📅 ${formatSpanishFullDate(eventData.event_date)}`}</p>
-                  {rsvpDeadlineLabel ? (
-                    <p className="text-gray-500">{`Puedes confirmar hasta el ${rsvpDeadlineLabel}`}</p>
+                  {confirmacionesLine ? (
+                    <p className="text-gray-500">{confirmacionesLine}</p>
                   ) : null}
                   <p className="text-gray-800">
                     {eventData.pickup_time
