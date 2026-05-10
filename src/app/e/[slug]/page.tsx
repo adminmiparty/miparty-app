@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { subDays } from 'date-fns'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/server'
 import { getTheme, type ThemeKey } from '@/lib/themes'
 import EventRecap from './EventRecap'
@@ -150,6 +152,10 @@ export default async function PublicEventPage({
   const isPreview =
     previewRaw === 'true' || (Array.isArray(previewRaw) && previewRaw[0] === 'true')
   const supabase = await createClient()
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser()
+  const isLoggedIn = Boolean(authUser)
 
   const { data: event } = await supabase
     .from('events')
@@ -195,11 +201,45 @@ export default async function PublicEventPage({
   const previewNavTheme = pickPreviewNavTheme(themeFromUrl, event.invitation_theme)
 
   return (
-    <main className={`min-h-screen bg-gradient-to-b ${theme.pageBg} px-4 py-8`}>
+    <main className={`min-h-screen bg-gradient-to-b ${theme.pageBg}`}>
       {isPreview ? (
-        <InvitationPreviewTopBar publicSlug={slug} themeKey={previewNavTheme} />
-      ) : null}
-      <div className="mx-auto w-full max-w-md space-y-4">
+        <div className="px-4 pt-8">
+          <InvitationPreviewTopBar publicSlug={slug} themeKey={previewNavTheme} />
+        </div>
+      ) : (
+        <div
+          className={`sticky top-0 z-50 w-full ${brand.navBorder} ${brand.navBg} shadow-sm`}
+        >
+          <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 py-3 md:max-w-6xl">
+            <Link
+              href="/"
+              className={`inline-flex items-center text-sm font-medium ${brand.navText} transition ${brand.navTextHover}`}
+            >
+              ← Inicio
+            </Link>
+            {isLoggedIn ? (
+              <span className={`text-sm font-bold ${brand.textBrand}`}>MiParty</span>
+            ) : (
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/login"
+                  className={`text-sm font-medium ${brand.navText} ${brand.navTextHover}`}
+                >
+                  Iniciar sesión
+                </Link>
+                <Link
+                  href="/registro"
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${brand.buttonPrimary}`}
+                >
+                  Registrarse
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      <div className={`px-4 ${isPreview ? 'pb-8 pt-0' : 'py-8'}`}>
+        <div className="mx-auto w-full max-w-md space-y-4">
         <div
           id="invitation-recap"
           className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl"
@@ -258,6 +298,7 @@ export default async function PublicEventPage({
           theme={theme}
           themeKey={event.invitation_theme}
         />
+        </div>
       </div>
     </main>
   )

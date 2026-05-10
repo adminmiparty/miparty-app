@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { subDays } from 'date-fns'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -279,6 +280,7 @@ export default function RsvpEditPage() {
   const [parentDialOpen, setParentDialOpen] = useState(false)
   const parentDialRef = useRef<HTMLDivElement>(null)
   const messageRef = useRef<HTMLTextAreaElement>(null)
+  const [navLoggedIn, setNavLoggedIn] = useState<boolean | null>(null)
 
   const resolvedThemeKey: ThemeKeyType =
     themeKey === 'yellow' || themeKey === 'pink' || themeKey === 'blue' || themeKey === 'green' || themeKey === 'purple'
@@ -304,6 +306,13 @@ export default function RsvpEditPage() {
       if (saveToastUnmountRef.current != null) clearTimeout(saveToastUnmountRef.current)
       if (savedEditCopyTimeoutRef.current != null) clearTimeout(savedEditCopyTimeoutRef.current)
     }
+  }, [])
+
+  useEffect(() => {
+    const client = createClient()
+    void client.auth.getUser().then(({ data: { user } }) => {
+      setNavLoggedIn(Boolean(user))
+    })
   }, [])
 
   function showSavedResponseToast() {
@@ -660,22 +669,59 @@ export default function RsvpEditPage() {
     setLoading(false)
   }
 
+  const rsvpTopNav = (
+    <div className={`sticky top-0 z-50 w-full ${brand.navBorder} ${brand.navBg} shadow-sm`}>
+      <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 py-3 md:max-w-6xl">
+        <Link
+          href="/"
+          className={`inline-flex items-center text-sm font-medium ${brand.navText} transition ${brand.navTextHover}`}
+        >
+          ← Inicio
+        </Link>
+        {navLoggedIn === true ? (
+          <span className={`text-sm font-bold ${brand.textBrand}`}>MiParty</span>
+        ) : (
+          <div className="flex items-center gap-3">
+            <Link
+              href="/login"
+              className={`text-sm font-medium ${brand.navText} ${brand.navTextHover}`}
+            >
+              Iniciar sesión
+            </Link>
+            <Link
+              href="/registro"
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${brand.buttonPrimary}`}
+            >
+              Registrarse
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
   if (loadState === 'loading') {
     return (
-      <main className={`min-h-screen ${brand.pageBg} px-4 py-8`}>
-        <p className="text-center text-sm text-gray-600">Cargando...</p>
+      <main className={`min-h-screen ${brand.pageBg}`}>
+        {rsvpTopNav}
+        <div className="px-4 py-8">
+          <p className="text-center text-sm text-gray-600">Cargando...</p>
+        </div>
       </main>
     )
   }
 
   if (loadState === 'notfound') {
     return (
-      <main className={`min-h-screen ${brand.pageBg} px-4 py-10`}>
-        <div className="mx-auto max-w-md rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
-          <p className="text-center text-sm font-medium text-gray-900">Este enlace no es válido o ha expirado.</p>
-          <p className="mt-2 text-center text-xs text-gray-500">
-            Pide al organizador que te reenvíe la invitación para responder de nuevo.
-          </p>
+      <main className={`min-h-screen ${brand.pageBg}`}>
+        {rsvpTopNav}
+        <div className="px-4 py-10">
+          <div className="mx-auto max-w-md rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
+            <p className="text-center text-sm font-medium text-gray-900">Este enlace no es válido o ha expirado.</p>
+            <p className="mt-2 text-center text-xs text-gray-500">
+              Pide al organizador que te reenvíe la invitación para responder de nuevo.
+            </p>
+          </div>
         </div>
       </main>
     )
@@ -694,7 +740,9 @@ export default function RsvpEditPage() {
   }
 
   return (
-    <main className={`relative min-h-screen bg-gradient-to-b ${pageBg} px-4 py-6 pb-10 sm:py-8`}>
+    <main className={`relative min-h-screen bg-gradient-to-b ${pageBg}`}>
+      {rsvpTopNav}
+      <div className="px-4 py-6 pb-10 sm:py-8">
       {saveToastVisible ? (
         <div
           className="pointer-events-none fixed inset-x-0 top-0 z-[100] flex justify-center px-3 sm:px-4"
@@ -1131,6 +1179,7 @@ export default function RsvpEditPage() {
           </div>
         </div>
       ) : null}
+      </div>
     </main>
   )
 }

@@ -24,12 +24,20 @@ export default async function NotFound() {
           {isLoggedIn ? (
             <span className={`text-sm font-bold ${brand.textBrand}`}>MiParty</span>
           ) : (
-            <Link
-              href="/registro"
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${brand.buttonPrimary}`}
-            >
-              Registrarse
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/login"
+                className={`text-sm font-medium ${brand.navText} ${brand.navTextHover}`}
+              >
+                Iniciar sesión
+              </Link>
+              <Link
+                href="/registro"
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${brand.buttonPrimary}`}
+              >
+                Registrarse
+              </Link>
+            </div>
           )}
         </div>
       </div>
