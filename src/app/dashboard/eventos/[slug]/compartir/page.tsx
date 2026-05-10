@@ -324,7 +324,7 @@ export default function EventSharePage() {
       }
     }
 
-    router.push(`/dashboard/events/${slug}`)
+    router.push(`/dashboard/eventos/${slug}`)
   }
 
   const imagePos = event ? parseInvitationPosition(event.invitation_image_position) : { x: 50, y: 50 }
@@ -358,7 +358,7 @@ export default function EventSharePage() {
         <div className="mx-auto w-full max-w-md px-4">
           <div className="flex items-center justify-between gap-3 py-3">
             <Link
-              href={`/dashboard/events/${slug}/edit?theme=${themeKey}&from=share`}
+              href={`/dashboard/eventos/${slug}/editar?theme=${themeKey}&from=share`}
               className="inline-flex items-center text-sm font-medium text-gray-900 hover:underline"
             >
               ← Volver al Paso 1
@@ -520,7 +520,7 @@ export default function EventSharePage() {
               </div>
 
               <div className="flex flex-col gap-3">
-                <Link href={`/dashboard/events/${slug}/edit?theme=${themeKey}&from=share`} className={secondaryOutlineClass}>
+                <Link href={`/dashboard/eventos/${slug}/editar?theme=${themeKey}&from=share`} className={secondaryOutlineClass}>
                   Editar evento
                 </Link>
                 <a href={`/e/${event.public_slug}?preview=true&theme=${themeKey ?? 'yellow'}&from=share`} className={secondaryOutlineClass}>

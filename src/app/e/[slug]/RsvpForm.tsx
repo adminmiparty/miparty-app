@@ -31,8 +31,8 @@ export function InvitationPreviewTopBar({
     themeKey === 'yellow' || themeKey === 'pink' || themeKey === 'blue' || themeKey === 'green' || themeKey === 'purple'
       ? themeKey
       : 'yellow'
-  const shareHref = `/dashboard/events/${publicSlug}/share?theme=${encodeURIComponent(t)}`
-  const dashboardHref = `/dashboard/events/${publicSlug}`
+  const shareHref = `/dashboard/eventos/${publicSlug}/compartir?theme=${encodeURIComponent(t)}`
+  const dashboardHref = `/dashboard/eventos/${publicSlug}`
   const backHref = fromParam === 'dashboard' ? dashboardHref : shareHref
   const brandClass = previewBrandMap[t] ?? previewBrandMap.yellow
 

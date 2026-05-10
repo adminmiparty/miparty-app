@@ -1,5 +1,9 @@
 'use client'
 
+// Event control center — manages a single event and its RSVPs
+// Route: /dashboard/eventos/[slug]
+// Do not confuse with the Eventos page at /dashboard/eventos
+
 import Link from 'next/link'
 import { Copy, LayoutGrid, Table2 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
@@ -395,7 +399,7 @@ export default function EventControlCenterPage() {
 
               <div className="mt-4">
                 <Link
-                  href={`/dashboard/events/${event.public_slug}/edit?theme=${event.invitation_theme ?? 'yellow'}`}
+                  href={`/dashboard/eventos/${event.public_slug}/editar?theme=${event.invitation_theme ?? 'yellow'}`}
                   className="inline-flex w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
                 >
                   Editar evento

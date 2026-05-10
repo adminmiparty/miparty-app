@@ -1,13 +1,13 @@
 ﻿'use client'
 
 import Link from 'next/link'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { type ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { DayPicker, type Matcher } from 'react-day-picker'
 import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
-import { getTheme, themes, type ThemeKey } from '@/lib/themes'
+import { themes, type ThemeKey } from '@/lib/themes'
 import 'react-day-picker/style.css'
 
 type Child = {
@@ -27,277 +27,8 @@ function getChildDropdownDisplayName(child: Child) {
 }
 
 type GiftOption = 'regalo_libre' | 'bizum_pool'
-const NEW_CHILD_VALUE = '__new__'
-const SPANISH_MONTHS = [
-  'Enero',
-  'Febrero',
-  'Marzo',
-  'Abril',
-  'Mayo',
-  'Junio',
-  'Julio',
-  'Agosto',
-  'Septiembre',
-  'Octubre',
-  'Noviembre',
-  'Diciembre',
-]
 
-function formatIsoToDisplayDate(isoDate: string) {
-  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (!match) {
-    return ''
-  }
-  const [, year, month, day] = match
-  return `${day}/${month}/${year}`
-}
-
-function formatDisplayToIsoDate(displayDate: string) {
-  const match = displayDate.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
-  if (!match) {
-    return null
-  }
-  const [, day, month, year] = match
-  const dayNumber = Number.parseInt(day, 10)
-  const monthNumber = Number.parseInt(month, 10)
-  const yearNumber = Number.parseInt(year, 10)
-
-  if (
-    Number.isNaN(dayNumber) ||
-    Number.isNaN(monthNumber) ||
-    Number.isNaN(yearNumber) ||
-    monthNumber < 1 ||
-    monthNumber > 12 ||
-    dayNumber < 1 ||
-    dayNumber > 31
-  ) {
-    return null
-  }
-
-  const parsed = new Date(yearNumber, monthNumber - 1, dayNumber)
-  if (
-    parsed.getFullYear() !== yearNumber ||
-    parsed.getMonth() + 1 !== monthNumber ||
-    parsed.getDate() !== dayNumber
-  ) {
-    return null
-  }
-
-  return `${year}-${month}-${day}`
-}
-
-function formatDateInputValue(rawValue: string) {
-  const digits = rawValue.replace(/\D/g, '').slice(0, 8)
-  const day = digits.slice(0, 2)
-  const month = digits.slice(2, 4)
-  const year = digits.slice(4, 8)
-
-  if (digits.length <= 2) {
-    return day
-  }
-  if (digits.length <= 4) {
-    return `${day}/${month}`
-  }
-  return `${day}/${month}/${year}`
-}
-
-function formatEventDateInputValue(rawValue: string) {
-  const digits = rawValue.replace(/\D/g, '').slice(0, 8)
-  const day = digits.slice(0, 2)
-  const month = digits.slice(2, 4)
-  const year = digits.slice(4, 8)
-  const currentYear = String(new Date().getFullYear())
-
-  if (digits.length <= 2) {
-    return day
-  }
-  if (digits.length < 4) {
-    return `${day}/${month}`
-  }
-  if (digits.length === 4) {
-    return `${day}/${month}/${currentYear}`
-  }
-  return `${day}/${month}/${year}`
-}
-
-function formatSpanishWeekday(isoDate: string) {
-  const [year, month, day] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
-  const date = new Date(year, month - 1, day)
-  return date.toLocaleDateString('es-ES', {
-    weekday: 'long',
-  })
-}
-
-function parseIsoDateToLocal(isoDate: string) {
-  const [yearPart, monthPart, dayPart] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
-  return new Date(yearPart, monthPart - 1, dayPart)
-}
-
-function getChildAgeOnEventDate(birthDate: Date, eventDate: Date) {
-  let age = eventDate.getFullYear() - birthDate.getFullYear()
-  const monthDiff = eventDate.getMonth() - birthDate.getMonth()
-  if (monthDiff < 0 || (monthDiff === 0 && eventDate.getDate() < birthDate.getDate())) {
-    age -= 1
-  }
-  return age
-}
-
-function parse24hTime(time24h: string) {
-  const [hours, minutes] = time24h.split(':')
-  return {
-    hour: String(Number.parseInt(hours, 10)),
-    minutes: minutes ?? '00',
-  }
-}
-
-function build24hTime(hour: string, minutes: string) {
-  const hourNumber = Number.parseInt(hour, 10)
-  if (Number.isNaN(hourNumber)) {
-    return ''
-  }
-  return `${String(hourNumber).padStart(2, '0')}:${minutes}`
-}
-
-type InlineTimePickerProps = {
-  value: string
-  onChange: (value: string) => void
-  optional?: boolean
-  minHour?: number
-}
-
-function InlineTimePicker({ value, onChange, optional = false, minHour = 1 }: InlineTimePickerProps) {
-  const parsed = value ? parse24hTime(value) : null
-  const [optionalHour, setOptionalHour] = useState(parsed?.hour ?? '')
-  const [optionalMinutes, setOptionalMinutes] = useState(parsed?.minutes ?? '')
-  const selectedHour = optional ? optionalHour : parsed?.hour ?? ''
-  const selectedMinutes = optional ? optionalMinutes : parsed?.minutes ?? '00'
-
-  useEffect(() => {
-    if (!optional && !value) {
-      onChange('17:00')
-    }
-  }, [optional, onChange, value])
-
-  useEffect(() => {
-    if (!optional) {
-      return
-    }
-    if (!value) {
-      return
-    }
-    const nextParsed = parse24hTime(value)
-    setOptionalHour(nextParsed.hour)
-    setOptionalMinutes(nextParsed.minutes)
-  }, [optional, value])
-
-  const handleHourChange = (nextHour: string) => {
-    if (optional) {
-      setOptionalHour(nextHour)
-      if (!nextHour) {
-        setOptionalMinutes('')
-        onChange('')
-        return
-      }
-      if (!selectedMinutes) {
-        onChange('')
-        return
-      }
-      onChange(build24hTime(nextHour, selectedMinutes))
-      return
-    }
-    onChange(build24hTime(nextHour, selectedMinutes || '00'))
-  }
-
-  const handleMinutesChange = (nextMinutes: string) => {
-    if (optional) {
-      setOptionalMinutes(nextMinutes)
-      if (!selectedHour) {
-        return
-      }
-      if (!nextMinutes) {
-        onChange('')
-        return
-      }
-      onChange(build24hTime(selectedHour, nextMinutes))
-      return
-    }
-    onChange(build24hTime(selectedHour || '17', nextMinutes || '00'))
-  }
-
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      <select
-        value={selectedHour}
-        onChange={(event) => handleHourChange(event.target.value)}
-        className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
-      >
-        {optional ? <option value="">--</option> : null}
-        {Array.from({ length: 23 }, (_, index) => index + 1)
-          .filter((hour) => hour >= minHour)
-          .map((hour) => (
-          <option key={hour} value={hour}>
-            {hour}
-          </option>
-          ))}
-      </select>
-
-      <select
-        value={selectedMinutes}
-        onChange={(event) => handleMinutesChange(event.target.value)}
-        className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
-      >
-        {optional ? <option value="">--</option> : null}
-        {['00', '15', '30', '45'].map((minute) => (
-          <option key={minute} value={minute}>
-            {minute}
-          </option>
-        ))}
-      </select>
-    </div>
-  )
-}
-
-type EventRow = {
-  id: string
-  user_id: string
-  child_name: string
-  child_birth_date: string | null
-  title: string
-  event_date: string
-  start_time: string
-  pickup_time: string | null
-  location_name: string | null
-  location_address: string | null
-  google_maps_url: string | null
-  gift_option: 'sin_regalo' | 'regalo_libre' | 'bizum_pool' | null
-  bizum_phone: string | null
-  rsvp_deadline_days: number | null
-  birthday_number: number | null
-  organizer_phone: string | null
-  enable_food_options: boolean | null
-  organizer_notes: string | null
-  invitation_theme: string | null
-  invitation_image_url: string | null
-  invitation_image_fit: 'contain' | 'cover' | null
-  invitation_image_position: string | null
-  invitation_image_zoom: number | null
-  public_slug: string
-}
-
-function parseStoredLocationAddress(address: string) {
-  const segments = address.split(',').map((part) => part.trim())
-  if (segments.length >= 2) {
-    const street = segments[0] ?? ''
-    const tail = segments.slice(1).join(', ').trim()
-    const tailMatch = tail.match(/^(\S+)\s+(.+)$/)
-    if (tailMatch) {
-      return { street, postal: tailMatch[1], city: tailMatch[2] }
-    }
-    return { street, postal: '', city: tail }
-  }
-  return { street: address.trim(), postal: '', city: '' }
-}
-
+/** Beyond +34/+57 — longest match first when reloading stored full international numbers */
 const EXTRA_INTERNATIONAL_PREFIXES_LONGEST_FIRST = Array.from(
   new Set([
     '+886',
@@ -473,15 +204,13 @@ function sanitizeDialPrefix(raw: string): string {
   return ('+' + body).slice(0, 5)
 }
 
-function splitDialPhone(full: string | null): {
+function splitDialPhone(full: string): {
   countryCode: '+34' | '+57' | 'otro'
   customCode: string
   number: string
 } {
-  if (!full || full.trim() === '') {
-    return { countryCode: '+34', customCode: '', number: '' }
-  }
   const trimmed = full.trim()
+  if (!trimmed) return { countryCode: '+34', customCode: '', number: '' }
   if (trimmed.startsWith('+57')) {
     return { countryCode: '+57', customCode: '', number: trimmed.slice(3) }
   }
@@ -506,28 +235,260 @@ function dialCodeShortLabel(code: string): string {
   return '🇪🇸 +34'
 }
 
-function parseInvitationPosition(position: string | null) {
-  if (!position || position.trim() === '') {
-    return { x: 50, y: 50 }
+const NEW_CHILD_VALUE = '__new__'
+const SPANISH_MONTHS = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+]
+
+function formatIsoToDisplayDate(isoDate: string) {
+  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) {
+    return ''
   }
-  const parts = position.trim().split(/\s+/)
-  const x = Number.parseFloat((parts[0] ?? '50').replace('%', ''))
-  const y = Number.parseFloat((parts[1] ?? '50').replace('%', ''))
+  const [, year, month, day] = match
+  return `${day}/${month}/${year}`
+}
+
+function formatDisplayToIsoDate(displayDate: string) {
+  const match = displayDate.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (!match) {
+    return null
+  }
+  const [, day, month, year] = match
+  const dayNumber = Number.parseInt(day, 10)
+  const monthNumber = Number.parseInt(month, 10)
+  const yearNumber = Number.parseInt(year, 10)
+
+  if (
+    Number.isNaN(dayNumber) ||
+    Number.isNaN(monthNumber) ||
+    Number.isNaN(yearNumber) ||
+    monthNumber < 1 ||
+    monthNumber > 12 ||
+    dayNumber < 1 ||
+    dayNumber > 31
+  ) {
+    return null
+  }
+
+  const parsed = new Date(yearNumber, monthNumber - 1, dayNumber)
+  if (
+    parsed.getFullYear() !== yearNumber ||
+    parsed.getMonth() + 1 !== monthNumber ||
+    parsed.getDate() !== dayNumber
+  ) {
+    return null
+  }
+
+  return `${year}-${month}-${day}`
+}
+
+function formatDateInputValue(rawValue: string) {
+  const digits = rawValue.replace(/\D/g, '').slice(0, 8)
+  const day = digits.slice(0, 2)
+  const month = digits.slice(2, 4)
+  const year = digits.slice(4, 8)
+
+  if (digits.length <= 2) {
+    return day
+  }
+  if (digits.length <= 4) {
+    return `${day}/${month}`
+  }
+  return `${day}/${month}/${year}`
+}
+
+function formatEventDateInputValue(rawValue: string) {
+  const digits = rawValue.replace(/\D/g, '').slice(0, 8)
+  const day = digits.slice(0, 2)
+  const month = digits.slice(2, 4)
+  const year = digits.slice(4, 8)
+  const currentYear = String(new Date().getFullYear())
+
+  if (digits.length <= 2) {
+    return day
+  }
+  if (digits.length < 4) {
+    return `${day}/${month}`
+  }
+  if (digits.length === 4) {
+    return `${day}/${month}/${currentYear}`
+  }
+  return `${day}/${month}/${year}`
+}
+
+function formatSpanishWeekday(isoDate: string) {
+  const [year, month, day] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
+  const date = new Date(year, month - 1, day)
+  return date.toLocaleDateString('es-ES', {
+    weekday: 'long',
+  })
+}
+
+function parseIsoDateToLocal(isoDate: string) {
+  const [yearPart, monthPart, dayPart] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
+  return new Date(yearPart, monthPart - 1, dayPart)
+}
+
+function getChildAgeOnEventDate(birthDate: Date, eventDate: Date) {
+  let age = eventDate.getFullYear() - birthDate.getFullYear()
+  const monthDiff = eventDate.getMonth() - birthDate.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && eventDate.getDate() < birthDate.getDate())) {
+    age -= 1
+  }
+  return age
+}
+
+function parse24hTime(time24h: string) {
+  const [hours, minutes] = time24h.split(':')
   return {
-    x: Number.isFinite(x) ? x : 50,
-    y: Number.isFinite(y) ? y : 50,
+    hour: String(Number.parseInt(hours, 10)),
+    minutes: minutes ?? '00',
   }
 }
 
-export default function EditEventPage() {
+function build24hTime(hour: string, minutes: string) {
+  const hourNumber = Number.parseInt(hour, 10)
+  if (Number.isNaN(hourNumber)) {
+    return ''
+  }
+  return `${String(hourNumber).padStart(2, '0')}:${minutes}`
+}
+
+type InlineTimePickerProps = {
+  value: string
+  onChange: (value: string) => void
+  optional?: boolean
+  minHour?: number
+  inputFocusClass: string
+}
+
+function InlineTimePicker({
+  value,
+  onChange,
+  optional = false,
+  minHour = 1,
+  inputFocusClass,
+}: InlineTimePickerProps) {
+  const parsed = value ? parse24hTime(value) : null
+  const [optionalHour, setOptionalHour] = useState(parsed?.hour ?? '')
+  const [optionalMinutes, setOptionalMinutes] = useState(parsed?.minutes ?? '')
+  const selectedHour = optional ? optionalHour : parsed?.hour ?? ''
+  const selectedMinutes = optional ? optionalMinutes : parsed?.minutes ?? '00'
+
+  useEffect(() => {
+    if (!optional && !value) {
+      onChange('17:00')
+    }
+  }, [optional, onChange, value])
+
+  useEffect(() => {
+    if (!optional) {
+      return
+    }
+    if (!value) {
+      return
+    }
+    const nextParsed = parse24hTime(value)
+    setOptionalHour(nextParsed.hour)
+    setOptionalMinutes(nextParsed.minutes)
+  }, [optional, value])
+
+  const handleHourChange = (nextHour: string) => {
+    if (optional) {
+      setOptionalHour(nextHour)
+      if (!nextHour) {
+        setOptionalMinutes('')
+        onChange('')
+        return
+      }
+      if (!selectedMinutes) {
+        onChange('')
+        return
+      }
+      onChange(build24hTime(nextHour, selectedMinutes))
+      return
+    }
+    onChange(build24hTime(nextHour, selectedMinutes || '00'))
+  }
+
+  const handleMinutesChange = (nextMinutes: string) => {
+    if (optional) {
+      setOptionalMinutes(nextMinutes)
+      if (!selectedHour) {
+        return
+      }
+      if (!nextMinutes) {
+        onChange('')
+        return
+      }
+      onChange(build24hTime(selectedHour, nextMinutes))
+      return
+    }
+    onChange(build24hTime(selectedHour || '17', nextMinutes || '00'))
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <select
+        value={selectedHour}
+        onChange={(event) => handleHourChange(event.target.value)}
+        className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
+      >
+        {optional ? <option value="">--</option> : null}
+        {Array.from({ length: 23 }, (_, index) => index + 1)
+          .filter((hour) => hour >= minHour)
+          .map((hour) => (
+          <option key={hour} value={hour}>
+            {hour}
+          </option>
+          ))}
+      </select>
+
+      <select
+        value={selectedMinutes}
+        onChange={(event) => handleMinutesChange(event.target.value)}
+        className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
+      >
+        {optional ? <option value="">--</option> : null}
+        {['00', '15', '30', '45'].map((minute) => (
+          <option key={minute} value={minute}>
+            {minute}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+function generatePublicSlug(title: string) {
+  const base = title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+
+  const randomSuffix = Math.random().toString(36).slice(2, 6)
+  return `${base || 'evento'}-${randomSuffix}`
+}
+
+export default function NewEventPage() {
   const router = useRouter()
-  const params = useParams()
-  const slugParam = params?.slug
-  const slug = typeof slugParam === 'string' ? slugParam : Array.isArray(slugParam) ? slugParam[0] : ''
   const supabase = createClient()
-  const searchParams = useSearchParams()
-  const themeParam = searchParams.get('theme') as ThemeKey | null
-  const fromShare = searchParams.get('from') === 'share'
 
   const [children, setChildren] = useState<Child[]>([])
   const [childrenLoading, setChildrenLoading] = useState(true)
@@ -568,10 +529,6 @@ export default function EditEventPage() {
   const [bizumCustomCode, setBizumCustomCode] = useState('')
   const [bizumPhoneNumber, setBizumPhoneNumber] = useState('')
   const [showGift, setShowGift] = useState(false)
-  const [organizerDialOpen, setOrganizerDialOpen] = useState(false)
-  const [bizumDialOpen, setBizumDialOpen] = useState(false)
-  const organizerDialRef = useRef<HTMLDivElement>(null)
-  const bizumDialRef = useRef<HTMLDivElement>(null)
 
   const [foodEnabled, setFoodEnabled] = useState(false)
   const [foodOptions, setFoodOptions] = useState<string[]>([''])
@@ -586,17 +543,34 @@ export default function EditEventPage() {
   const [showImage, setShowImage] = useState(false)
   const [notes, setNotes] = useState('')
   const [showNotes, setShowNotes] = useState(false)
-  const [invitationTheme, setInvitationTheme] = useState<ThemeKey>(() => (themeParam ?? 'yellow') as ThemeKey)
+  const [invitationTheme, setInvitationTheme] = useState<ThemeKey>('yellow')
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [eventId, setEventId] = useState<string | null>(null)
+  const [organizerDialOpen, setOrganizerDialOpen] = useState(false)
+  const [bizumDialOpen, setBizumDialOpen] = useState(false)
+  const organizerDialRef = useRef<HTMLDivElement>(null)
+  const bizumDialRef = useRef<HTMLDivElement>(null)
+  const pageBgMap: Record<string, string> = {
+    yellow: 'from-yellow-50 to-white',
+    pink: 'from-pink-50 to-white',
+    blue: 'from-blue-50 to-white',
+    green: 'from-green-50 to-white',
+    purple: 'from-purple-50 to-white',
+  }
   const buttonMap: Record<string, string> = {
     yellow: 'bg-yellow-400 hover:bg-yellow-500 text-gray-900',
     pink: 'bg-pink-400 hover:bg-pink-500 text-white',
     blue: 'bg-blue-400 hover:bg-blue-500 text-white',
     green: 'bg-green-400 hover:bg-green-500 text-gray-900',
     purple: 'bg-purple-400 hover:bg-purple-500 text-white',
+  }
+  const progressAccentMap: Record<string, string> = {
+    yellow: 'bg-yellow-400',
+    pink: 'bg-pink-400',
+    blue: 'bg-blue-400',
+    green: 'bg-green-400',
+    purple: 'bg-purple-400',
   }
   const zoomSliderThemeMap: Record<ThemeKey, { thumbClass: string; fillColor: string }> = {
     yellow: {
@@ -654,44 +628,16 @@ export default function EditEventPage() {
     },
   }
   const activePreviewTheme = previewThemeClasses[invitationTheme]
-  const pageBg = getTheme(invitationTheme).pageBg
+  const pageBg = pageBgMap[invitationTheme] ?? pageBgMap.yellow
   const submitButtonClass = buttonMap[invitationTheme] ?? buttonMap.yellow
-  const themeDef = themes[invitationTheme] ?? themes.yellow
-  const brandMap: Record<ThemeKey, string> = {
-    yellow: 'text-yellow-500',
-    pink: 'text-pink-500',
-    blue: 'text-blue-500',
-    green: 'text-green-500',
-    purple: 'text-purple-500',
+  const progressAccentClass = progressAccentMap[invitationTheme] ?? progressAccentMap.yellow
+  const themeCalendarClasses: Record<ThemeKey, string> = {
+    yellow: 'bg-yellow-400 text-gray-900',
+    pink: 'bg-pink-400 text-white',
+    blue: 'bg-blue-400 text-white',
+    green: 'bg-green-400 text-white',
+    purple: 'bg-purple-400 text-white',
   }
-  const brandClass = brandMap[invitationTheme] ?? brandMap.yellow
-
-  const addOptionButtonMap: Record<ThemeKey, string> = {
-    yellow: 'border-yellow-400 text-yellow-600 hover:bg-yellow-50',
-    pink: 'border-pink-400 text-pink-600 hover:bg-pink-50',
-    blue: 'border-blue-400 text-blue-600 hover:bg-blue-50',
-    green: 'border-green-400 text-green-600 hover:bg-green-50',
-    purple: 'border-purple-400 text-purple-600 hover:bg-purple-50',
-  }
-  const addOptionButtonClass = addOptionButtonMap[invitationTheme] ?? addOptionButtonMap.yellow
-
-  const sectionCardMap: Record<ThemeKey, string> = {
-    yellow: 'border-yellow-200 hover:border-yellow-300 hover:bg-yellow-50',
-    pink: 'border-pink-200 hover:border-pink-300 hover:bg-pink-50',
-    blue: 'border-blue-200 hover:border-blue-300 hover:bg-blue-50',
-    green: 'border-green-200 hover:border-green-300 hover:bg-green-50',
-    purple: 'border-purple-200 hover:border-purple-300 hover:bg-purple-50',
-  }
-  const sectionCardClass = sectionCardMap[invitationTheme] ?? sectionCardMap.yellow
-
-  const openSectionMap: Record<ThemeKey, string> = {
-    yellow: 'border-yellow-200',
-    pink: 'border-pink-200',
-    blue: 'border-blue-200',
-    green: 'border-green-200',
-    purple: 'border-purple-200',
-  }
-  const openSectionClass = openSectionMap[invitationTheme] ?? openSectionMap.yellow
 
   const inputFocusMap: Record<ThemeKey, string> = {
     yellow: 'ring-yellow-400 focus:border-yellow-400',
@@ -715,6 +661,15 @@ export default function EditEventPage() {
     return () => document.removeEventListener('pointerdown', handlePointerDown, true)
   }, [organizerDialOpen, bizumDialOpen])
 
+  const sectionCardMap: Record<ThemeKey, string> = {
+    yellow: 'border-yellow-200 hover:border-yellow-300 hover:bg-yellow-50',
+    pink: 'border-pink-200 hover:border-pink-300 hover:bg-pink-50',
+    blue: 'border-blue-200 hover:border-blue-300 hover:bg-blue-50',
+    green: 'border-green-200 hover:border-green-300 hover:bg-green-50',
+    purple: 'border-purple-200 hover:border-purple-300 hover:bg-purple-50',
+  }
+  const sectionCardClass = sectionCardMap[invitationTheme] ?? sectionCardMap.yellow
+
   const accentTextMap: Record<ThemeKey, string> = {
     yellow: 'text-yellow-600',
     pink: 'text-pink-600',
@@ -723,6 +678,15 @@ export default function EditEventPage() {
     purple: 'text-purple-600',
   }
   const accentTextClass = accentTextMap[invitationTheme] ?? accentTextMap.yellow
+
+  const openSectionMap: Record<ThemeKey, string> = {
+    yellow: 'border-yellow-200',
+    pink: 'border-pink-200',
+    blue: 'border-blue-200',
+    green: 'border-green-200',
+    purple: 'border-purple-200',
+  }
+  const openSectionClass = openSectionMap[invitationTheme] ?? openSectionMap.yellow
 
   const calendarHoverMap: Record<ThemeKey, string> = {
     yellow: 'hover:bg-yellow-100',
@@ -733,13 +697,32 @@ export default function EditEventPage() {
   }
   const calendarHoverClass = calendarHoverMap[invitationTheme] ?? calendarHoverMap.yellow
 
-  const themeCalendarClasses: Record<string, string> = {
-    yellow: 'bg-yellow-400 text-gray-900',
-    pink: 'bg-pink-400 text-white',
-    blue: 'bg-blue-400 text-white',
-    green: 'bg-green-400 text-white',
-    purple: 'bg-purple-400 text-white',
+  const mipartyTextMap: Record<ThemeKey, string> = {
+    yellow: 'text-yellow-500',
+    pink: 'text-pink-500',
+    blue: 'text-blue-500',
+    green: 'text-green-500',
+    purple: 'text-purple-500',
   }
+  const mipartyTextClass = mipartyTextMap[invitationTheme] ?? mipartyTextMap.yellow
+
+  const addOptionButtonMap: Record<ThemeKey, string> = {
+    yellow: 'border-yellow-400 text-yellow-600 hover:bg-yellow-50',
+    pink: 'border-pink-400 text-pink-600 hover:bg-pink-50',
+    blue: 'border-blue-400 text-blue-600 hover:bg-blue-50',
+    green: 'border-green-400 text-green-600 hover:bg-green-50',
+    purple: 'border-purple-400 text-purple-600 hover:bg-purple-50',
+  }
+  const addOptionButtonClass = addOptionButtonMap[invitationTheme] ?? addOptionButtonMap.yellow
+
+  const progressTrackMap: Record<ThemeKey, string> = {
+    yellow: 'bg-yellow-100',
+    pink: 'bg-pink-100',
+    blue: 'bg-blue-100',
+    green: 'bg-green-100',
+    purple: 'bg-purple-100',
+  }
+  const progressTrackClass = progressTrackMap[invitationTheme] ?? progressTrackMap.yellow
 
   const hasChildren = children.length > 0
 
@@ -791,33 +774,10 @@ export default function EditEventPage() {
   }, [birthdayNumber, childName, eventTitleManuallyEdited])
 
   useEffect(() => {
-    if (!slug) {
-      router.replace('/dashboard')
-      return
-    }
-
     let isMounted = true
 
-    const loadEventAndChildren = async () => {
+    const loadChildren = async () => {
       setChildrenLoading(true)
-
-      const applyBirthFromDisplay = (displayValue: string) => {
-        const parts = displayValue.split('/')
-        if (parts.length === 3) {
-          const d = parts[0] ?? ''
-          const m = parts[1] ?? ''
-          const y = parts[2] ?? ''
-          setBirthDay(d)
-          setBirthMonth(m)
-          setBirthYear(y)
-          setChildBirthDate(`${d}/${m}/${y}`)
-        } else {
-          setBirthDay('')
-          setBirthMonth('')
-          setBirthYear('')
-          setChildBirthDate('')
-        }
-      }
 
       const {
         data: { user },
@@ -833,28 +793,6 @@ export default function EditEventPage() {
         return
       }
 
-      const { data: eventRow, error: eventError } = await supabase
-        .from('events')
-        .select(
-          'id, user_id, child_name, child_birth_date, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, public_slug'
-        )
-        .eq('public_slug', slug)
-        .maybeSingle<EventRow>()
-
-      if (eventError || !eventRow) {
-        router.replace('/dashboard')
-        return
-      }
-
-      if (eventRow.user_id !== user.id) {
-        router.replace('/dashboard')
-        return
-      }
-
-      if (isMounted) {
-        setEventId(eventRow.id)
-      }
-
       const { data: userProfile } = await supabase
         .from('users')
         .select('phone')
@@ -868,20 +806,13 @@ export default function EditEventPage() {
             ? String(userProfile.phone).trim()
             : ''
         setHasSavedProfilePhone(profilePhone !== '')
+        if (profilePhone !== '') {
+          const parts = splitDialPhone(profilePhone)
+          setOrganizerCountryCode(parts.countryCode)
+          setOrganizerCustomCode(parts.customCode)
+          setOrganizerPhoneNumber(parts.number)
+        }
       }
-
-      const organizerParts = splitDialPhone(eventRow.organizer_phone)
-      if (isMounted) {
-        setOrganizerCountryCode(organizerParts.countryCode)
-        setOrganizerCustomCode(organizerParts.customCode)
-        setOrganizerPhoneNumber(organizerParts.number)
-      }
-
-      const { data: foodOptionRows } = await supabase
-        .from('event_food_options')
-        .select('label')
-        .eq('event_id', eventRow.id)
-        .order('created_at', { ascending: true })
 
       const { data, error: childrenError } = await supabase
         .from('children')
@@ -889,144 +820,28 @@ export default function EditEventPage() {
         .eq('user_id', user.id)
         .order('name', { ascending: true })
 
-      if (!isMounted) {
-        return
-      }
-
-      if (childrenError) {
-        setChildren([])
-        setError(childrenError.message)
-        setChildrenLoading(false)
-        return
-      }
-
-      const loadedChildren = (data ?? []) as Child[]
-      setChildren(loadedChildren)
-
-      const matchedChild = loadedChildren.find(
-        (child) => getChildDropdownDisplayName(child).trim() === eventRow.child_name.trim()
-      )
-
-      if (matchedChild) {
-        setSelectedChildId(matchedChild.id)
-        setChildName(getChildDropdownDisplayName(matchedChild))
-        setChildLastName('')
-        applyBirthFromDisplay(matchedChild.birth_date ? formatIsoToDisplayDate(matchedChild.birth_date) : '')
-      } else {
-        setSelectedChildId(NEW_CHILD_VALUE)
-        const nameParts = eventRow.child_name.trim().split(/\s+/)
-        if (nameParts.length >= 2) {
-          setChildName(nameParts[0] ?? '')
-          setChildLastName(nameParts.slice(1).join(' '))
+      if (isMounted) {
+        if (childrenError) {
+          setChildren([])
+          setError(childrenError.message)
         } else {
-          setChildName(eventRow.child_name.trim())
+          const loadedChildren = (data ?? []) as Child[]
+          setChildren(loadedChildren)
+          setSelectedChildId('')
+          setChildName('')
           setChildLastName('')
+          syncChildBirthDateFromDisplayValue('')
         }
-        applyBirthFromDisplay(
-          eventRow.child_birth_date ? formatIsoToDisplayDate(eventRow.child_birth_date) : ''
-        )
+        setChildrenLoading(false)
       }
-
-      setEventTitle(eventRow.title)
-      setEventTitleManuallyEdited(true)
-      setEventDate(formatIsoToDisplayDate(eventRow.event_date))
-      setCurrentMonth(parseIsoDateToLocal(eventRow.event_date))
-      setStartTime(eventRow.start_time ? eventRow.start_time.slice(0, 5) : '')
-      setPickupTime(eventRow.pickup_time ? eventRow.pickup_time.slice(0, 5) : '')
-
-      const loc = parseStoredLocationAddress(eventRow.location_address ?? '')
-      setLocationName(eventRow.location_name ?? '')
-      setLocationStreet(loc.street)
-      setLocationCity(loc.city)
-      setLocationPostal(loc.postal)
-      setGoogleMapsUrl(eventRow.google_maps_url ?? '')
-
-      setRsvpDeadlineDays(
-        eventRow.rsvp_deadline_days != null && Number.isFinite(eventRow.rsvp_deadline_days)
-          ? String(eventRow.rsvp_deadline_days)
-          : '1'
-      )
-      setBirthdayNumber(eventRow.birthday_number != null ? String(eventRow.birthday_number) : '')
-      setBirthdayNumberUserEdited(true)
-
-      const gift = eventRow.gift_option
-      if (gift === 'bizum_pool') {
-        setShowGift(true)
-        setGiftOption('bizum_pool')
-        const bizum = splitDialPhone(eventRow.bizum_phone)
-        setBizumCountryCode(bizum.countryCode)
-        setBizumCustomCode(bizum.customCode)
-        setBizumPhoneNumber(bizum.number)
-      } else if (gift === 'sin_regalo') {
-        setShowGift(false)
-        setGiftOption('regalo_libre')
-        setBizumPhoneNumber('')
-        setBizumCountryCode('+34')
-        setBizumCustomCode('')
-      } else {
-        setShowGift(true)
-        setGiftOption('regalo_libre')
-        setBizumPhoneNumber('')
-        setBizumCountryCode('+34')
-        setBizumCustomCode('')
-      }
-
-      const foodLabels = (foodOptionRows ?? []).map((row) => String((row as { label: string }).label))
-      if (eventRow.enable_food_options && foodLabels.length > 0) {
-        setShowFood(true)
-        setFoodEnabled(true)
-        setFoodOptions(foodLabels)
-      } else if (eventRow.enable_food_options) {
-        setShowFood(true)
-        setFoodEnabled(true)
-        setFoodOptions([''])
-      } else {
-        setShowFood(false)
-        setFoodEnabled(false)
-        setFoodOptions([''])
-      }
-
-      if (eventRow.organizer_notes) {
-        setShowNotes(true)
-        setNotes(eventRow.organizer_notes)
-      } else {
-        setShowNotes(false)
-        setNotes('')
-      }
-
-      if (eventRow.invitation_image_url) {
-        setShowImage(true)
-        setInvitationImageUrl(eventRow.invitation_image_url)
-        setImageFit(eventRow.invitation_image_fit === 'cover' ? 'cover' : 'contain')
-        const pos = parseInvitationPosition(eventRow.invitation_image_position)
-        setImagePosX(pos.x)
-        setImagePosY(pos.y)
-        setImageZoom(
-          eventRow.invitation_image_zoom != null && Number.isFinite(Number(eventRow.invitation_image_zoom))
-            ? Number(eventRow.invitation_image_zoom)
-            : 1
-        )
-      } else {
-        setShowImage(false)
-        setInvitationImageUrl(null)
-      }
-
-      const themeKey = eventRow.invitation_theme
-      if (themeKey === 'yellow' || themeKey === 'pink' || themeKey === 'blue' || themeKey === 'green' || themeKey === 'purple') {
-        setInvitationTheme(themeKey)
-      } else {
-        setInvitationTheme('yellow')
-      }
-
-      setChildrenLoading(false)
     }
 
-    void loadEventAndChildren()
+    void loadChildren()
 
     return () => {
       isMounted = false
     }
-  }, [supabase, slug, router])
+  }, [supabase])
 
   useEffect(() => {
     setBirthdayNumberUserEdited(false)
@@ -1306,11 +1121,6 @@ export default function EditEventPage() {
       return
     }
 
-    if (!eventId) {
-      setError('No se pudo cargar el evento.')
-      return
-    }
-
     setLoading(true)
 
     const {
@@ -1337,14 +1147,17 @@ export default function EditEventPage() {
       }
     }
 
+    const publicSlug = generatePublicSlug(trimmedEventTitle)
+    console.log('event insert food toggle', { foodEnabled, isFoodActive })
     const query = encodeURIComponent(`${trimmedLocationStreet}, ${trimmedLocationPostal} ${trimmedLocationCity}, Spain`)
     const generatedMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`
     const generatedGoogleMapsUrl = generatedMapsUrl
     const finalGoogleMapsUrl = trimmedGoogleMapsUrl || generatedGoogleMapsUrl
 
-    const { error: eventError } = await supabase
+    const { data: insertedEvent, error: eventError } = await supabase
       .from('events')
-      .update({
+      .insert({
+        user_id: user.id,
         child_name: trimmedChildName,
         child_birth_date: parsedChildBirthDate || null,
         title: trimmedEventTitle,
@@ -1369,26 +1182,20 @@ export default function EditEventPage() {
         invitation_image_fit: showImage ? imageFit : null,
         invitation_image_position: showImage ? `${imagePosX}% ${imagePosY}%` : null,
         invitation_image_zoom: showImage ? imageZoom : null,
+        public_slug: publicSlug,
       })
-      .eq('id', eventId)
+      .select('id, public_slug')
+      .single()
 
-    if (eventError) {
-      setError(eventError.message ?? 'No se pudo guardar el evento.')
-      setLoading(false)
-      return
-    }
-
-    const { error: deleteFoodError } = await supabase.from('event_food_options').delete().eq('event_id', eventId)
-
-    if (deleteFoodError) {
-      setError(deleteFoodError.message)
+    if (eventError || !insertedEvent) {
+      setError(eventError?.message ?? 'No se pudo crear el evento.')
       setLoading(false)
       return
     }
 
     if (isFoodActive && foodEnabled && normalizedFoodOptions.length > 0) {
       const optionRows = normalizedFoodOptions.map((option) => ({
-        event_id: eventId,
+        event_id: insertedEvent.id,
         label: option,
       }))
 
@@ -1417,36 +1224,32 @@ export default function EditEventPage() {
     }
 
     localStorage.setItem('lastEventTheme', invitationTheme)
-    if (fromShare) {
-      router.push(`/dashboard/events/${slug}/share?theme=${invitationTheme ?? 'yellow'}`)
-    } else {
-      router.push(`/dashboard/events/${slug}`)
-    }
+    router.push(`/dashboard/eventos/${insertedEvent.public_slug}/compartir?theme=${invitationTheme ?? 'yellow'}`)
   }
 
   return (
-    <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-8`}>
-      <div
-        className={`sticky top-0 z-50 w-full border-b border-gray-200 ${themeDef.bg}/95 shadow-sm backdrop-blur-sm`}
-      >
-        <div className="mx-auto w-full max-w-md px-4">
-          <div className="flex items-center justify-between gap-3 py-3">
-            <Link
-              href={`/dashboard/events/${slug}`}
-              className="inline-flex items-center text-sm font-medium text-gray-900 hover:underline"
-            >
-              ← Volver
-            </Link>
-            <p className={`text-sm font-semibold ${brandClass}`}>MiParty</p>
+    <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-6`}>
+      <div className="mx-auto w-full max-w-sm pb-8">
+        <div className="mb-5 flex items-center justify-between">
+          <Link href="/dashboard" className={`inline-flex items-center text-sm font-medium ${accentTextClass}`}>
+            ← Volver al panel
+          </Link>
+          <p className={`font-bold ${mipartyTextClass}`}>MiParty</p>
+        </div>
+
+        <div className="mb-4 rounded-xl border border-yellow-100 bg-white/80 p-3">
+          <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
+            <span>Paso 1 de 2 — Crear evento</span>
+            <span>2: Compartir invitación</span>
+          </div>
+          <div className={`h-2 w-full rounded-full ${progressTrackClass}`}>
+            <div className={`h-2 w-1/2 rounded-full ${progressAccentClass}`} />
           </div>
         </div>
-      </div>
 
-      <div className="mx-auto w-full max-w-md pb-8 pt-4">
         <section className={`rounded-2xl border p-5 shadow-xl ${activePreviewTheme.card}`}>
           <div className="mb-5">
-            <h1 className="text-2xl font-bold text-gray-900">Editar evento</h1>
-            <p className="mt-2 text-sm text-gray-500">Actualiza los datos de tu evento.</p>
+            <p className="text-sm text-gray-500">Completa los datos y crea tu evento en minutos.</p>
           </div>
 
           <form
@@ -1475,7 +1278,7 @@ export default function EditEventPage() {
                     id="childSelect"
                     value={selectedChildId}
                     onChange={(event) => handleChildSelect(event.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                    className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
                   >
                     <option value="" className="text-gray-500">
                       Selecciona un hijo/a
@@ -1513,7 +1316,7 @@ export default function EditEventPage() {
                             value={childName}
                             onChange={(event) => handleChildNameChange(event.target.value)}
                             required
-                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                            className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                             placeholder="Ej. Sofía"
                           />
                         </div>
@@ -1527,7 +1330,7 @@ export default function EditEventPage() {
                             value={childLastName}
                             onChange={(event) => setChildLastName(event.target.value)}
                             required
-                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                            className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                             placeholder="Ej. García"
                           />
                         </div>
@@ -1610,83 +1413,40 @@ export default function EditEventPage() {
                       </div>
                     </>
                   ) : (
-                    <>
-                      <div>
-                        <label htmlFor="childBirthDate" className="mb-1.5 block text-sm font-medium text-gray-900">
-                          Fecha de nacimiento *
+                    <div className="pointer-events-none space-y-3 rounded-lg border border-gray-200 bg-white p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <label
+                          htmlFor="childBirthDateReadOnly"
+                          className="whitespace-nowrap text-sm font-medium text-gray-900"
+                        >
+                          Fecha de nacimiento
                         </label>
-                        <div id="childBirthDate" className="grid grid-cols-3 gap-2">
-                          <select
-                            value={birthDay}
-                            onChange={(event) => handleChildBirthDateChange(event.target.value, birthMonth, birthYear)}
-                            required
-                            className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
-                          >
-                            <option value="">--</option>
-                            {Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, '0')).map((day) => (
-                              <option key={day} value={day}>
-                                {day}
-                              </option>
-                            ))}
-                          </select>
-
-                          <select
-                            value={birthMonth}
-                            onChange={(event) => handleChildBirthDateChange(birthDay, event.target.value, birthYear)}
-                            required
-                            className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
-                          >
-                            <option value="">--</option>
-                            {SPANISH_MONTHS.map((monthName, index) => {
-                              const monthValue = String(index + 1).padStart(2, '0')
-                              return (
-                                <option key={monthValue} value={monthValue}>
-                                  {monthName}
-                                </option>
-                              )
-                            })}
-                          </select>
-
-                          <select
-                            value={birthYear}
-                            onChange={(event) => handleChildBirthDateChange(birthDay, birthMonth, event.target.value)}
-                            required
-                            className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
-                          >
-                            <option value="">--</option>
-                            {Array.from(
-                              { length: new Date().getFullYear() - 1926 + 1 },
-                              (_, index) => String(new Date().getFullYear() - index)
-                            ).map((year) => (
-                              <option key={year} value={year}>
-                                {year}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                        <input
+                          id="childBirthDateReadOnly"
+                          readOnly
+                          tabIndex={-1}
+                          value={childBirthDate}
+                          className="w-32 shrink-0 cursor-default whitespace-nowrap rounded-lg bg-gray-100 px-3 py-1 text-center text-sm text-gray-900 outline-none ring-0 border-0 focus:border-0 focus:ring-0"
+                        />
                       </div>
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <label htmlFor="birthdayNumber" className="text-sm font-medium text-gray-900">
-                            ¿Cuántos cumple? 🎂
-                          </label>
-                          <input
-                            id="birthdayNumber"
-                            type="number"
-                            min={1}
-                            inputMode="numeric"
-                            value={birthdayNumber}
-                            onChange={(event) => {
-                              setBirthdayNumberUserEdited(true)
-                              setBirthdayNumber(event.target.value)
-                            }}
-                            placeholder="Ej. 5"
-                            className={`w-20 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
-                          />
-                        </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <label
+                          htmlFor="birthdayNumberReadOnly"
+                          className="whitespace-nowrap text-sm font-medium text-gray-900"
+                        >
+                          ¿Cuántos cumple? 🎂
+                        </label>
+                        <input
+                          id="birthdayNumberReadOnly"
+                          readOnly
+                          tabIndex={-1}
+                          type="text"
+                          inputMode="numeric"
+                          value={birthdayNumber}
+                          className="w-32 shrink-0 cursor-default whitespace-nowrap rounded-lg bg-gray-100 px-3 py-1 text-center text-sm text-gray-900 outline-none ring-0 border-0 focus:border-0 focus:ring-0"
+                        />
                       </div>
-                    </>
+                    </div>
                   )}
                 </>
               ) : null}
@@ -1706,7 +1466,7 @@ export default function EditEventPage() {
                   onChange={(event) => handleEventTitleChange(event.target.value)}
                   required
                   placeholder="Ej. Cumple de Sofía"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                 />
               </div>
 
@@ -1785,7 +1545,7 @@ export default function EditEventPage() {
                     inputMode="numeric"
                     value={rsvpDeadlineDays}
                     onChange={(event) => setRsvpDeadlineDays(event.target.value)}
-                    className="w-12 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                    className={`w-12 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
                   />
                   <span className="whitespace-nowrap text-sm text-gray-700">
                     {rsvpDeadlineDaysParsed === 1 ? 'día antes del evento,' : 'días antes del evento,'}
@@ -1810,7 +1570,7 @@ export default function EditEventPage() {
                     Hora de inicio
                   </label>
                   <div id="startTime">
-                    <InlineTimePicker value={startTime} onChange={setStartTime} />
+                    <InlineTimePicker value={startTime} onChange={setStartTime} inputFocusClass={inputFocusClass} />
                   </div>
                 </div>
 
@@ -1828,6 +1588,7 @@ export default function EditEventPage() {
                       onChange={setPickupTime}
                       optional
                       minHour={Number.parseInt(startTime.split(':')[0] || '1', 10)}
+                      inputFocusClass={inputFocusClass}
                     />
                   </div>
                 </div>
@@ -1849,7 +1610,7 @@ export default function EditEventPage() {
                   onChange={(event) => setLocationName(event.target.value)}
                   required
                   placeholder="Ej. Parque del barrio"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                 />
               </div>
 
@@ -1864,7 +1625,7 @@ export default function EditEventPage() {
                   onChange={(event) => setLocationStreet(event.target.value)}
                   required
                   placeholder="Calle y número"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                 />
               </div>
 
@@ -1880,7 +1641,7 @@ export default function EditEventPage() {
                     onChange={(event) => setLocationCity(event.target.value)}
                     required
                     placeholder="Ej. Madrid"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                    className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                   />
                 </div>
 
@@ -1895,7 +1656,7 @@ export default function EditEventPage() {
                     onChange={(event) => setLocationPostal(event.target.value)}
                     required
                     placeholder="00000 si no aplica"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                    className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                   />
                 </div>
               </div>
@@ -1910,7 +1671,7 @@ export default function EditEventPage() {
                   value={googleMapsUrl}
                   onChange={(event) => setGoogleMapsUrl(event.target.value)}
                   placeholder="https://maps.google.com/..."
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                 />
                 <p className="mt-1 text-xs text-gray-400">
                   Si lo dejas vacío, generaremos un enlace usando la dirección, ciudad y código postal.
@@ -2042,7 +1803,7 @@ export default function EditEventPage() {
                     <p className="text-sm font-medium text-gray-900">Regalo</p>
                     <p className="text-xs text-gray-400">Añade información de regalo opcional.</p>
                   </div>
-                  <span className="text-sm font-medium text-yellow-600">
+                  <span className={`text-sm font-medium ${accentTextClass}`}>
                     Añadir
                   </span>
                 </div>
@@ -2215,7 +1976,7 @@ export default function EditEventPage() {
                     <p className="text-sm font-medium text-gray-900">Opciones de comida</p>
                     <p className="text-xs text-gray-400">Añade opciones de comida si lo necesitas.</p>
                   </div>
-                  <span className="text-sm font-medium text-yellow-600">
+                  <span className={`text-sm font-medium ${accentTextClass}`}>
                     Añadir
                   </span>
                 </div>
@@ -2244,7 +2005,7 @@ export default function EditEventPage() {
                           value={option}
                           onChange={(event) => updateFoodOption(index, event.target.value)}
                           placeholder={index === 0 ? 'Ej. Pizza' : `Opción ${index + 1}`}
-                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                          className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                         />
                         <button
                           type="button"
@@ -2459,7 +2220,7 @@ export default function EditEventPage() {
                     onChange={(event) => setNotes(event.target.value)}
                     rows={4}
                     placeholder="Información útil o mensaje especial para tus invitados"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                    className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                   />
                 </div>
               </div>
@@ -2497,7 +2258,7 @@ export default function EditEventPage() {
               disabled={loading}
               className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${submitButtonClass}`}
             >
-              {loading ? 'Guardando...' : 'Guardar cambios'}
+              {loading ? 'Creando evento...' : 'Crear evento'}
             </button>
           </form>
         </section>
