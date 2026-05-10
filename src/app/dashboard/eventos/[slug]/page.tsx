@@ -225,6 +225,14 @@ export default function EventControlCenterPage() {
       .sort((a, b) => b.count - a.count)
   }, [rsvps])
 
+  const foodSummaryGridClass = useMemo(() => {
+    const n = foodPreferenceCounts.length
+    if (n <= 1) return 'grid grid-cols-1 gap-3'
+    if (n === 2) return 'grid grid-cols-2 gap-3'
+    if (n === 3) return 'grid grid-cols-3 gap-3'
+    return 'grid grid-cols-2 gap-3 sm:grid-cols-4'
+  }, [foodPreferenceCounts.length])
+
   const allergyEntries = useMemo(
     () =>
       rsvps
@@ -272,11 +280,27 @@ export default function EventControlCenterPage() {
     green: 'text-green-600',
     purple: 'text-purple-600',
   }
+  const accentPillSoftBgMap: Record<string, string> = {
+    yellow: 'bg-yellow-100',
+    pink: 'bg-pink-100',
+    blue: 'bg-blue-100',
+    green: 'bg-green-100',
+    purple: 'bg-purple-100',
+  }
+  const accentCountBubbleMap: Record<string, string> = {
+    yellow: 'bg-yellow-500 text-white',
+    pink: 'bg-pink-500 text-white',
+    blue: 'bg-blue-500 text-white',
+    green: 'bg-green-600 text-white',
+    purple: 'bg-purple-500 text-white',
+  }
   const pageBg = pageBgMap[themeKey] ?? pageBgMap.yellow
   const primaryButtonClass = buttonMap[themeKey] ?? buttonMap.yellow
   const accentBorderClass = accentBorderMap[themeKey] ?? accentBorderMap.yellow
   const accentSoftBgClass = accentSoftBgMap[themeKey] ?? accentSoftBgMap.yellow
   const accentTextClass = accentTextMap[themeKey] ?? accentTextMap.yellow
+  const accentPillSoftBgClass = accentPillSoftBgMap[themeKey] ?? accentPillSoftBgMap.yellow
+  const accentCountBubbleClass = accentCountBubbleMap[themeKey] ?? accentCountBubbleMap.yellow
 
   const statRingActiveMap: Record<string, string> = {
     yellow: 'ring-yellow-400',
@@ -355,7 +379,7 @@ export default function EventControlCenterPage() {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-7xl px-6">
+      <div className="mx-auto w-full max-w-7xl px-6 pt-6">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[360px_minmax(0,1fr)] md:gap-6">
           <aside className="space-y-4">
             <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl md:sticky md:top-6 md:self-start">
@@ -771,11 +795,22 @@ export default function EventControlCenterPage() {
 
             {event.enable_food_options && foodPreferenceCounts.length > 0 ? (
               <section className={`rounded-2xl border shadow-xl ${accentBorderClass} ${accentSoftBgClass}`}>
-                <div className="px-6 py-4">
+                <div className="p-6">
                   <h2 className="text-left text-base font-semibold text-gray-900">🍽️ Resumen de comida</h2>
-                  <div className="mt-3 space-y-2.5 text-left text-sm leading-relaxed text-gray-700">
+                  <div className={`mt-4 ${foodSummaryGridClass}`}>
                     {foodPreferenceCounts.map((item) => (
-                      <p key={item.label}>{`${item.label} → ${item.count}`}</p>
+                      <div
+                        key={item.label}
+                        className={`flex w-full items-center justify-between rounded-full px-4 py-2.5 ${accentPillSoftBgClass}`}
+                      >
+                        <span className="min-w-0 pr-2 text-sm font-medium text-gray-700">{item.label}</span>
+                        <span
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${accentCountBubbleClass}`}
+                          aria-label={`${item.count} personas`}
+                        >
+                          {item.count}
+                        </span>
+                      </div>
                     ))}
                   </div>
                 </div>
