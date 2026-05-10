@@ -180,6 +180,15 @@ function RsvpFormInner({
   const messageRef = useRef<HTMLTextAreaElement>(null)
   const [parentDialOpen, setParentDialOpen] = useState(false)
   const parentDialRef = useRef<HTMLDivElement>(null)
+  const [duplicatePrompt, setDuplicatePrompt] = useState<{
+    id: string
+    child_name: string | null
+    edit_token: string | null
+  } | null>(null)
+  const [ignoreDuplicate, setIgnoreDuplicate] = useState(false)
+  const [submittedEditToken, setSubmittedEditToken] = useState<string | null>(null)
+  const [copyEditLinkDone, setCopyEditLinkDone] = useState(false)
+  const copyEditLinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function handleMessageInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const el = e.target
@@ -264,6 +273,14 @@ function RsvpFormInner({
   }, [parentDialOpen])
 
   useEffect(() => {
+    return () => {
+      if (copyEditLinkTimeoutRef.current != null) {
+        clearTimeout(copyEditLinkTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     if (attendance === 'confirmed' && hasFoodOptions && foodOptions.length === 1) {
       setFoodPreference(foodOptions[0]?.label ?? '')
       return
@@ -272,6 +289,97 @@ function RsvpFormInner({
       setFoodPreference('')
     }
   }, [attendance, hasFoodOptions, foodOptions])
+
+  const editLinkIntroCopy: Record<AttendanceStatus, string> = {
+    confirmed: 'Guarda este enlace por si necesitas cambiar tu respuesta más tarde:',
+    declined: 'Guarda este enlace por si cambias de opinión:',
+    maybe: 'Usa este enlace para confirmar tu asistencia cuando lo tengas claro:',
+  }
+
+  const copyEditLinkToClipboard = async () => {
+    if (!submittedEditToken) return
+    const url = `https://miparty.net/rsvp/${submittedEditToken}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopyEditLinkDone(true)
+      if (copyEditLinkTimeoutRef.current != null) {
+        clearTimeout(copyEditLinkTimeoutRef.current)
+      }
+      copyEditLinkTimeoutRef.current = setTimeout(() => {
+        setCopyEditLinkDone(false)
+        copyEditLinkTimeoutRef.current = null
+      }, 2000)
+    } catch {
+      setError('No se pudo copiar el enlace.')
+    }
+  }
+
+  const handleUpdateExistingRsvp = async () => {
+    if (isPreview || !attendance || !duplicatePrompt) return
+    setError(null)
+    const trimmedParentName = parentName.trim()
+    const trimmedChildName = childName.trim()
+    const trimmedChildLastName = childLastName.trim()
+    const trimmedParentEmail = parentEmail.trim()
+    const trimmedParentPhoneNumber = parentPhoneNumber.trim()
+    const finalParentDial = resolveDialCode(parentCountryCode, parentCustomCode)
+    if (attendance === 'confirmed' && parentCountryCode === 'otro' && finalParentDial.length <= 1) {
+      setError('Indica el prefijo internacional (ej. +44).')
+      return
+    }
+    const trimmedParentPhone =
+      trimmedParentPhoneNumber.length > 0 ? `${finalParentDial}${trimmedParentPhoneNumber}` : ''
+    const trimmedFoodPreference = foodPreference.trim()
+    const trimmedAllergyNotes = allergyNotes.trim()
+    const trimmedExtraNotes = extraNotes.trim()
+
+    if (!trimmedParentName) {
+      setError('El nombre del padre/madre es obligatorio.')
+      return
+    }
+    if (!trimmedChildName) {
+      setError('El nombre del niño/a es obligatorio.')
+      return
+    }
+    if (!trimmedChildLastName) {
+      setError('El apellido es obligatorio.')
+      return
+    }
+    if (attendance === 'confirmed' && hasFoodOptions && !trimmedFoodPreference) {
+      setError('Selecciona una opción de comida.')
+      return
+    }
+
+    const combinedChildName =
+      trimmedChildLastName.length > 0 ? `${trimmedChildName} ${trimmedChildLastName}` : trimmedChildName
+
+    setLoading(true)
+    const { error: updateError } = await supabase
+      .from('rsvps')
+      .update({
+        attendance_status: attendance,
+        guest_parent_name: trimmedParentName,
+        guest_parent_email: trimmedParentEmail || null,
+        guest_parent_phone: trimmedParentPhone || null,
+        child_name: combinedChildName,
+        food_preference: attendance === 'confirmed' && hasFoodOptions ? trimmedFoodPreference || null : null,
+        allergy_notes: attendance === 'confirmed' && hasFoodOptions ? trimmedAllergyNotes || null : null,
+        extra_notes: trimmedExtraNotes || null,
+      })
+      .eq('id', duplicatePrompt.id)
+
+    if (updateError) {
+      setError(updateError.message)
+      setLoading(false)
+      return
+    }
+
+    setSubmittedEditToken(duplicatePrompt.edit_token ?? null)
+    setSubmittedStatus(attendance)
+    setDuplicatePrompt(null)
+    setIgnoreDuplicate(false)
+    setLoading(false)
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -322,22 +430,45 @@ function RsvpFormInner({
       return
     }
 
-    setLoading(true)
-
     const combinedChildName =
       trimmedChildLastName.length > 0 ? `${trimmedChildName} ${trimmedChildLastName}` : trimmedChildName
 
-    const { error: insertError } = await supabase.from('rsvps').insert({
-      event_id: eventId,
-      guest_parent_name: trimmedParentName,
-      guest_parent_email: trimmedParentEmail || null,
-      guest_parent_phone: trimmedParentPhone || null,
-      child_name: combinedChildName,
-      attendance_status: attendance,
-      food_preference: attendance === 'confirmed' && hasFoodOptions ? trimmedFoodPreference || null : null,
-      allergy_notes: attendance === 'confirmed' && hasFoodOptions ? trimmedAllergyNotes || null : null,
-      extra_notes: trimmedExtraNotes || null,
-    })
+    setLoading(true)
+
+    if (!ignoreDuplicate && trimmedParentPhone) {
+      const { data: existingRsvp } = await supabase
+        .from('rsvps')
+        .select('id, attendance_status, child_name, edit_token')
+        .eq('event_id', eventId)
+        .eq('guest_parent_phone', trimmedParentPhone)
+        .maybeSingle()
+
+      if (existingRsvp?.id) {
+        setDuplicatePrompt({
+          id: existingRsvp.id,
+          child_name: existingRsvp.child_name,
+          edit_token: existingRsvp.edit_token,
+        })
+        setLoading(false)
+        return
+      }
+    }
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('rsvps')
+      .insert({
+        event_id: eventId,
+        guest_parent_name: trimmedParentName,
+        guest_parent_email: trimmedParentEmail || null,
+        guest_parent_phone: trimmedParentPhone || null,
+        child_name: combinedChildName,
+        attendance_status: attendance,
+        food_preference: attendance === 'confirmed' && hasFoodOptions ? trimmedFoodPreference || null : null,
+        allergy_notes: attendance === 'confirmed' && hasFoodOptions ? trimmedAllergyNotes || null : null,
+        extra_notes: trimmedExtraNotes || null,
+      })
+      .select('edit_token')
+      .single()
 
     if (insertError) {
       setError(insertError.message)
@@ -345,6 +476,7 @@ function RsvpFormInner({
       return
     }
 
+    setSubmittedEditToken(inserted?.edit_token ?? null)
     setSubmittedStatus(attendance)
     setLoading(false)
   }
@@ -446,6 +578,25 @@ END:VCALENDAR`
             </button>
           </div>
         ) : null}
+        {!isPreview && submittedEditToken ? (
+          <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
+            <p className="text-center text-xs leading-relaxed text-gray-600">
+              {editLinkIntroCopy.confirmed}
+            </p>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-stretch sm:justify-between sm:gap-3">
+              <code className="block max-w-full flex-1 break-all rounded-lg bg-white px-2 py-2 text-left text-[11px] text-gray-700">
+                {`miparty.net/rsvp/${submittedEditToken}`}
+              </code>
+              <button
+                type="button"
+                onClick={() => void copyEditLinkToClipboard()}
+                className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-800 transition hover:bg-gray-100"
+              >
+                {copyEditLinkDone ? '¡Copiado!' : 'Copiar'}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
     )
   }
@@ -456,6 +607,23 @@ END:VCALENDAR`
         <p className="whitespace-pre-line text-center text-sm font-medium text-gray-800">
           {'Gracias por avisar 🙌\n¡Esperamos veros en la próxima!'}
         </p>
+        {!isPreview && submittedEditToken ? (
+          <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
+            <p className="text-center text-xs leading-relaxed text-gray-600">{editLinkIntroCopy.declined}</p>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-stretch sm:justify-between sm:gap-3">
+              <code className="block max-w-full flex-1 break-all rounded-lg bg-white px-2 py-2 text-left text-[11px] text-gray-700">
+                {`miparty.net/rsvp/${submittedEditToken}`}
+              </code>
+              <button
+                type="button"
+                onClick={() => void copyEditLinkToClipboard()}
+                className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-800 transition hover:bg-gray-100"
+              >
+                {copyEditLinkDone ? '¡Copiado!' : 'Copiar'}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
     )
   }
@@ -464,8 +632,27 @@ END:VCALENDAR`
     return (
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
         <p className="whitespace-pre-line text-center text-sm font-medium text-gray-800">
-          {'Gracias 🙌\nCuando lo tengas claro puedes volver y actualizar tu respuesta'}
+          {
+            'Gracias 🙌\nGuarda el enlace que aparece abajo para actualizar tu respuesta cuando lo tengas claro.'
+          }
         </p>
+        {!isPreview && submittedEditToken ? (
+          <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
+            <p className="text-center text-xs leading-relaxed text-gray-600">{editLinkIntroCopy.maybe}</p>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-stretch sm:justify-between sm:gap-3">
+              <code className="block max-w-full flex-1 break-all rounded-lg bg-white px-2 py-2 text-left text-[11px] text-gray-700">
+                {`miparty.net/rsvp/${submittedEditToken}`}
+              </code>
+              <button
+                type="button"
+                onClick={() => void copyEditLinkToClipboard()}
+                className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-800 transition hover:bg-gray-100"
+              >
+                {copyEditLinkDone ? '¡Copiado!' : 'Copiar'}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
     )
   }
@@ -749,7 +936,37 @@ END:VCALENDAR`
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
           ) : null}
 
-          {!isPreview ? (
+          {duplicatePrompt ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-gray-800">
+              <p className="font-medium text-gray-900">Encontramos una respuesta anterior con este número.</p>
+              <p className="mt-1 text-gray-700">
+                Respuesta de: {duplicatePrompt.child_name?.trim() ? duplicatePrompt.child_name : '—'}
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => void handleUpdateExistingRsvp()}
+                  className={`inline-flex flex-1 items-center justify-center rounded-lg ${activeTheme.button} px-3 py-2.5 text-sm font-semibold text-gray-900 transition ${activeTheme.buttonHover} disabled:cursor-not-allowed disabled:opacity-70`}
+                >
+                  {loading ? 'Guardando...' : 'Actualizar mi respuesta anterior'}
+                </button>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setIgnoreDuplicate(true)
+                    setDuplicatePrompt(null)
+                  }}
+                  className="inline-flex flex-1 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Es otro niño/a que también viene
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {!isPreview && !duplicatePrompt ? (
             <button
               type="submit"
               disabled={loading}
