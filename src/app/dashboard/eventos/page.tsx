@@ -18,6 +18,14 @@ const themeCardBorder: Record<string, string> = {
   purple: 'border-l-purple-400',
 }
 
+const themeRingMap: Record<string, string> = {
+  yellow: 'hover:ring-yellow-200',
+  pink: 'hover:ring-pink-200',
+  blue: 'hover:ring-blue-200',
+  green: 'hover:ring-green-200',
+  purple: 'hover:ring-purple-200',
+}
+
 type EventListItem = {
   id: string
   public_slug: string
@@ -60,11 +68,12 @@ function EventRow({
   const themeKey = event.invitation_theme ?? 'yellow'
   const leftBorderClass =
     themeCardBorder[themeKey] ?? themeCardBorder.yellow
+  const hoverRingClass = themeRingMap[themeKey] ?? themeRingMap.yellow
   return (
-    <li>
+    <li className="w-full">
       <Link
         href={`/dashboard/eventos/${event.public_slug}`}
-        className={`flex items-center justify-between gap-3 rounded-xl border border-gray-200 border-l-4 ${leftBorderClass} bg-white p-4 shadow-sm transition-shadow hover:border-gray-300 hover:shadow-md`}
+        className={`flex w-full items-center justify-between gap-3 rounded-xl border border-gray-200 border-l-4 ${leftBorderClass} bg-white p-4 sm:p-5 shadow-sm transition-shadow hover:border-l-4 hover:shadow-md hover:ring-2 ${hoverRingClass}`}
       >
         <div className="min-w-0 flex-1">
           <p className="text-base font-bold text-gray-900">{event.title}</p>
@@ -191,7 +200,7 @@ export default function EventosPage() {
   }, [supabase])
 
   const renderList = (list: EventListItem[]) => (
-    <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+    <ul className="grid w-full grid-cols-1 gap-3">
       {list.map((event) => (
         <EventRow
           key={event.id}
@@ -222,11 +231,11 @@ export default function EventosPage() {
   )
 
   const sectionHeaderClass =
-    'flex w-full cursor-pointer list-none items-center justify-between gap-2 py-2 text-left font-semibold text-gray-900 marker:content-none [&::-webkit-details-marker]:hidden'
+    'flex w-full cursor-pointer list-none items-center justify-between gap-2 px-4 py-2 text-left font-semibold text-gray-900 marker:content-none sm:px-6 [&::-webkit-details-marker]:hidden'
 
   return (
     <main className={`min-h-screen ${brand.pageBg} px-4 py-6 pb-12 sm:py-8`}>
-      <div className="mx-auto w-full max-w-md md:max-w-2xl">
+      <div className="mx-auto w-full max-w-4xl">
         <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Eventos</h1>
@@ -255,7 +264,8 @@ export default function EventosPage() {
           ) : null}
 
           {!loading && !error && total > 0 && total <= 5 ? (
-            <div className="space-y-6">
+            <div className="space-y-6 px-4 sm:px-6">
+              <h2 className="mb-4 mt-2 text-lg font-semibold text-gray-800">Mis eventos</h2>
               <details
                 className="group rounded-xl border border-gray-100 bg-gray-50/50"
                 open={detailsUpOpen}
@@ -275,7 +285,7 @@ export default function EventosPage() {
                     ▼
                   </span>
                 </summary>
-                <div className="border-t border-gray-100 px-3 pb-4 pt-3">
+                <div className="border-t border-gray-100 pb-4 pt-3">
                   {upcoming.length === 0 ? upcomingEmptyBlock : renderList(upcoming)}
                 </div>
               </details>
@@ -299,7 +309,7 @@ export default function EventosPage() {
                     ▼
                   </span>
                 </summary>
-                <div className="border-t border-gray-100 px-3 pb-4 pt-3">
+                <div className="border-t border-gray-100 pb-4 pt-3">
                   {past.length === 0 ? pastEmptyBlock : renderList(past)}
                 </div>
               </details>
@@ -307,7 +317,8 @@ export default function EventosPage() {
           ) : null}
 
           {!loading && !error && total > 5 ? (
-            <div>
+            <div className="px-4 sm:px-6">
+              <h2 className="mb-4 mt-2 text-lg font-semibold text-gray-800">Mis eventos</h2>
               <div className="flex gap-0 border-b border-gray-200">
                 <button
                   type="button"
@@ -355,14 +366,13 @@ export default function EventosPage() {
           ) : null}
         </section>
 
-        <section
-          className="mt-6 rounded-2xl border border-dashed border-gray-300 bg-white/60 px-4 py-5 text-center sm:mt-8 sm:px-6"
-          aria-label="Invitaciones como invitado"
-        >
-          <h2 className="text-sm font-semibold text-gray-700">Fiestas a las que has sido invitado/a</h2>
-          <p className="mt-2 text-xs leading-relaxed text-gray-500 sm:text-sm">
-            Próximamente podrás ver aquí los eventos a los que has sido invitado.
-          </p>
+        <section className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
+          <div className="px-6">
+            <h2 className="mb-4 text-lg font-semibold text-gray-800">Eventos a los que fui invitado/a</h2>
+            <p className="pb-6 pt-6 text-center text-sm text-gray-400">
+              Próximamente podrás ver aquí los eventos a los que has sido invitado.
+            </p>
+          </div>
         </section>
       </div>
     </main>
