@@ -74,6 +74,34 @@ type RsvpFormProps = RsvpFormInnerProps & {
   isPreview?: boolean
 }
 
+type ThemeKeyType = 'yellow' | 'pink' | 'blue' | 'green' | 'purple'
+
+const inputFocusMap: Record<ThemeKeyType, string> = {
+  yellow: 'ring-yellow-400 focus:border-yellow-400',
+  pink: 'ring-pink-400 focus:border-pink-400',
+  blue: 'ring-blue-400 focus:border-blue-400',
+  green: 'ring-green-400 focus:border-green-400',
+  purple: 'ring-purple-400 focus:border-purple-400',
+}
+
+function sanitizeDialPrefix(raw: string): string {
+  const digitsPlus = raw.replace(/[^\d+]/g, '')
+  if (digitsPlus.length === 0) return ''
+  let body = digitsPlus.startsWith('+') ? digitsPlus.slice(1) : digitsPlus
+  body = body.replace(/\+/g, '')
+  return ('+' + body).slice(0, 5)
+}
+
+function resolveDialCode(countryCode: string, customCode: string): string {
+  return countryCode === 'otro' ? sanitizeDialPrefix(customCode) : countryCode
+}
+
+function dialCodeShortLabel(code: string): string {
+  if (code === '+57') return '🇨🇴 +57'
+  if (code === 'otro') return '✏️ Otro'
+  return '🇪🇸 +34'
+}
+
 function capitalizeFirst(str: string) {
   return str.charAt(0).toUpperCase() + str.slice(1)
 }
@@ -124,13 +152,20 @@ function RsvpFormInner({
   themeKey = null,
 }: RsvpFormInnerProps) {
   const activeTheme = theme ?? getTheme()
+  const resolvedThemeKey: ThemeKeyType =
+    themeKey === 'yellow' || themeKey === 'pink' || themeKey === 'blue' || themeKey === 'green' || themeKey === 'purple'
+      ? themeKey
+      : 'yellow'
+  const inputFocusClass = inputFocusMap[resolvedThemeKey]
   const supabase = createClient()
   const [attendance, setAttendance] = useState<AttendanceStatus | null>(null)
   const [childName, setChildName] = useState('')
   const [childLastName, setChildLastName] = useState('')
   const [parentName, setParentName] = useState('')
   const [parentEmail, setParentEmail] = useState('')
-  const [parentPhone, setParentPhone] = useState('')
+  const [parentCountryCode, setParentCountryCode] = useState<string>('+34')
+  const [parentCustomCode, setParentCustomCode] = useState('')
+  const [parentPhoneNumber, setParentPhoneNumber] = useState('')
   const [foodPreference, setFoodPreference] = useState('')
   const [allergyNotes, setAllergyNotes] = useState('')
   const [extraNotes, setExtraNotes] = useState('')
@@ -143,6 +178,8 @@ function RsvpFormInner({
   const formFieldsRef = useRef<HTMLFormElement | null>(null)
   const siButtonRef = useRef<HTMLButtonElement>(null)
   const messageRef = useRef<HTMLTextAreaElement>(null)
+  const [parentDialOpen, setParentDialOpen] = useState(false)
+  const parentDialRef = useRef<HTMLDivElement>(null)
 
   function handleMessageInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const el = e.target
@@ -216,6 +253,17 @@ function RsvpFormInner({
   }, [eventChildName, googleMapsUrl, organizerNotes])
 
   useEffect(() => {
+    if (!parentDialOpen) return
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node
+      if (parentDialRef.current?.contains(target)) return
+      setParentDialOpen(false)
+    }
+    document.addEventListener('pointerdown', handlePointerDown, true)
+    return () => document.removeEventListener('pointerdown', handlePointerDown, true)
+  }, [parentDialOpen])
+
+  useEffect(() => {
     if (attendance === 'confirmed' && hasFoodOptions && foodOptions.length === 1) {
       setFoodPreference(foodOptions[0]?.label ?? '')
       return
@@ -242,7 +290,14 @@ function RsvpFormInner({
     const trimmedChildName = childName.trim()
     const trimmedChildLastName = childLastName.trim()
     const trimmedParentEmail = parentEmail.trim()
-    const trimmedParentPhone = parentPhone.trim()
+    const trimmedParentPhoneNumber = parentPhoneNumber.trim()
+    const finalParentDial = resolveDialCode(parentCountryCode, parentCustomCode)
+    if (attendance === 'confirmed' && parentCountryCode === 'otro' && finalParentDial.length <= 1) {
+      setError('Indica el prefijo internacional (ej. +44).')
+      return
+    }
+    const trimmedParentPhone =
+      trimmedParentPhoneNumber.length > 0 ? `${finalParentDial}${trimmedParentPhoneNumber}` : ''
     const trimmedFoodPreference = foodPreference.trim()
     const trimmedAllergyNotes = allergyNotes.trim()
     const trimmedExtraNotes = extraNotes.trim()
@@ -351,14 +406,18 @@ END:VCALENDAR`
 
   if (submittedStatus === 'confirmed') {
     return (
-      <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
-        <p className="text-center text-sm font-medium text-gray-800">
+      <section className={`rounded-2xl border ${activeTheme.border} bg-white p-5 shadow-xl`}>
+        <p
+          className={`text-center text-sm font-medium ${
+            previewBrandMap[resolvedThemeKey] ?? previewBrandMap.yellow
+          }`}
+        >
           🎉 ¡Genial! Te esperamos en el cumple
         </p>
         <button
           type="button"
           onClick={() => setShowCalendarOptions((previous) => !previous)}
-          className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-yellow-400 px-3 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-yellow-500"
+          className={`mt-3 inline-flex w-full items-center justify-center rounded-lg border px-3 py-2.5 text-sm font-semibold text-gray-900 transition ${activeTheme.border} ${activeTheme.button} ${activeTheme.buttonHover}`}
         >
           Añadir al calendario
         </button>
@@ -566,20 +625,107 @@ END:VCALENDAR`
               <label htmlFor="parentPhone" className="mb-1.5 block text-sm font-medium text-gray-900">
                 Teléfono *
               </label>
-              <input
-                id="parentPhone"
-                type="tel"
-                value={parentPhone}
-                onChange={(event) => setParentPhone(event.target.value)}
-                required
-                onInvalid={(e) => {
-                  (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
-                }}
-                onInput={(e) => {
-                  (e.target as HTMLInputElement).setCustomValidity('')
-                }}
-                className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ${activeTheme.accent} transition focus:border-gray-300 focus:ring-2`}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  ref={parentDialRef}
+                  className={
+                    parentCountryCode === 'otro'
+                      ? 'relative w-20 max-w-20 flex-shrink-0'
+                      : 'relative w-28 max-w-28 flex-shrink-0'
+                  }
+                >
+                  <button
+                    type="button"
+                    id="parentCountryCode"
+                    aria-expanded={parentDialOpen}
+                    aria-haspopup="listbox"
+                    onClick={() => setParentDialOpen((open) => !open)}
+                    className={`flex h-10 w-full items-center justify-between gap-0.5 rounded-lg border border-gray-300 bg-white px-1.5 py-2 text-left text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{dialCodeShortLabel(parentCountryCode)}</span>
+                    <span className="shrink-0 text-[10px] leading-none text-gray-500" aria-hidden>
+                      ▾
+                    </span>
+                  </button>
+                  {parentDialOpen ? (
+                    <ul
+                      role="listbox"
+                      className="absolute left-0 top-full z-[60] mt-0.5 min-w-[12rem] rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+                    >
+                      <li role="presentation">
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={parentCountryCode === '+34'}
+                          className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                          onClick={() => {
+                            setParentCountryCode('+34')
+                            setParentDialOpen(false)
+                          }}
+                        >
+                          🇪🇸 +34 (España)
+                        </button>
+                      </li>
+                      <li role="presentation">
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={parentCountryCode === '+57'}
+                          className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                          onClick={() => {
+                            setParentCountryCode('+57')
+                            setParentDialOpen(false)
+                          }}
+                        >
+                          🇨🇴 +57 (Colombia)
+                        </button>
+                      </li>
+                      <li role="presentation">
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={parentCountryCode === 'otro'}
+                          className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                          onClick={() => {
+                            setParentCountryCode('otro')
+                            setParentDialOpen(false)
+                          }}
+                        >
+                          ✏️ Otro
+                        </button>
+                      </li>
+                    </ul>
+                  ) : null}
+                </div>
+                {parentCountryCode === 'otro' ? (
+                  <input
+                    type="text"
+                    inputMode="tel"
+                    autoComplete="tel-country-code"
+                    value={parentCustomCode}
+                    onChange={(event) => setParentCustomCode(sanitizeDialPrefix(event.target.value))}
+                    maxLength={5}
+                    placeholder="+00"
+                    aria-label="Prefijo internacional"
+                    className={`w-16 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
+                  />
+                ) : null}
+                <input
+                  id="parentPhone"
+                  type="tel"
+                  value={parentPhoneNumber}
+                  onChange={(event) => setParentPhoneNumber(event.target.value)}
+                  required
+                  placeholder="Ej. 612345678"
+                  onInvalid={(e) => {
+                    (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
+                  }}
+                  onInput={(e) => {
+                    (e.target as HTMLInputElement).setCustomValidity('')
+                  }}
+                  className={`min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
+                />
+              </div>
             </div>
           ) : null}
 

@@ -65,8 +65,6 @@ function rsvpStatusMeta(status: RsvpItem['attendance_status']) {
   return { label: 'Pendiente', badge: 'bg-gray-100 text-gray-600 border-gray-200' }
 }
 
-const cellTruncateClass = 'max-w-[10rem] overflow-hidden text-ellipsis whitespace-nowrap md:max-w-[12rem]'
-
 export default function EventControlCenterPage() {
   const params = useParams()
   const router = useRouter()
@@ -340,8 +338,20 @@ export default function EventControlCenterPage() {
   }
 
   return (
-    <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-8`}>
-      <div className="mx-auto w-full max-w-md md:max-w-6xl">
+    <main className={`min-h-screen bg-gradient-to-b ${pageBg}`}>
+      <div className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white shadow-sm">
+        <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 py-3 md:max-w-6xl">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center text-sm font-medium text-gray-600 transition hover:text-gray-900"
+          >
+            ← Mis eventos
+          </Link>
+          <p className="text-sm font-bold text-yellow-500">MiParty</p>
+        </div>
+      </div>
+
+      <div className="mx-auto w-full max-w-7xl px-6">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[360px_minmax(0,1fr)] md:gap-6">
           <aside className="space-y-4">
             <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl md:sticky md:top-6 md:self-start">
@@ -446,13 +456,13 @@ export default function EventControlCenterPage() {
             </section>
           </aside>
 
-          <section className="space-y-4">
+          <div className="w-full space-y-4">
             <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="mx-auto grid w-full grid-cols-3 gap-3">
                 <button
                   type="button"
                   onClick={() => toggleFilter('confirmed')}
-                  className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition hover:shadow ${
+                  className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm transition hover:shadow ${
                     activeFilters.includes('confirmed')
                       ? `opacity-100 ring-2 ring-offset-2 ring-offset-white ${statRingActiveClass} shadow-md`
                       : 'opacity-50'
@@ -464,7 +474,7 @@ export default function EventControlCenterPage() {
                 <button
                   type="button"
                   onClick={() => toggleFilter('declined')}
-                  className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition hover:shadow ${
+                  className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm transition hover:shadow ${
                     activeFilters.includes('declined')
                       ? `opacity-100 ring-2 ring-offset-2 ring-offset-white ${statRingActiveClass} shadow-md`
                       : 'opacity-50'
@@ -476,7 +486,7 @@ export default function EventControlCenterPage() {
                 <button
                   type="button"
                   onClick={() => toggleFilter('maybe')}
-                  className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition hover:shadow ${
+                  className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm transition hover:shadow ${
                     activeFilters.includes('maybe')
                       ? `opacity-100 ring-2 ring-offset-2 ring-offset-white ${statRingActiveClass} shadow-md`
                       : 'opacity-50'
@@ -549,22 +559,22 @@ export default function EventControlCenterPage() {
                     </>
                   ) : (
                     <>
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-[36rem] text-left text-sm">
+                      <div className="w-full overflow-x-auto">
+                        <table className="w-full table-auto text-left text-sm">
                           <thead>
                             <tr className="border-b border-gray-200 text-xs font-medium text-gray-600">
-                              <th className="px-3 py-2">Niño/a</th>
-                              <th className="px-3 py-2">Adulto</th>
-                              <th className="px-3 py-2">Estado</th>
-                              <th className="px-3 py-2">Comida</th>
-                              <th className="px-3 py-2">Alergias</th>
-                              <th className="px-3 py-2">Mensaje</th>
+                              <th className="whitespace-nowrap px-3 py-2">Niño/a</th>
+                              <th className="whitespace-nowrap px-3 py-2">Adulto</th>
+                              <th className="whitespace-nowrap px-3 py-2">Estado</th>
+                              <th className="whitespace-nowrap px-3 py-2">Comida</th>
+                              <th className="whitespace-nowrap px-3 py-2">Alergias</th>
+                              <th className="whitespace-nowrap px-3 py-2 min-w-[120px]">Mensaje</th>
                             </tr>
                           </thead>
                           <tbody>
                             {!anyDemoRowVisible ? (
                               <tr>
-                                <td colSpan={6} className="px-3 py-4 text-center text-sm text-gray-600">
+                                <td colSpan={6} className="whitespace-nowrap px-3 py-4 text-center text-sm text-gray-600">
                                   No hay respuestas con estos filtros.
                                 </td>
                               </tr>
@@ -572,58 +582,58 @@ export default function EventControlCenterPage() {
                               <>
                                 {showDemoLucía ? (
                                   <tr className="border-b border-gray-100 bg-gray-50 italic text-gray-400 opacity-70">
-                                    <td className="px-3 py-2 font-medium">Lucía Pérez</td>
-                                    <td className={`px-3 py-2 ${cellTruncateClass}`} title="María Pérez">
+                                    <td className="whitespace-nowrap px-3 py-2 font-medium">Lucía Pérez</td>
+                                    <td className="whitespace-nowrap px-3 py-2" title="María Pérez">
                                       María Pérez
                                     </td>
-                                    <td className="px-3 py-2">
+                                    <td className="whitespace-nowrap px-3 py-2">
                                       <span className="whitespace-nowrap rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-400">
                                         ✅ Sí
                                       </span>
                                     </td>
-                                    <td className={`px-3 py-2 ${cellTruncateClass}`} title="🍕 Pizza">
+                                    <td className="whitespace-nowrap px-3 py-2" title="🍕 Pizza">
                                       🍕 Pizza
                                     </td>
-                                    <td className="px-3 py-2 text-gray-400">—</td>
-                                    <td className={`px-3 py-2 ${cellTruncateClass}`} title="¡Qué ilusión, gracias por invitarnos!">
+                                    <td className="whitespace-nowrap px-3 py-2 text-gray-400">—</td>
+                                    <td className="whitespace-nowrap px-3 py-2 min-w-[120px] text-gray-700" title="¡Qué ilusión, gracias por invitarnos!">
                                       ¡Qué ilusión, gracias por invitarnos!
                                     </td>
                                   </tr>
                                 ) : null}
                                 {showDemoCarlos ? (
                                   <tr className="border-b border-gray-100 bg-gray-50 italic text-gray-400 opacity-70">
-                                    <td className="px-3 py-2 font-medium">Carlos Díaz</td>
-                                    <td className={`px-3 py-2 ${cellTruncateClass}`} title="Roberto Díaz">
+                                    <td className="whitespace-nowrap px-3 py-2 font-medium">Carlos Díaz</td>
+                                    <td className="whitespace-nowrap px-3 py-2" title="Roberto Díaz">
                                       Roberto Díaz
                                     </td>
-                                    <td className="px-3 py-2">
+                                    <td className="whitespace-nowrap px-3 py-2">
                                       <span className="whitespace-nowrap rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-400">
                                         🤔 Aún no lo sé
                                       </span>
                                     </td>
-                                    <td className={`px-3 py-2 ${cellTruncateClass}`} title="🌭 Perrito">
+                                    <td className="whitespace-nowrap px-3 py-2" title="🌭 Perrito">
                                       🌭 Perrito
                                     </td>
-                                    <td className={`px-3 py-2 ${cellTruncateClass}`} title="Gluten">
+                                    <td className="whitespace-nowrap px-3 py-2" title="Gluten">
                                       Gluten
                                     </td>
-                                    <td className="px-3 py-2 text-gray-400">—</td>
+                                    <td className="whitespace-nowrap px-3 py-2 text-gray-400">—</td>
                                   </tr>
                                 ) : null}
                                 {showDemoEmma ? (
                                   <tr className="border-b border-gray-100 bg-gray-50 italic text-gray-400 opacity-70">
-                                    <td className="px-3 py-2 font-medium">Emma García</td>
-                                    <td className={`px-3 py-2 ${cellTruncateClass}`} title="Laura García">
+                                    <td className="whitespace-nowrap px-3 py-2 font-medium">Emma García</td>
+                                    <td className="whitespace-nowrap px-3 py-2" title="Laura García">
                                       Laura García
                                     </td>
-                                    <td className="px-3 py-2">
+                                    <td className="whitespace-nowrap px-3 py-2">
                                       <span className="whitespace-nowrap rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-400">
                                         ❌ No puede ir
                                       </span>
                                     </td>
-                                    <td className="px-3 py-2 text-gray-400">—</td>
-                                    <td className="px-3 py-2 text-gray-400">—</td>
-                                    <td className={`px-3 py-2 ${cellTruncateClass}`} title="Lo sentimos, ese día tenemos compromiso">
+                                    <td className="whitespace-nowrap px-3 py-2 text-gray-400">—</td>
+                                    <td className="whitespace-nowrap px-3 py-2 text-gray-400">—</td>
+                                    <td className="whitespace-nowrap px-3 py-2 min-w-[120px] text-gray-700" title="Lo sentimos, ese día tenemos compromiso">
                                       Lo sentimos, ese día tenemos compromiso
                                     </td>
                                   </tr>
@@ -684,22 +694,22 @@ export default function EventControlCenterPage() {
                       </div>
                     )
                   ) : (
-                    <div className="mt-3 overflow-x-auto">
-                      <table className="w-full min-w-[36rem] text-left text-sm">
+                    <div className="mt-3 w-full overflow-x-auto">
+                      <table className="w-full table-auto text-left text-sm">
                         <thead>
                           <tr className="border-b border-gray-200 text-xs font-medium text-gray-600">
-                            <th className="px-3 py-2">Niño/a</th>
-                            <th className="px-3 py-2">Adulto</th>
-                            <th className="px-3 py-2">Estado</th>
-                            <th className="px-3 py-2">Comida</th>
-                            <th className="px-3 py-2">Alergias</th>
-                            <th className="px-3 py-2">Mensaje</th>
+                            <th className="whitespace-nowrap px-3 py-2">Niño/a</th>
+                            <th className="whitespace-nowrap px-3 py-2">Adulto</th>
+                            <th className="whitespace-nowrap px-3 py-2">Estado</th>
+                            <th className="whitespace-nowrap px-3 py-2">Comida</th>
+                            <th className="whitespace-nowrap px-3 py-2">Alergias</th>
+                            <th className="whitespace-nowrap px-3 py-2 min-w-[120px]">Mensaje</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredRsvps.length === 0 ? (
                             <tr>
-                              <td colSpan={6} className="px-3 py-4 text-center text-sm text-gray-600">
+                              <td colSpan={6} className="whitespace-nowrap px-3 py-4 text-center text-sm text-gray-600">
                                 No hay respuestas con estos filtros.
                               </td>
                             </tr>
@@ -713,38 +723,32 @@ export default function EventControlCenterPage() {
                             const messageRaw = (rsvp.extra_notes ?? '').trim()
                             return (
                               <tr key={rsvp.id} className="border-b border-gray-100">
-                                <td className="px-3 py-2 font-medium text-gray-900">{fullChildName}</td>
+                                <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">{fullChildName}</td>
                                 <td
-                                  className={`px-3 py-2 text-gray-700 ${cellTruncateClass}`}
+                                  className="whitespace-nowrap px-3 py-2 text-gray-700"
                                   title={rsvp.guest_parent_name || undefined}
                                 >
                                   {rsvp.guest_parent_name}
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="whitespace-nowrap px-3 py-2">
                                   <span
                                     className={`whitespace-nowrap rounded-full border px-2 py-1 text-xs font-medium ${status.badge}`}
                                   >
                                     {status.label}
                                   </span>
                                 </td>
-                                <td
-                                  className={`px-3 py-2 text-gray-700 ${cellTruncateClass}`}
-                                  title={foodDisplay || undefined}
-                                >
+                                <td className="whitespace-nowrap px-3 py-2 text-gray-700" title={foodDisplay || undefined}>
                                   {foodRaw ? (
                                     foodDisplay
                                   ) : (
                                     <span className="text-gray-300">—</span>
                                   )}
                                 </td>
-                                <td
-                                  className={`px-3 py-2 text-gray-700 ${cellTruncateClass}`}
-                                  title={allergyRaw || undefined}
-                                >
+                                <td className="whitespace-nowrap px-3 py-2 text-gray-700" title={allergyRaw || undefined}>
                                   {allergyRaw ? allergyRaw : <span className="text-gray-300">—</span>}
                                 </td>
                                 <td
-                                  className={`px-3 py-2 text-gray-700 ${cellTruncateClass}`}
+                                  className="whitespace-nowrap px-3 py-2 min-w-[120px] text-gray-700"
                                   title={messageRaw || undefined}
                                 >
                                   {messageRaw ? messageRaw : <span className="text-gray-300">—</span>}
@@ -762,12 +766,14 @@ export default function EventControlCenterPage() {
             </section>
 
             {event.enable_food_options && foodPreferenceCounts.length > 0 ? (
-              <section className={`rounded-2xl border p-4 shadow-xl ${accentBorderClass} ${accentSoftBgClass}`}>
-                <h2 className="text-base font-semibold text-gray-900">🍽️ Resumen de comida</h2>
-                <div className="mt-2 space-y-1 text-sm text-gray-700">
-                  {foodPreferenceCounts.map((item) => (
-                    <p key={item.label}>{`${item.label} → ${item.count}`}</p>
-                  ))}
+              <section className={`rounded-2xl border shadow-xl ${accentBorderClass} ${accentSoftBgClass}`}>
+                <div className="px-6 py-4">
+                  <h2 className="text-left text-base font-semibold text-gray-900">🍽️ Resumen de comida</h2>
+                  <div className="mt-3 space-y-2.5 text-left text-sm leading-relaxed text-gray-700">
+                    {foodPreferenceCounts.map((item) => (
+                      <p key={item.label}>{`${item.label} → ${item.count}`}</p>
+                    ))}
+                  </div>
                 </div>
               </section>
             ) : null}
@@ -782,7 +788,7 @@ export default function EventControlCenterPage() {
                 </div>
               </section>
             ) : null}
-          </section>
+          </div>
         </div>
       </div>
     </main>

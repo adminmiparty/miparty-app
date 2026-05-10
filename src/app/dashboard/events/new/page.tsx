@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { type ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
+import { type ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { DayPicker, type Matcher } from 'react-day-picker'
 import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -27,6 +27,214 @@ function getChildDropdownDisplayName(child: Child) {
 }
 
 type GiftOption = 'regalo_libre' | 'bizum_pool'
+
+/** Beyond +34/+57 — longest match first when reloading stored full international numbers */
+const EXTRA_INTERNATIONAL_PREFIXES_LONGEST_FIRST = Array.from(
+  new Set([
+    '+886',
+    '+852',
+    '+853',
+    '+855',
+    '+856',
+    '+880',
+    '+960',
+    '+961',
+    '+962',
+    '+963',
+    '+964',
+    '+965',
+    '+966',
+    '+967',
+    '+968',
+    '+970',
+    '+971',
+    '+972',
+    '+973',
+    '+974',
+    '+975',
+    '+976',
+    '+977',
+    '+992',
+    '+993',
+    '+994',
+    '+995',
+    '+996',
+    '+998',
+    '+598',
+    '+596',
+    '+595',
+    '+593',
+    '+591',
+    '+590',
+    '+594',
+    '+597',
+    '+599',
+    '+351',
+    '+352',
+    '+353',
+    '+354',
+    '+356',
+    '+357',
+    '+358',
+    '+359',
+    '+370',
+    '+371',
+    '+372',
+    '+373',
+    '+374',
+    '+375',
+    '+376',
+    '+377',
+    '+378',
+    '+380',
+    '+385',
+    '+386',
+    '+387',
+    '+389',
+    '+420',
+    '+421',
+    '+423',
+    '+212',
+    '+213',
+    '+216',
+    '+218',
+    '+220',
+    '+221',
+    '+222',
+    '+223',
+    '+224',
+    '+225',
+    '+226',
+    '+227',
+    '+228',
+    '+229',
+    '+230',
+    '+231',
+    '+232',
+    '+233',
+    '+234',
+    '+235',
+    '+236',
+    '+237',
+    '+238',
+    '+239',
+    '+240',
+    '+241',
+    '+242',
+    '+243',
+    '+244',
+    '+245',
+    '+246',
+    '+247',
+    '+248',
+    '+249',
+    '+250',
+    '+251',
+    '+252',
+    '+253',
+    '+254',
+    '+255',
+    '+256',
+    '+257',
+    '+258',
+    '+260',
+    '+261',
+    '+262',
+    '+263',
+    '+264',
+    '+265',
+    '+266',
+    '+267',
+    '+268',
+    '+269',
+    '+290',
+    '+291',
+    '+297',
+    '+298',
+    '+299',
+    '+44',
+    '+49',
+    '+33',
+    '+39',
+    '+41',
+    '+43',
+    '+45',
+    '+46',
+    '+47',
+    '+48',
+    '+31',
+    '+32',
+    '+36',
+    '+40',
+    '+52',
+    '+54',
+    '+51',
+    '+56',
+    '+61',
+    '+64',
+    '+65',
+    '+81',
+    '+82',
+    '+86',
+    '+91',
+    '+92',
+    '+93',
+    '+94',
+    '+95',
+    '+98',
+    '+84',
+    '+62',
+    '+63',
+    '+66',
+    '+30',
+    '+385',
+    '+386',
+    '+387',
+    '+389',
+    '+1',
+    '+7',
+  ])
+).sort((a, b) => b.length - a.length)
+
+function sanitizeDialPrefix(raw: string): string {
+  const digitsPlus = raw.replace(/[^\d+]/g, '')
+  if (digitsPlus.length === 0) return ''
+  let body = digitsPlus.startsWith('+') ? digitsPlus.slice(1) : digitsPlus
+  body = body.replace(/\+/g, '')
+  return ('+' + body).slice(0, 5)
+}
+
+function splitDialPhone(full: string): {
+  countryCode: '+34' | '+57' | 'otro'
+  customCode: string
+  number: string
+} {
+  const trimmed = full.trim()
+  if (!trimmed) return { countryCode: '+34', customCode: '', number: '' }
+  if (trimmed.startsWith('+57')) {
+    return { countryCode: '+57', customCode: '', number: trimmed.slice(3) }
+  }
+  if (trimmed.startsWith('+34')) {
+    return { countryCode: '+34', customCode: '', number: trimmed.slice(3) }
+  }
+  for (const p of EXTRA_INTERNATIONAL_PREFIXES_LONGEST_FIRST) {
+    if (trimmed.startsWith(p) && trimmed.length > p.length) {
+      return { countryCode: 'otro', customCode: p, number: trimmed.slice(p.length) }
+    }
+  }
+  return { countryCode: 'otro', customCode: '', number: trimmed }
+}
+
+function resolveDialCode(countryCode: string, customCode: string): string {
+  return countryCode === 'otro' ? sanitizeDialPrefix(customCode) : countryCode
+}
+
+function dialCodeShortLabel(code: string): string {
+  if (code === '+57') return '🇨🇴 +57'
+  if (code === 'otro') return '✏️ Otro'
+  return '🇪🇸 +34'
+}
+
 const NEW_CHILD_VALUE = '__new__'
 const SPANISH_MONTHS = [
   'Enero',
@@ -163,9 +371,16 @@ type InlineTimePickerProps = {
   onChange: (value: string) => void
   optional?: boolean
   minHour?: number
+  inputFocusClass: string
 }
 
-function InlineTimePicker({ value, onChange, optional = false, minHour = 1 }: InlineTimePickerProps) {
+function InlineTimePicker({
+  value,
+  onChange,
+  optional = false,
+  minHour = 1,
+  inputFocusClass,
+}: InlineTimePickerProps) {
   const parsed = value ? parse24hTime(value) : null
   const [optionalHour, setOptionalHour] = useState(parsed?.hour ?? '')
   const [optionalMinutes, setOptionalMinutes] = useState(parsed?.minutes ?? '')
@@ -229,7 +444,7 @@ function InlineTimePicker({ value, onChange, optional = false, minHour = 1 }: In
       <select
         value={selectedHour}
         onChange={(event) => handleHourChange(event.target.value)}
-        className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+        className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
       >
         {optional ? <option value="">--</option> : null}
         {Array.from({ length: 23 }, (_, index) => index + 1)
@@ -244,7 +459,7 @@ function InlineTimePicker({ value, onChange, optional = false, minHour = 1 }: In
       <select
         value={selectedMinutes}
         onChange={(event) => handleMinutesChange(event.target.value)}
-        className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+        className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
       >
         {optional ? <option value="">--</option> : null}
         {['00', '15', '30', '45'].map((minute) => (
@@ -298,7 +513,8 @@ export default function NewEventPage() {
   const [locationCity, setLocationCity] = useState('')
   const [locationPostal, setLocationPostal] = useState('')
   const [googleMapsUrl, setGoogleMapsUrl] = useState('')
-  const [organizerCountryCode, setOrganizerCountryCode] = useState('+34')
+  const [organizerCountryCode, setOrganizerCountryCode] = useState<string>('+34')
+  const [organizerCustomCode, setOrganizerCustomCode] = useState('')
   const [organizerPhoneNumber, setOrganizerPhoneNumber] = useState('')
   const [organizerProfilePhoneLoaded, setOrganizerProfilePhoneLoaded] = useState(false)
   const [hasSavedProfilePhone, setHasSavedProfilePhone] = useState(false)
@@ -309,7 +525,8 @@ export default function NewEventPage() {
   const [birthdayNumberUserEdited, setBirthdayNumberUserEdited] = useState(false)
 
   const [giftOption, setGiftOption] = useState<GiftOption>('regalo_libre')
-  const [bizumCountryCode, setBizumCountryCode] = useState('+34')
+  const [bizumCountryCode, setBizumCountryCode] = useState<string>('+34')
+  const [bizumCustomCode, setBizumCustomCode] = useState('')
   const [bizumPhoneNumber, setBizumPhoneNumber] = useState('')
   const [showGift, setShowGift] = useState(false)
 
@@ -330,6 +547,10 @@ export default function NewEventPage() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [organizerDialOpen, setOrganizerDialOpen] = useState(false)
+  const [bizumDialOpen, setBizumDialOpen] = useState(false)
+  const organizerDialRef = useRef<HTMLDivElement>(null)
+  const bizumDialRef = useRef<HTMLDivElement>(null)
   const pageBgMap: Record<string, string> = {
     yellow: 'from-yellow-50 to-white',
     pink: 'from-pink-50 to-white',
@@ -410,13 +631,98 @@ export default function NewEventPage() {
   const pageBg = pageBgMap[invitationTheme] ?? pageBgMap.yellow
   const submitButtonClass = buttonMap[invitationTheme] ?? buttonMap.yellow
   const progressAccentClass = progressAccentMap[invitationTheme] ?? progressAccentMap.yellow
-  const themeCalendarClasses: Record<string, string> = {
+  const themeCalendarClasses: Record<ThemeKey, string> = {
     yellow: 'bg-yellow-400 text-gray-900',
     pink: 'bg-pink-400 text-white',
     blue: 'bg-blue-400 text-white',
     green: 'bg-green-400 text-white',
     purple: 'bg-purple-400 text-white',
   }
+
+  const inputFocusMap: Record<ThemeKey, string> = {
+    yellow: 'ring-yellow-400 focus:border-yellow-400',
+    pink: 'ring-pink-400 focus:border-pink-400',
+    blue: 'ring-blue-400 focus:border-blue-400',
+    green: 'ring-green-400 focus:border-green-400',
+    purple: 'ring-purple-400 focus:border-purple-400',
+  }
+  const inputFocusClass = inputFocusMap[invitationTheme] ?? inputFocusMap.yellow
+
+  useEffect(() => {
+    if (!organizerDialOpen && !bizumDialOpen) return
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node
+      if (organizerDialRef.current?.contains(target)) return
+      if (bizumDialRef.current?.contains(target)) return
+      setOrganizerDialOpen(false)
+      setBizumDialOpen(false)
+    }
+    document.addEventListener('pointerdown', handlePointerDown, true)
+    return () => document.removeEventListener('pointerdown', handlePointerDown, true)
+  }, [organizerDialOpen, bizumDialOpen])
+
+  const sectionCardMap: Record<ThemeKey, string> = {
+    yellow: 'border-yellow-200 hover:border-yellow-300 hover:bg-yellow-50',
+    pink: 'border-pink-200 hover:border-pink-300 hover:bg-pink-50',
+    blue: 'border-blue-200 hover:border-blue-300 hover:bg-blue-50',
+    green: 'border-green-200 hover:border-green-300 hover:bg-green-50',
+    purple: 'border-purple-200 hover:border-purple-300 hover:bg-purple-50',
+  }
+  const sectionCardClass = sectionCardMap[invitationTheme] ?? sectionCardMap.yellow
+
+  const accentTextMap: Record<ThemeKey, string> = {
+    yellow: 'text-yellow-600',
+    pink: 'text-pink-600',
+    blue: 'text-blue-600',
+    green: 'text-green-600',
+    purple: 'text-purple-600',
+  }
+  const accentTextClass = accentTextMap[invitationTheme] ?? accentTextMap.yellow
+
+  const openSectionMap: Record<ThemeKey, string> = {
+    yellow: 'border-yellow-200',
+    pink: 'border-pink-200',
+    blue: 'border-blue-200',
+    green: 'border-green-200',
+    purple: 'border-purple-200',
+  }
+  const openSectionClass = openSectionMap[invitationTheme] ?? openSectionMap.yellow
+
+  const calendarHoverMap: Record<ThemeKey, string> = {
+    yellow: 'hover:bg-yellow-100',
+    pink: 'hover:bg-pink-100',
+    blue: 'hover:bg-blue-100',
+    green: 'hover:bg-green-100',
+    purple: 'hover:bg-purple-100',
+  }
+  const calendarHoverClass = calendarHoverMap[invitationTheme] ?? calendarHoverMap.yellow
+
+  const mipartyTextMap: Record<ThemeKey, string> = {
+    yellow: 'text-yellow-500',
+    pink: 'text-pink-500',
+    blue: 'text-blue-500',
+    green: 'text-green-500',
+    purple: 'text-purple-500',
+  }
+  const mipartyTextClass = mipartyTextMap[invitationTheme] ?? mipartyTextMap.yellow
+
+  const addOptionButtonMap: Record<ThemeKey, string> = {
+    yellow: 'border-yellow-400 text-yellow-600 hover:bg-yellow-50',
+    pink: 'border-pink-400 text-pink-600 hover:bg-pink-50',
+    blue: 'border-blue-400 text-blue-600 hover:bg-blue-50',
+    green: 'border-green-400 text-green-600 hover:bg-green-50',
+    purple: 'border-purple-400 text-purple-600 hover:bg-purple-50',
+  }
+  const addOptionButtonClass = addOptionButtonMap[invitationTheme] ?? addOptionButtonMap.yellow
+
+  const progressTrackMap: Record<ThemeKey, string> = {
+    yellow: 'bg-yellow-100',
+    pink: 'bg-pink-100',
+    blue: 'bg-blue-100',
+    green: 'bg-green-100',
+    purple: 'bg-purple-100',
+  }
+  const progressTrackClass = progressTrackMap[invitationTheme] ?? progressTrackMap.yellow
 
   const hasChildren = children.length > 0
 
@@ -501,7 +807,10 @@ export default function NewEventPage() {
             : ''
         setHasSavedProfilePhone(profilePhone !== '')
         if (profilePhone !== '') {
-          setOrganizerPhoneNumber(profilePhone)
+          const parts = splitDialPhone(profilePhone)
+          setOrganizerCountryCode(parts.countryCode)
+          setOrganizerCustomCode(parts.customCode)
+          setOrganizerPhoneNumber(parts.number)
         }
       }
 
@@ -755,6 +1064,12 @@ export default function NewEventPage() {
       return
     }
 
+    const finalOrganizerDial = resolveDialCode(organizerCountryCode, organizerCustomCode)
+    if (organizerCountryCode === 'otro' && finalOrganizerDial.length <= 1) {
+      setError('Indica el prefijo internacional (ej. +44).')
+      return
+    }
+
     const rsvpTrimmed = rsvpDeadlineDays.trim()
     let rsvpDeadlineDaysValue: number | null = null
     if (rsvpTrimmed !== '') {
@@ -788,6 +1103,14 @@ export default function NewEventPage() {
       return
     }
 
+    if (isGiftActive && giftOption === 'bizum_pool') {
+      const bizumDialCheck = resolveDialCode(bizumCountryCode, bizumCustomCode)
+      if (bizumCountryCode === 'otro' && bizumDialCheck.length <= 1) {
+        setError('Indica el prefijo internacional del teléfono Bizum (ej. +34).')
+        return
+      }
+    }
+
     const isFoodActive = showFood
     const normalizedFoodOptions = isFoodActive && foodEnabled
       ? foodOptions.map((option) => option.trim()).filter((option) => option.length > 0)
@@ -811,7 +1134,7 @@ export default function NewEventPage() {
       return
     }
 
-    const fullOrganizerPhone = `${organizerCountryCode}${trimmedOrganizerPhone}`
+    const fullOrganizerPhone = `${finalOrganizerDial}${trimmedOrganizerPhone}`
     if (!hasSavedProfilePhone && savePhoneForFuture) {
       const { error: saveProfilePhoneError } = await supabase
         .from('users')
@@ -846,7 +1169,9 @@ export default function NewEventPage() {
         google_maps_url: finalGoogleMapsUrl,
         gift_option: isGiftActive ? giftOption : 'regalo_libre',
         bizum_phone:
-          isGiftActive && giftOption === 'bizum_pool' ? `${bizumCountryCode}${trimmedBizumPhoneNumber}` : null,
+          isGiftActive && giftOption === 'bizum_pool'
+            ? `${resolveDialCode(bizumCountryCode, bizumCustomCode)}${trimmedBizumPhoneNumber}`
+            : null,
         rsvp_deadline_days: rsvpDeadlineDaysValue,
         birthday_number: birthdayNumberValue,
         organizer_phone: fullOrganizerPhone,
@@ -906,10 +1231,10 @@ export default function NewEventPage() {
     <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-6`}>
       <div className="mx-auto w-full max-w-sm pb-8">
         <div className="mb-5 flex items-center justify-between">
-          <Link href="/dashboard" className="inline-flex items-center text-sm font-medium text-yellow-600 hover:text-yellow-700">
+          <Link href="/dashboard" className={`inline-flex items-center text-sm font-medium ${accentTextClass}`}>
             ← Volver al panel
           </Link>
-          <p className="font-bold text-yellow-500">MiParty</p>
+          <p className={`font-bold ${mipartyTextClass}`}>MiParty</p>
         </div>
 
         <div className="mb-4 rounded-xl border border-yellow-100 bg-white/80 p-3">
@@ -917,7 +1242,7 @@ export default function NewEventPage() {
             <span>Paso 1 de 2 — Crear evento</span>
             <span>2: Compartir invitación</span>
           </div>
-          <div className="h-2 w-full rounded-full bg-yellow-100">
+          <div className={`h-2 w-full rounded-full ${progressTrackClass}`}>
             <div className={`h-2 w-1/2 rounded-full ${progressAccentClass}`} />
           </div>
         </div>
@@ -953,7 +1278,7 @@ export default function NewEventPage() {
                     id="childSelect"
                     value={selectedChildId}
                     onChange={(event) => handleChildSelect(event.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                    className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
                   >
                     <option value="" className="text-gray-500">
                       Selecciona un hijo/a
@@ -969,7 +1294,7 @@ export default function NewEventPage() {
                   <button
                     type="button"
                     onClick={() => handleChildSelect(NEW_CHILD_VALUE)}
-                    className="mt-1 text-sm text-yellow-600 hover:underline"
+                    className={`mt-1 text-sm hover:underline ${accentTextClass}`}
                   >
                     + Añadir nuevo perfil
                   </button>
@@ -991,7 +1316,7 @@ export default function NewEventPage() {
                             value={childName}
                             onChange={(event) => handleChildNameChange(event.target.value)}
                             required
-                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                            className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                             placeholder="Ej. Sofía"
                           />
                         </div>
@@ -1005,7 +1330,7 @@ export default function NewEventPage() {
                             value={childLastName}
                             onChange={(event) => setChildLastName(event.target.value)}
                             required
-                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                            className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                             placeholder="Ej. García"
                           />
                         </div>
@@ -1020,7 +1345,7 @@ export default function NewEventPage() {
                             value={birthDay}
                             onChange={(event) => handleChildBirthDateChange(event.target.value, birthMonth, birthYear)}
                             required
-                            className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                            className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
                           >
                             <option value="">--</option>
                             {Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, '0')).map((day) => (
@@ -1034,7 +1359,7 @@ export default function NewEventPage() {
                             value={birthMonth}
                             onChange={(event) => handleChildBirthDateChange(birthDay, event.target.value, birthYear)}
                             required
-                            className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                            className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
                           >
                             <option value="">--</option>
                             {SPANISH_MONTHS.map((monthName, index) => {
@@ -1051,7 +1376,7 @@ export default function NewEventPage() {
                             value={birthYear}
                             onChange={(event) => handleChildBirthDateChange(birthDay, birthMonth, event.target.value)}
                             required
-                            className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                            className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
                           >
                             <option value="">--</option>
                             {Array.from(
@@ -1082,7 +1407,7 @@ export default function NewEventPage() {
                               setBirthdayNumber(event.target.value)
                             }}
                             placeholder="Ej. 5"
-                            className="w-20 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                            className={`w-20 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                           />
                         </div>
                       </div>
@@ -1141,7 +1466,7 @@ export default function NewEventPage() {
                   onChange={(event) => handleEventTitleChange(event.target.value)}
                   required
                   placeholder="Ej. Cumple de Sofía"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                 />
               </div>
 
@@ -1197,8 +1522,7 @@ export default function NewEventPage() {
                         month_grid: 'w-full',
                         weeks: 'mt-1',
                         week: 'mt-1',
-                        day_button:
-                          'hover:bg-yellow-300 rounded-full w-full h-full transition-colors',
+                        day_button: `rounded-full w-full h-full transition-colors ${calendarHoverClass}`,
                       }}
                       modifiersClassNames={{
                         selected: `${themeCalendarClasses[invitationTheme] ?? themeCalendarClasses.yellow} rounded-full font-semibold`,
@@ -1221,7 +1545,7 @@ export default function NewEventPage() {
                     inputMode="numeric"
                     value={rsvpDeadlineDays}
                     onChange={(event) => setRsvpDeadlineDays(event.target.value)}
-                    className="w-12 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                    className={`w-12 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
                   />
                   <span className="whitespace-nowrap text-sm text-gray-700">
                     {rsvpDeadlineDaysParsed === 1 ? 'día antes del evento,' : 'días antes del evento,'}
@@ -1246,7 +1570,7 @@ export default function NewEventPage() {
                     Hora de inicio
                   </label>
                   <div id="startTime">
-                    <InlineTimePicker value={startTime} onChange={setStartTime} />
+                    <InlineTimePicker value={startTime} onChange={setStartTime} inputFocusClass={inputFocusClass} />
                   </div>
                 </div>
 
@@ -1264,6 +1588,7 @@ export default function NewEventPage() {
                       onChange={setPickupTime}
                       optional
                       minHour={Number.parseInt(startTime.split(':')[0] || '1', 10)}
+                      inputFocusClass={inputFocusClass}
                     />
                   </div>
                 </div>
@@ -1285,7 +1610,7 @@ export default function NewEventPage() {
                   onChange={(event) => setLocationName(event.target.value)}
                   required
                   placeholder="Ej. Parque del barrio"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                 />
               </div>
 
@@ -1300,7 +1625,7 @@ export default function NewEventPage() {
                   onChange={(event) => setLocationStreet(event.target.value)}
                   required
                   placeholder="Calle y número"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                 />
               </div>
 
@@ -1316,7 +1641,7 @@ export default function NewEventPage() {
                     onChange={(event) => setLocationCity(event.target.value)}
                     required
                     placeholder="Ej. Madrid"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                    className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                   />
                 </div>
 
@@ -1331,7 +1656,7 @@ export default function NewEventPage() {
                     onChange={(event) => setLocationPostal(event.target.value)}
                     required
                     placeholder="00000 si no aplica"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                    className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                   />
                 </div>
               </div>
@@ -1346,7 +1671,7 @@ export default function NewEventPage() {
                   value={googleMapsUrl}
                   onChange={(event) => setGoogleMapsUrl(event.target.value)}
                   placeholder="https://maps.google.com/..."
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                 />
                 <p className="mt-1 text-xs text-gray-400">
                   Si lo dejas vacío, generaremos un enlace usando la dirección, ciudad y código postal.
@@ -1358,16 +1683,91 @@ export default function NewEventPage() {
                   Número de contacto del organizador *
                 </label>
                 <p className="mb-2 text-xs text-gray-500">Los invitados podrán contactarte en este número</p>
-                <div className="flex items-center gap-2">
-                  <select
-                    id="organizerCountryCode"
-                    value={organizerCountryCode}
-                    onChange={(event) => setOrganizerCountryCode(event.target.value)}
-                    className="w-28 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                <div className="flex flex-wrap items-center gap-2">
+                  <div
+                    ref={organizerDialRef}
+                    className={
+                      organizerCountryCode === 'otro'
+                        ? 'relative w-20 max-w-20 flex-shrink-0'
+                        : 'relative w-28 max-w-28 flex-shrink-0'
+                    }
                   >
-                    <option value="+34">🇪🇸 +34</option>
-                    <option value="+57">🇨🇴 +57</option>
-                  </select>
+                    <button
+                      type="button"
+                      id="organizerCountryCode"
+                      aria-expanded={organizerDialOpen}
+                      aria-haspopup="listbox"
+                      onClick={() => setOrganizerDialOpen((open) => !open)}
+                      className={`flex h-10 w-full items-center justify-between gap-0.5 rounded-lg border border-gray-300 bg-white px-1.5 py-2 text-left text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{dialCodeShortLabel(organizerCountryCode)}</span>
+                      <span className="shrink-0 text-[10px] leading-none text-gray-500" aria-hidden>
+                        ▾
+                      </span>
+                    </button>
+                    {organizerDialOpen ? (
+                      <ul
+                        role="listbox"
+                        className="absolute left-0 top-full z-[60] mt-0.5 min-w-[12rem] rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+                      >
+                        <li role="presentation">
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={organizerCountryCode === '+34'}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                            onClick={() => {
+                              setOrganizerCountryCode('+34')
+                              setOrganizerDialOpen(false)
+                            }}
+                          >
+                            🇪🇸 +34 (España)
+                          </button>
+                        </li>
+                        <li role="presentation">
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={organizerCountryCode === '+57'}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                            onClick={() => {
+                              setOrganizerCountryCode('+57')
+                              setOrganizerDialOpen(false)
+                            }}
+                          >
+                            🇨🇴 +57 (Colombia)
+                          </button>
+                        </li>
+                        <li role="presentation">
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={organizerCountryCode === 'otro'}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                            onClick={() => {
+                              setOrganizerCountryCode('otro')
+                              setOrganizerDialOpen(false)
+                            }}
+                          >
+                            ✏️ Otro
+                          </button>
+                        </li>
+                      </ul>
+                    ) : null}
+                  </div>
+                  {organizerCountryCode === 'otro' ? (
+                    <input
+                      type="text"
+                      inputMode="tel"
+                      autoComplete="tel-country-code"
+                      value={organizerCustomCode}
+                      onChange={(event) => setOrganizerCustomCode(sanitizeDialPrefix(event.target.value))}
+                      maxLength={5}
+                      placeholder="+00"
+                      aria-label="Prefijo internacional"
+                      className={`w-16 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
+                    />
+                  ) : null}
                   <input
                     id="organizerPhone"
                     type="tel"
@@ -1375,7 +1775,7 @@ export default function NewEventPage() {
                     onChange={(event) => setOrganizerPhoneNumber(event.target.value)}
                     required
                     placeholder="Ej. 612345678"
-                    className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                    className={`min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                   />
                 </div>
                 {organizerProfilePhoneLoaded && !hasSavedProfilePhone && organizerPhoneNumber.trim() !== '' ? (
@@ -1396,20 +1796,20 @@ export default function NewEventPage() {
               <button
                 type="button"
                 onClick={() => setShowGift(true)}
-                className="w-full cursor-pointer rounded-xl border border-gray-200 p-4 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+                className={`w-full cursor-pointer rounded-xl border p-4 text-left transition ${sectionCardClass}`}
               >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-900">Regalo</p>
                     <p className="text-xs text-gray-400">Añade información de regalo opcional.</p>
                   </div>
-                  <span className="text-sm font-medium text-yellow-600">
+                  <span className={`text-sm font-medium ${accentTextClass}`}>
                     Añadir
                   </span>
                 </div>
               </button>
             ) : (
-              <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
+              <div className={`border ${openSectionClass} rounded-xl p-4 space-y-4`}>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-gray-900">Regalo</p>
                   <button
@@ -1419,6 +1819,7 @@ export default function NewEventPage() {
                       setGiftOption('regalo_libre')
                       setBizumPhoneNumber('')
                       setBizumCountryCode('+34')
+                      setBizumCustomCode('')
                     }}
                     className="text-xs text-gray-400 hover:text-gray-600 font-normal"
                   >
@@ -1452,25 +1853,96 @@ export default function NewEventPage() {
                     </label>
                   </div>
                   {giftOption === 'bizum_pool' ? (
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <label htmlFor="bizumCountryCode" className="mb-1.5 block text-sm font-medium text-gray-900">
-                          País
-                        </label>
-                        <select
-                          id="bizumCountryCode"
-                          value={bizumCountryCode}
-                          onChange={(event) => setBizumCountryCode(event.target.value)}
-                          className="w-28 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                    <div>
+                      <label htmlFor="bizumPhone" className="mb-1.5 block text-sm font-medium text-gray-900">
+                        Teléfono *
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div
+                          className={
+                            bizumCountryCode === 'otro'
+                              ? 'relative w-20 max-w-20 flex-shrink-0'
+                              : 'relative w-28 max-w-28 flex-shrink-0'
+                          }
+                          ref={bizumDialRef}
                         >
-                          <option value="+34">🇪🇸 +34</option>
-                          <option value="+57">🇨🇴 +57</option>
-                        </select>
-                      </div>
-                      <div className="flex-1">
-                        <label htmlFor="bizumPhone" className="mb-1.5 block text-sm font-medium text-gray-900">
-                          Teléfono *
-                        </label>
+                          <button
+                            type="button"
+                            id="bizumCountryCode"
+                            aria-expanded={bizumDialOpen}
+                            aria-haspopup="listbox"
+                            onClick={() => setBizumDialOpen((open) => !open)}
+                            className={`flex h-[42px] w-full items-center justify-between gap-1 truncate rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm font-normal text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
+                          >
+                            <span className="truncate">{dialCodeShortLabel(bizumCountryCode)}</span>
+                            <span aria-hidden className="flex-shrink-0 text-xs text-gray-500">
+                              ▾
+                            </span>
+                          </button>
+                          {bizumDialOpen ? (
+                            <ul
+                              role="listbox"
+                              aria-labelledby="bizumCountryCode"
+                              className="absolute left-0 top-[calc(100%+4px)] z-50 min-w-[min(100vw-2rem,14rem)] rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+                            >
+                              <li role="presentation">
+                                <button
+                                  type="button"
+                                  role="option"
+                                  aria-selected={bizumCountryCode === '+34'}
+                                  className="flex w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                                  onClick={() => {
+                                    setBizumCountryCode('+34')
+                                    setBizumDialOpen(false)
+                                  }}
+                                >
+                                  🇪🇸 +34 (España)
+                                </button>
+                              </li>
+                              <li role="presentation">
+                                <button
+                                  type="button"
+                                  role="option"
+                                  aria-selected={bizumCountryCode === '+57'}
+                                  className="flex w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                                  onClick={() => {
+                                    setBizumCountryCode('+57')
+                                    setBizumDialOpen(false)
+                                  }}
+                                >
+                                  🇨🇴 +57 (Colombia)
+                                </button>
+                              </li>
+                              <li role="presentation">
+                                <button
+                                  type="button"
+                                  role="option"
+                                  aria-selected={bizumCountryCode === 'otro'}
+                                  className="flex w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                                  onClick={() => {
+                                    setBizumCountryCode('otro')
+                                    setBizumDialOpen(false)
+                                  }}
+                                >
+                                  ✏️ Otro
+                                </button>
+                              </li>
+                            </ul>
+                          ) : null}
+                        </div>
+                        {bizumCountryCode === 'otro' ? (
+                          <input
+                            type="text"
+                            inputMode="tel"
+                            autoComplete="tel-country-code"
+                            value={bizumCustomCode}
+                            onChange={(event) => setBizumCustomCode(sanitizeDialPrefix(event.target.value))}
+                            maxLength={5}
+                            placeholder="+00"
+                            aria-label="Prefijo internacional Bizum"
+                            className={`w-16 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
+                          />
+                        ) : null}
                         <input
                           id="bizumPhone"
                           type="tel"
@@ -1478,7 +1950,7 @@ export default function NewEventPage() {
                           onChange={(event) => setBizumPhoneNumber(event.target.value)}
                           required
                           placeholder="Ej. 612345678"
-                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                          className={`min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                         />
                       </div>
                     </div>
@@ -1497,20 +1969,20 @@ export default function NewEventPage() {
                     setFoodOptions([''])
                   }
                 }}
-                className="w-full cursor-pointer rounded-xl border border-gray-200 p-4 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+                className={`w-full cursor-pointer rounded-xl border p-4 text-left transition ${sectionCardClass}`}
               >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-900">Opciones de comida</p>
                     <p className="text-xs text-gray-400">Añade opciones de comida si lo necesitas.</p>
                   </div>
-                  <span className="text-sm font-medium text-yellow-600">
+                  <span className={`text-sm font-medium ${accentTextClass}`}>
                     Añadir
                   </span>
                 </div>
               </button>
             ) : (
-              <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
+              <div className={`border ${openSectionClass} rounded-xl p-4 space-y-4`}>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-gray-900">Opciones de comida</p>
                   <button
@@ -1533,7 +2005,7 @@ export default function NewEventPage() {
                           value={option}
                           onChange={(event) => updateFoodOption(index, event.target.value)}
                           placeholder={index === 0 ? 'Ej. Pizza' : `Opción ${index + 1}`}
-                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                          className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                         />
                         <button
                           type="button"
@@ -1551,7 +2023,7 @@ export default function NewEventPage() {
                     <button
                       type="button"
                       onClick={addFoodOption}
-                      className="w-full bg-white border border-yellow-300 text-yellow-700 hover:bg-yellow-50 rounded-xl py-2 text-sm font-medium transition"
+                      className={`w-full bg-white border rounded-xl py-2 text-sm font-medium transition ${addOptionButtonClass}`}
                     >
                       + Añadir opción
                     </button>
@@ -1563,7 +2035,7 @@ export default function NewEventPage() {
               <button
                 type="button"
                 onClick={() => setShowImage(true)}
-                className="w-full cursor-pointer rounded-xl border border-gray-200 p-4 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+                className={`w-full cursor-pointer rounded-xl border p-4 text-left transition ${sectionCardClass}`}
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -1572,13 +2044,13 @@ export default function NewEventPage() {
                       Puedes subir una imagen creada en Canva, ChatGPT u otra herramienta. Aparecerá en la parte superior de la invitación.
                     </p>
                   </div>
-                  <span className="text-sm font-medium text-yellow-600">
+                  <span className={`text-sm font-medium ${accentTextClass}`}>
                     Añadir
                   </span>
                 </div>
               </button>
             ) : (
-              <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
+              <div className={`border ${openSectionClass} rounded-xl p-4 space-y-4`}>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-gray-900">Imagen de la invitación</p>
                   <button
@@ -1714,20 +2186,20 @@ export default function NewEventPage() {
               <button
                 type="button"
                 onClick={() => setShowNotes(true)}
-                className="w-full cursor-pointer rounded-xl border border-gray-200 p-4 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+                className={`w-full cursor-pointer rounded-xl border p-4 text-left transition ${sectionCardClass}`}
               >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-900">Notas para los invitados</p>
                     <p className="text-xs text-gray-400">Añade un mensaje opcional para tus invitados.</p>
                   </div>
-                  <span className="text-sm font-medium text-yellow-600">
+                  <span className={`text-sm font-medium ${accentTextClass}`}>
                     Añadir
                   </span>
                 </div>
               </button>
             ) : (
-              <div className="border border-yellow-200 rounded-xl p-4 space-y-4">
+              <div className={`border ${openSectionClass} rounded-xl p-4 space-y-4`}>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-gray-900">Notas para los invitados</p>
                   <button
@@ -1748,7 +2220,7 @@ export default function NewEventPage() {
                     onChange={(event) => setNotes(event.target.value)}
                     rows={4}
                     placeholder="Información útil o mensaje especial para tus invitados"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                    className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                   />
                 </div>
               </div>

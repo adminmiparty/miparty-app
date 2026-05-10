@@ -128,6 +128,14 @@ const progressTrackMap: Record<ThemeKey, string> = {
   purple: 'bg-purple-100',
 }
 
+const progressCardBorderMap: Record<ThemeKey, string> = {
+  yellow: 'border-yellow-100',
+  pink: 'border-pink-100',
+  blue: 'border-blue-100',
+  green: 'border-green-100',
+  purple: 'border-purple-100',
+}
+
 const previewThemeClasses: Record<ThemeKey, { card: string }> = {
   yellow: { card: 'bg-yellow-50 border-yellow-200' },
   pink: { card: 'bg-pink-50 border-pink-200' },
@@ -180,6 +188,7 @@ export default function EventSharePage() {
   const primaryButtonClass = `${themeDef.button} ${themeDef.buttonHover} ${primaryButtonTextMap[themeKey] ?? primaryButtonTextMap.yellow}`
   const progressAccentClass = progressAccentMap[themeKey] ?? progressAccentMap.yellow
   const progressTrackClass = progressTrackMap[themeKey] ?? progressTrackMap.yellow
+  const progressCardBorderClass = progressCardBorderMap[themeKey] ?? progressCardBorderMap.yellow
   const cardClass = previewThemeClasses[themeKey]?.card ?? previewThemeClasses.yellow.card
   const linkAccent = linkAccentMap[themeKey] ?? linkAccentMap.yellow
   const brandClass = brandMap[themeKey] ?? brandMap.yellow
@@ -352,7 +361,7 @@ export default function EventSharePage() {
             <p className={`text-sm font-semibold ${brandClass}`}>MiParty</p>
           </div>
           <div className="border-t border-gray-200/60 pb-3 pt-2">
-            <div className="rounded-xl border border-yellow-100 bg-white/80 p-3">
+            <div className={`rounded-xl border ${progressCardBorderClass} bg-white/80 p-3`}>
               <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
                 <span className="text-gray-400 font-normal">Paso 1 — Crea tu evento</span>
                 <span className="text-gray-900 font-semibold">Paso 2 — Revisa tu invitación</span>
@@ -482,7 +491,7 @@ export default function EventSharePage() {
                 <Link href={`/dashboard/events/${slug}/edit?theme=${themeKey}&from=share`} className={secondaryOutlineClass}>
                   Editar evento
                 </Link>
-                <a href={`/e/${event.public_slug}?preview=true`} className={secondaryOutlineClass}>
+                <a href={`/e/${event.public_slug}?preview=true&theme=${themeKey ?? 'yellow'}&from=share`} className={secondaryOutlineClass}>
                   Ver cómo la verán tus invitados
                 </a>
               </div>
@@ -536,12 +545,20 @@ export default function EventSharePage() {
           onClick={() => setShowPaymentModal(false)}
         >
           <div
-            className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+            className="relative mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="payment-modal-title"
             onClick={(e) => e.stopPropagation()}
           >
+            <button
+              type="button"
+              aria-label="Cerrar"
+              onClick={() => setShowPaymentModal(false)}
+              className="absolute top-4 right-4 z-10 p-1 text-lg leading-none text-gray-400 hover:text-gray-600"
+            >
+              ×
+            </button>
             <p className="text-sm text-gray-500 text-center">✨ Ya casi está listo</p>
             <h2 id="payment-modal-title" className="mt-2 text-xl font-bold text-center text-gray-900">
               Tu invitación ya está lista 🎉
@@ -572,14 +589,6 @@ export default function EventSharePage() {
               <p className="mt-2 text-center text-xs text-gray-400">
                 Podrás compartir el enlace y ver las respuestas al instante.
               </p>
-              <button
-                type="button"
-                disabled={publishing}
-                onClick={() => setShowPaymentModal(false)}
-                className={secondaryOutlineClass}
-              >
-                Cerrar
-              </button>
             </div>
           </div>
         </div>
