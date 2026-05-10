@@ -6,6 +6,7 @@ import { type ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } fro
 import { DayPicker, type Matcher } from 'react-day-picker'
 import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
 import { themes, type ThemeKey } from '@/lib/themes'
 import 'react-day-picker/style.css'
@@ -2110,7 +2111,7 @@ export default function NewEventPage() {
                           onClick={() => setImageFit(fit)}
                           className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${
                             imageFit === fit
-                              ? 'border-yellow-400 bg-yellow-50 text-yellow-700'
+                              ? `${brand.borderBrand} ${brand.accentBg} ${brand.textBrandDark}`
                               : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
                           }`}
                         >

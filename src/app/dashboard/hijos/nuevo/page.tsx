@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useState } from 'react'
+import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
 
 export default function NewChildPage() {
@@ -48,7 +49,7 @@ export default function NewChildPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-8">
+    <main className={`min-h-screen ${brand.pageBg} px-4 py-8`}>
       <div className="mx-auto w-full max-w-sm">
         <Link
           href="/dashboard"
@@ -59,7 +60,7 @@ export default function NewChildPage() {
 
         <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
           <div className="mb-6">
-            <p className="text-sm font-medium text-yellow-500">Perfil infantil</p>
+            <p className={`text-sm font-medium ${brand.textBrand}`}>Perfil infantil</p>
             <h1 className="mt-1 text-2xl font-bold text-gray-900">Añadir hijo o hija</h1>
             <p className="mt-2 text-sm text-gray-500">
               Guarda el nombre y la fecha de nacimiento para organizar sus fiestas.

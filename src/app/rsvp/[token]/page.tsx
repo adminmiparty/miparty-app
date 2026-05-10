@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useParams } from 'next/navigation'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
 import { getTheme } from '@/lib/themes'
 
@@ -645,7 +646,7 @@ export default function RsvpEditPage() {
 
   if (loadState === 'loading') {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-8">
+      <main className={`min-h-screen ${brand.pageBg} px-4 py-8`}>
         <p className="text-center text-sm text-gray-600">Cargando...</p>
       </main>
     )
@@ -653,7 +654,7 @@ export default function RsvpEditPage() {
 
   if (loadState === 'notfound') {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-10">
+      <main className={`min-h-screen ${brand.pageBg} px-4 py-10`}>
         <div className="mx-auto max-w-md rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
           <p className="text-center text-sm font-medium text-gray-900">Este enlace no es válido o ha expirado.</p>
           <p className="mt-2 text-center text-xs text-gray-500">

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { FormEvent, useState } from 'react'
+import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
 
 export default function SignupPage() {
@@ -59,7 +60,7 @@ export default function SignupPage() {
 
   if (signupSuccess) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-8">
+      <main className={`min-h-screen ${brand.pageBg} px-4 py-8`}>
         <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-sm items-center justify-center">
           <section className="w-full rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-xl">
             <p className="text-4xl" aria-hidden="true">
@@ -83,7 +84,7 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-8">
+    <main className={`min-h-screen ${brand.pageBg} px-4 py-8`}>
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-sm flex-col items-center justify-center gap-5">
         <div className="text-center">
           <p className="text-4xl" aria-hidden="true">
@@ -95,7 +96,7 @@ export default function SignupPage() {
 
         <section className="w-full rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
           <div className="mb-6">
-            <p className="text-sm font-medium text-yellow-500">Crea tu cuenta</p>
+            <p className={`text-sm font-medium ${brand.textBrand}`}>Crea tu cuenta</p>
             <h2 className="mt-1 text-2xl font-bold text-gray-900">Empieza en MiParty</h2>
             <p className="mt-2 text-sm text-gray-500">
               Registrate para organizar eventos y compartir momentos con amigos.

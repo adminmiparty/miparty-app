@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { Copy, LayoutGrid, Table2 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
 import ShareButton from '@/components/ShareButton'
 
@@ -351,7 +352,7 @@ export default function EventControlCenterPage() {
 
   if (loadError) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-8">
+      <main className={`min-h-screen ${brand.pageBg} px-4 py-8`}>
         <p className="text-center text-sm text-gray-600">No encontramos este evento.</p>
       </main>
     )
@@ -375,7 +376,7 @@ export default function EventControlCenterPage() {
           >
             ← Mis eventos
           </Link>
-          <p className="text-sm font-bold text-yellow-500">MiParty</p>
+          <p className={`text-sm font-bold ${brand.textBrand}`}>MiParty</p>
         </div>
       </div>
 
