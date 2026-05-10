@@ -32,6 +32,7 @@ type LoadedEventForEdit = {
   invitation_image_fit: string | null
   invitation_image_position: string | null
   invitation_image_zoom: number | null
+  organizer_phone: string | null
 }
 
 type NormalizedRsvpPayload = {
@@ -59,14 +60,6 @@ const inputFocusMap: Record<ThemeKeyType, string> = {
   blue: 'ring-blue-400 focus:border-blue-400',
   green: 'ring-green-400 focus:border-green-400',
   purple: 'ring-purple-400 focus:border-purple-400',
-}
-
-const previewBrandMap: Record<ThemeKeyType, string> = {
-  yellow: 'text-yellow-500',
-  pink: 'text-pink-500',
-  blue: 'text-blue-500',
-  green: 'text-green-500',
-  purple: 'text-purple-500',
 }
 
 function sanitizeDialPrefix(raw: string): string {
@@ -142,6 +135,18 @@ function getGiftLine(giftOption: string | null, bizumPhone: string | null) {
   if (bizumPhone?.startsWith('+34')) return `🎁 Hucha al móvil ${bizumPhone.replace(/^\+\d{2}/, '')} (Bizum)`
   if (bizumPhone?.startsWith('+57')) return `🎁 Nequi al ${bizumPhone.replace(/^\+\d{2}/, '')}`
   return '🎁 Regalo compartido'
+}
+
+function digitsForWhatsApp(phone: string) {
+  return phone.replace(/\D/g, '')
+}
+
+function organizerPhoneLinkClass(themeKey: string | null) {
+  if (themeKey === 'pink') return 'text-pink-600 underline decoration-pink-400/40 underline-offset-2 hover:text-pink-800'
+  if (themeKey === 'blue') return 'text-blue-600 underline decoration-blue-400/40 underline-offset-2 hover:text-blue-800'
+  if (themeKey === 'green') return 'text-green-700 underline decoration-green-600/40 underline-offset-2 hover:text-green-900'
+  if (themeKey === 'purple') return 'text-purple-600 underline decoration-purple-400/40 underline-offset-2 hover:text-purple-800'
+  return 'text-yellow-700 underline decoration-yellow-600/40 underline-offset-2 hover:text-yellow-900'
 }
 
 function buildNormalizedPayloadFromForm(params: {
@@ -220,8 +225,13 @@ function buildBaselinePayload(
 
 export default function RsvpEditPage() {
   const params = useParams()
-  const token =
-    typeof params?.token === 'string' ? params.token : Array.isArray(params?.token) ? (params.token[0] ?? '') : ''
+  const token = (
+    typeof params?.token === 'string'
+      ? params.token
+      : Array.isArray(params?.token)
+        ? (params.token[0] ?? '')
+        : ''
+  ).trim()
 
   const supabase = createClient()
 
@@ -229,12 +239,10 @@ export default function RsvpEditPage() {
   const [themeKey, setThemeKey] = useState<string | null>('yellow')
   const [eventData, setEventData] = useState<LoadedEventForEdit | null>(null)
   const [baselinePayload, setBaselinePayload] = useState<NormalizedRsvpPayload | null>(null)
-  const [loadedResponseSummary, setLoadedResponseSummary] = useState<{
-    attendance: AttendanceStatus
-    childDisplayName: string
-  } | null>(null)
   const [foodOptions, setFoodOptions] = useState<{ label: string }[]>([])
   const [hasFoodOptions, setHasFoodOptions] = useState(false)
+  /** Details form card hidden until guest taps an attendance option in Card 2 */
+  const [detailsFormVisible, setDetailsFormVisible] = useState(false)
 
   const [attendance, setAttendance] = useState<AttendanceStatus | null>(null)
   const [childName, setChildName] = useState('')
@@ -250,9 +258,15 @@ export default function RsvpEditPage() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [submittedStatus, setSubmittedStatus] = useState<AttendanceStatus | null>(null)
-  const [copyEditLinkDone, setCopyEditLinkDone] = useState(false)
-  const copyEditLinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Success banner after save — slides in then auto-dismiss */
+  const [saveToastVisible, setSaveToastVisible] = useState(false)
+  const [saveToastEntered, setSaveToastEntered] = useState(false)
+  const saveToastDismissRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveToastUnmountRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Shown once a save succeeds — subtle footer with edit URL + copy */
+  const [hasSavedOnce, setHasSavedOnce] = useState(false)
+  const [savedEditCopyDone, setSavedEditCopyDone] = useState(false)
+  const savedEditCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [parentDialOpen, setParentDialOpen] = useState(false)
   const parentDialRef = useRef<HTMLDivElement>(null)
@@ -264,12 +278,6 @@ export default function RsvpEditPage() {
       : 'yellow'
   const activeTheme = getTheme(resolvedThemeKey)
   const inputFocusClass = inputFocusMap[resolvedThemeKey]
-
-  const editLinkIntroCopy: Record<AttendanceStatus, string> = {
-    confirmed: 'Guarda este enlace por si necesitas cambiar tu respuesta más tarde:',
-    declined: 'Guarda este enlace por si cambias de opinión:',
-    maybe: 'Usa este enlace para confirmar tu asistencia cuando lo tengas claro:',
-  }
 
   useEffect(() => {
     if (!parentDialOpen) return
@@ -284,9 +292,70 @@ export default function RsvpEditPage() {
 
   useEffect(() => {
     return () => {
-      if (copyEditLinkTimeoutRef.current != null) clearTimeout(copyEditLinkTimeoutRef.current)
+      if (saveToastDismissRef.current != null) clearTimeout(saveToastDismissRef.current)
+      if (saveToastUnmountRef.current != null) clearTimeout(saveToastUnmountRef.current)
+      if (savedEditCopyTimeoutRef.current != null) clearTimeout(savedEditCopyTimeoutRef.current)
     }
   }, [])
+
+  function showSavedResponseToast() {
+    if (saveToastDismissRef.current != null) {
+      clearTimeout(saveToastDismissRef.current)
+      saveToastDismissRef.current = null
+    }
+    if (saveToastUnmountRef.current != null) {
+      clearTimeout(saveToastUnmountRef.current)
+      saveToastUnmountRef.current = null
+    }
+
+    const scheduleDismiss = () => {
+      saveToastDismissRef.current = setTimeout(() => {
+        saveToastDismissRef.current = null
+        setSaveToastEntered(false)
+        saveToastUnmountRef.current = setTimeout(() => {
+          saveToastUnmountRef.current = null
+          setSaveToastVisible(false)
+        }, 280)
+      }, 3000)
+    }
+
+    if (saveToastVisible) {
+      scheduleDismiss()
+      return
+    }
+
+    setSaveToastVisible(true)
+    setSaveToastEntered(false)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setSaveToastEntered(true))
+    })
+    scheduleDismiss()
+  }
+
+  function syncFormFromPayload(saved: NormalizedRsvpPayload) {
+    const { first, last } = splitChildNameForForm(saved.child_name ?? '')
+    setChildName(first)
+    setChildLastName(last)
+    setParentName(saved.guest_parent_name)
+    setParentEmail(saved.guest_parent_email ?? '')
+    const dial = splitGuestPhone(saved.guest_parent_phone)
+    setParentCountryCode(dial.countryCode)
+    setParentCustomCode(dial.customCode)
+    setParentPhoneNumber(dial.number)
+    setAttendance(saved.attendance_status)
+    let foodPref = saved.food_preference?.trim() ?? ''
+    if (
+      saved.attendance_status === 'confirmed' &&
+      hasFoodOptions &&
+      foodOptions.length === 1 &&
+      !foodPref
+    ) {
+      foodPref = foodOptions[0]?.label ?? ''
+    }
+    setFoodPreference(foodPref)
+    setAllergyNotes(saved.allergy_notes?.trim() ?? '')
+    setExtraNotes(saved.extra_notes?.trim() ?? '')
+  }
 
   useEffect(() => {
     if (!token) {
@@ -314,7 +383,7 @@ export default function RsvpEditPage() {
       const { data: eventRow } = await supabase
         .from('events')
         .select(
-          'id, title, child_name, birthday_number, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, invitation_theme, enable_food_options, organizer_notes, rsvp_deadline_days, public_slug, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
+          'id, title, child_name, birthday_number, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_phone, invitation_theme, enable_food_options, organizer_notes, rsvp_deadline_days, public_slug, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
         )
         .eq('id', rsvpData.event_id)
         .maybeSingle()
@@ -358,12 +427,6 @@ export default function RsvpEditPage() {
       const status = rsvpData.attendance_status
       if (status === 'confirmed' || status === 'declined' || status === 'maybe') {
         setAttendance(status)
-        setLoadedResponseSummary({
-          attendance: status,
-          childDisplayName: (rsvpData.child_name ?? '').trim(),
-        })
-      } else {
-        setLoadedResponseSummary(null)
       }
 
       let initialFoodPref = rsvpData.food_preference?.trim() ?? ''
@@ -376,6 +439,7 @@ export default function RsvpEditPage() {
 
       if (!cancelled) {
         setBaselinePayload(buildBaselinePayload(rsvpData, Boolean(ev.enable_food_options), optsList))
+        setDetailsFormVisible(false)
       }
 
       if (!cancelled) setLoadState('ready')
@@ -399,18 +463,11 @@ export default function RsvpEditPage() {
   }, [attendance, hasFoodOptions, foodOptions])
 
   useEffect(() => {
-    if (loadState !== 'ready' || !messageRef.current) return
+    if (loadState !== 'ready' || !detailsFormVisible || !messageRef.current) return
     const el = messageRef.current
     el.style.height = 'auto'
     el.style.height = `${el.scrollHeight}px`
-  }, [loadState, extraNotes])
-
-  const submitText = useMemo(() => {
-    if (attendance === 'confirmed') return 'Guardar confirmación'
-    if (attendance === 'declined') return 'Guardar respuesta'
-    if (attendance === 'maybe') return 'Guardar como pendiente'
-    return 'Guardar cambios'
-  }, [attendance])
+  }, [loadState, detailsFormVisible, extraNotes])
 
   const placeholderText = useMemo(() => {
     if (attendance === 'confirmed') return 'Ej. ¡Genial! Irá encantado/a'
@@ -419,8 +476,7 @@ export default function RsvpEditPage() {
   }, [attendance])
 
   const hasFormChanges = useMemo(() => {
-    if (!baselinePayload) return false
-    if (!attendance) return true
+    if (!baselinePayload || !attendance) return false
     const current = buildNormalizedPayloadFromForm({
       attendance,
       childName,
@@ -452,15 +508,6 @@ export default function RsvpEditPage() {
     hasFoodOptions,
   ])
 
-  const recapHeadline = useMemo(() => {
-    if (!eventData) return ''
-    const bn = eventData.birthday_number
-    if (bn != null && bn > 0 && Number.isFinite(bn)) {
-      return `¡${eventData.child_name} cumple ${bn} años y estás invitado/a! 🎉`
-    }
-    return `¡Estás invitado/a al ${eventData.title}! 🎉`
-  }, [eventData])
-
   const rsvpDeadlineLabel = useMemo(() => {
     if (!eventData) return null
     const d = eventData.rsvp_deadline_days
@@ -480,21 +527,22 @@ export default function RsvpEditPage() {
     setExtraNotes(e.target.value)
   }
 
-  const handleAttendanceSelect = (nextStatus: AttendanceStatus) => {
-    const shouldDeselect = attendance === nextStatus
-    setAttendance(shouldDeselect ? null : nextStatus)
+  /** Card 2: pick attendance (always selects; reveals details card) */
+  function handleAttendancePickFromSummary(nextStatus: AttendanceStatus) {
+    setAttendance(nextStatus)
+    setDetailsFormVisible(true)
   }
 
-  const copyEditLinkToClipboard = async () => {
+  const copySavedEditLink = async () => {
     if (!token) return
     const url = `https://miparty.net/rsvp/${token}`
     try {
       await navigator.clipboard.writeText(url)
-      setCopyEditLinkDone(true)
-      if (copyEditLinkTimeoutRef.current != null) clearTimeout(copyEditLinkTimeoutRef.current)
-      copyEditLinkTimeoutRef.current = setTimeout(() => {
-        setCopyEditLinkDone(false)
-        copyEditLinkTimeoutRef.current = null
+      setSavedEditCopyDone(true)
+      if (savedEditCopyTimeoutRef.current != null) clearTimeout(savedEditCopyTimeoutRef.current)
+      savedEditCopyTimeoutRef.current = setTimeout(() => {
+        setSavedEditCopyDone(false)
+        savedEditCopyTimeoutRef.current = null
       }, 2000)
     } catch {
       setError('No se pudo copiar el enlace.')
@@ -509,6 +557,66 @@ export default function RsvpEditPage() {
     const finalParentDial = resolveDialCode(parentCountryCode, parentCustomCode)
     if (attendance === 'confirmed' && parentCountryCode === 'otro' && finalParentDial.length <= 1) {
       setError('Indica el prefijo internacional (ej. +44).')
+      return
+    }
+
+    const trimmedParentName = parentName.trim()
+    const trimmedChildName = childName.trim()
+    const trimmedChildLastName = childLastName.trim()
+    const trimmedParentEmail = parentEmail.trim()
+    const trimmedParentPhoneNumber = parentPhoneNumber.trim()
+    const trimmedFoodPreference = foodPreference.trim()
+    const trimmedAllergyNotes = allergyNotes.trim()
+    const trimmedExtraNotes = extraNotes.trim()
+
+    if (!trimmedParentName) {
+      setError('El nombre del padre/madre es obligatorio.')
+      return
+    }
+    if (!trimmedChildName) {
+      setError('El nombre del niño/a es obligatorio.')
+      return
+    }
+    if (!trimmedChildLastName) {
+      setError('El apellido es obligatorio.')
+      return
+    }
+    if (attendance === 'confirmed' && hasFoodOptions && !trimmedFoodPreference) {
+      setError('Selecciona una opción de comida.')
+      return
+    }
+
+    const combinedChildName =
+      trimmedChildLastName.length > 0 ? `${trimmedChildName} ${trimmedChildLastName}` : trimmedChildName
+    const finalPhone =
+      trimmedParentPhoneNumber.length > 0 ? `${finalParentDial}${trimmedParentPhoneNumber}` : ''
+
+    const foodPrefForDb = attendance === 'confirmed' && hasFoodOptions ? trimmedFoodPreference || null : null
+    const allergyForDb =
+      attendance === 'confirmed' && hasFoodOptions ? trimmedAllergyNotes || null : null
+
+    console.log('updating token:', token)
+
+    setLoading(true)
+    const { error: updateError } = await supabase
+      .from('rsvps')
+      .update({
+        attendance_status: attendance,
+        child_name: combinedChildName,
+        guest_parent_name: trimmedParentName,
+        guest_parent_email: trimmedParentEmail || null,
+        guest_parent_phone: finalPhone || null,
+        food_preference: foodPrefForDb,
+        allergy_notes: allergyForDb,
+        extra_notes: trimmedExtraNotes || null,
+      })
+      .eq('edit_token', token)
+
+    console.log('update error:', updateError)
+
+    if (updateError) {
+      setError(updateError.message)
+      setLoading(false)
       return
     }
 
@@ -527,47 +635,11 @@ export default function RsvpEditPage() {
       hasFoodOptions,
     })
 
-    if (!payload.guest_parent_name) {
-      setError('El nombre del padre/madre es obligatorio.')
-      return
-    }
-    const trimmedChildName = childName.trim()
-    const trimmedChildLastName = childLastName.trim()
-    if (!trimmedChildName) {
-      setError('El nombre del niño/a es obligatorio.')
-      return
-    }
-    if (!trimmedChildLastName) {
-      setError('El apellido es obligatorio.')
-      return
-    }
-    if (attendance === 'confirmed' && hasFoodOptions && !foodPreference.trim()) {
-      setError('Selecciona una opción de comida.')
-      return
-    }
-
-    setLoading(true)
-    const { error: updateError } = await supabase
-      .from('rsvps')
-      .update({
-        attendance_status: payload.attendance_status,
-        guest_parent_name: payload.guest_parent_name,
-        guest_parent_email: payload.guest_parent_email,
-        guest_parent_phone: payload.guest_parent_phone,
-        child_name: payload.child_name,
-        food_preference: payload.food_preference,
-        allergy_notes: payload.allergy_notes,
-        extra_notes: payload.extra_notes,
-      })
-      .eq('edit_token', token)
-
-    if (updateError) {
-      setError(updateError.message)
-      setLoading(false)
-      return
-    }
-
-    setSubmittedStatus(attendance)
+    setBaselinePayload(payload)
+    syncFormFromPayload(payload)
+    setDetailsFormVisible(false)
+    showSavedResponseToast()
+    setHasSavedOnce(true)
     setLoading(false)
   }
 
@@ -594,221 +666,221 @@ export default function RsvpEditPage() {
 
   const pageBg = getTheme(resolvedThemeKey).pageBg
 
-  if (submittedStatus === 'confirmed') {
-    return (
-      <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-8`}>
-        <div className="mx-auto w-full max-w-md">
-          <section className={`rounded-2xl border ${activeTheme.border} bg-white p-5 shadow-xl`}>
-            <p
-              className={`text-center text-sm font-medium ${
-                previewBrandMap[resolvedThemeKey] ?? previewBrandMap.yellow
-              }`}
-            >
-              🎉 ¡Genial! Te esperamos en el cumple
-            </p>
-            <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
-              <p className="text-center text-xs leading-relaxed text-gray-600">{editLinkIntroCopy.confirmed}</p>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-stretch sm:justify-between sm:gap-3">
-                <code className="block max-w-full flex-1 break-all rounded-lg bg-white px-2 py-2 text-left text-[11px] text-gray-700">
-                  {`miparty.net/rsvp/${token}`}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => void copyEditLinkToClipboard()}
-                  className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-800 transition hover:bg-gray-100"
-                >
-                  {copyEditLinkDone ? '¡Copiado!' : 'Copiar'}
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
-      </main>
-    )
-  }
-
-  if (submittedStatus === 'declined') {
-    return (
-      <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-8`}>
-        <div className="mx-auto w-full max-w-md">
-          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
-            <p className="whitespace-pre-line text-center text-sm font-medium text-gray-800">
-              {'Gracias por avisar 🙌\n¡Esperamos veros en la próxima!'}
-            </p>
-            <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
-              <p className="text-center text-xs leading-relaxed text-gray-600">{editLinkIntroCopy.declined}</p>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-stretch sm:justify-between sm:gap-3">
-                <code className="block max-w-full flex-1 break-all rounded-lg bg-white px-2 py-2 text-left text-[11px] text-gray-700">
-                  {`miparty.net/rsvp/${token}`}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => void copyEditLinkToClipboard()}
-                  className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-800 transition hover:bg-gray-100"
-                >
-                  {copyEditLinkDone ? '¡Copiado!' : 'Copiar'}
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
-      </main>
-    )
-  }
-
-  if (submittedStatus === 'maybe') {
-    return (
-      <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-8`}>
-        <div className="mx-auto w-full max-w-md">
-          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
-            <p className="whitespace-pre-line text-center text-sm font-medium text-gray-800">
-              {
-                'Gracias 🙌\nGuarda el enlace que aparece abajo para actualizar tu respuesta cuando lo tengas claro.'
-              }
-            </p>
-            <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
-              <p className="text-center text-xs leading-relaxed text-gray-600">{editLinkIntroCopy.maybe}</p>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-stretch sm:justify-between sm:gap-3">
-                <code className="block max-w-full flex-1 break-all rounded-lg bg-white px-2 py-2 text-left text-[11px] text-gray-700">
-                  {`miparty.net/rsvp/${token}`}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => void copyEditLinkToClipboard()}
-                  className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-800 transition hover:bg-gray-100"
-                >
-                  {copyEditLinkDone ? '¡Copiado!' : 'Copiar'}
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
-      </main>
-    )
-  }
-
   const invitationFitClass =
     eventData?.invitation_image_fit === 'cover' ? 'object-cover' : 'object-contain bg-gray-50'
 
+  function savedResponseBadgeClasses(status: AttendanceStatus) {
+    if (status === 'confirmed')
+      return 'border-emerald-300 bg-emerald-100 text-emerald-900'
+    if (status === 'declined') return 'border-red-200 bg-red-50 text-red-800'
+    return 'border-amber-200 bg-amber-100 text-amber-950'
+  }
+
   return (
-    <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-8`}>
-      <div className="mx-auto w-full max-w-md space-y-4">
-        <div id="invitation-recap" className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
-          {eventData?.invitation_image_url ? (
-            <div className="mb-4 max-h-72 w-full overflow-hidden rounded-2xl">
-              <img
-                src={eventData.invitation_image_url}
-                alt="Invitación"
-                style={{
-                  objectPosition:
-                    eventData.invitation_image_fit === 'cover'
-                      ? (eventData.invitation_image_position ?? '50% 50%')
-                      : undefined,
-                  transform:
-                    eventData.invitation_image_fit === 'cover' && eventData.invitation_image_zoom
-                      ? `scale(${eventData.invitation_image_zoom})`
-                      : undefined,
-                  transformOrigin:
-                    eventData.invitation_image_fit === 'cover'
-                      ? (eventData.invitation_image_position ?? '50% 50%')
-                      : undefined,
-                }}
-                className={`max-h-72 w-full ${invitationFitClass}`}
-              />
-            </div>
-          ) : null}
-          <p className="text-center text-2xl font-bold text-gray-900">{recapHeadline}</p>
-          {eventData ? (
-            <div className="mt-3 space-y-1.5 text-sm">
-              <p className="text-gray-700">{`📅 ${formatSpanishFullDate(eventData.event_date)}`}</p>
-              {rsvpDeadlineLabel ? (
-                <p className="text-sm text-gray-500">{`Puedes confirmar hasta el ${rsvpDeadlineLabel}`}</p>
-              ) : null}
-              <p className="text-gray-700">
-                {eventData.pickup_time
-                  ? `🕒 ${formatTimeValue(eventData.start_time)} a ${formatTimeValue(eventData.pickup_time)}`
-                  : `🕒 ${formatTimeValue(eventData.start_time)}`}
-              </p>
-              <div>
-                <p className="text-gray-700">{`📍 ${eventData.location_name ?? 'Ubicación'}`}</p>
-                {eventData.location_address ? (
-                  <p className="pl-6 text-gray-700">{eventData.location_address}</p>
-                ) : null}
-              </div>
-              {giftLine ? <p className="text-gray-700">{giftLine}</p> : null}
-              {hasFoodOptions && foodOptions.length > 0 ? (
-                <p className="text-gray-700">{`🍽️ ${foodOptions.map((option) => option.label).join(' · ')}`}</p>
-              ) : null}
-            </div>
-          ) : null}
-          {eventData?.organizer_notes?.trim() ? (
-            <div className="mt-3 space-y-4">
-              <p className="text-sm font-medium not-italic text-gray-800">
-                <span aria-hidden>📋</span> Mensaje para los invitados
-              </p>
-              <p className="whitespace-pre-wrap text-sm italic text-gray-500">{eventData.organizer_notes}</p>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
-          <h2 className="text-lg font-bold text-gray-900">¿Necesitas actualizar tu respuesta?</h2>
-          {loadedResponseSummary ? (
-            <p className="mt-3 text-sm leading-relaxed text-gray-600">
-              <span>{statusSummaryLabels[loadedResponseSummary.attendance]}</span>
-              {loadedResponseSummary.childDisplayName ? (
-                <>
-                  {' · '}
-                  <span className="font-medium text-gray-900">{loadedResponseSummary.childDisplayName}</span>
-                </>
-              ) : null}
-              {' · '}
-              <span className="text-gray-500">Cambia solo lo que necesites actualizar</span>
-            </p>
-          ) : null}
-        </div>
-
-        <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
-          <h2 className="text-base font-semibold text-gray-900">Tu asistencia</h2>
-
-          <div className="relative z-20 mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={() => handleAttendanceSelect('confirmed')}
-              className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
-                attendance === 'confirmed'
-                  ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
-                  : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
-              }`}
-            >
-              ✅ ¡Sí!
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAttendanceSelect('declined')}
-              className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
-                attendance === 'declined'
-                  ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
-                  : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
-              }`}
-            >
-              ❌ No
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAttendanceSelect('maybe')}
-              className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
-                attendance === 'maybe'
-                  ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
-                  : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
-              }`}
-            >
-              <span className="text-sm">🤔 Aún no lo sé</span>
-            </button>
+    <main className={`relative min-h-screen bg-gradient-to-b ${pageBg} px-4 py-6 pb-10 sm:py-8`}>
+      {saveToastVisible ? (
+        <div
+          className="pointer-events-none fixed inset-x-0 top-0 z-[100] flex justify-center px-3 sm:px-4"
+          style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0px))' }}
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <div
+            className={`max-w-md w-full rounded-xl bg-green-600 px-4 py-3 text-center text-sm font-semibold tracking-tight text-white shadow-lg transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none ${
+              saveToastEntered ? 'translate-y-0 opacity-100' : '-translate-y-[140%] opacity-95'
+            }`}
+          >
+            ✅ ¡Respuesta actualizada!
           </div>
+        </div>
+      ) : null}
+      <div className="mx-auto flex w-full max-w-md flex-col gap-5 sm:gap-6">
+        {/* CARD 1 — Event details */}
+        <article className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl sm:p-6">
+          <div className="flex flex-col gap-5">
+            {eventData?.invitation_image_url ? (
+              <div className="max-h-72 w-full overflow-hidden rounded-xl">
+                <img
+                  src={eventData.invitation_image_url}
+                  alt="Invitación"
+                  style={{
+                    objectPosition:
+                      eventData.invitation_image_fit === 'cover'
+                        ? (eventData.invitation_image_position ?? '50% 50%')
+                        : undefined,
+                    transform:
+                      eventData.invitation_image_fit === 'cover' && eventData.invitation_image_zoom
+                        ? `scale(${eventData.invitation_image_zoom})`
+                        : undefined,
+                    transformOrigin:
+                      eventData.invitation_image_fit === 'cover'
+                        ? (eventData.invitation_image_position ?? '50% 50%')
+                        : undefined,
+                  }}
+                  className={`max-h-72 w-full ${invitationFitClass}`}
+                />
+              </div>
+            ) : null}
 
-          {attendance ? (
-            <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+            {eventData ? (
+              <>
+                <h1 className="text-center text-2xl font-bold leading-tight text-gray-900 sm:text-3xl">
+                  {eventData.title}
+                </h1>
+                <div className="space-y-2 text-sm">
+                  <p className="text-gray-800">{`📅 ${formatSpanishFullDate(eventData.event_date)}`}</p>
+                  {rsvpDeadlineLabel ? (
+                    <p className="text-gray-500">{`Puedes confirmar hasta el ${rsvpDeadlineLabel}`}</p>
+                  ) : null}
+                  <p className="text-gray-800">
+                    {eventData.pickup_time
+                      ? `🕒 ${formatTimeValue(eventData.start_time)} a ${formatTimeValue(eventData.pickup_time)}`
+                      : `🕒 ${formatTimeValue(eventData.start_time)}`}
+                  </p>
+                  <div className="space-y-1">
+                    <p className="font-medium text-gray-900">{`📍 ${eventData.location_name ?? 'Ubicación'}`}</p>
+                    {eventData.location_address ? (
+                      <p className="pl-0 text-gray-700 sm:pl-6">{eventData.location_address}</p>
+                    ) : null}
+                    {eventData.google_maps_url ? (
+                      <a
+                        href={eventData.google_maps_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block text-sm text-blue-600 underline decoration-blue-300 underline-offset-2 hover:text-blue-800"
+                      >
+                        Ver en Google Maps ↗
+                      </a>
+                    ) : null}
+                  </div>
+                  {giftLine ? <p className="text-gray-800">{giftLine}</p> : null}
+                  {hasFoodOptions && foodOptions.length > 0 ? (
+                    <p className="text-gray-800">{`🍽️ ${foodOptions.map((option) => option.label).join(' · ')}`}</p>
+                  ) : null}
+                  {eventData.organizer_phone != null && eventData.organizer_phone.trim() !== '' ? (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
+                      <span className="text-sm font-medium text-gray-700">
+                        <span aria-hidden>📞</span> Contacto
+                      </span>
+                      <a
+                        href={`tel:${eventData.organizer_phone.trim()}`}
+                        className={`text-sm font-medium ${organizerPhoneLinkClass(themeKey)}`}
+                      >
+                        {eventData.organizer_phone.trim()}
+                      </a>
+                      {digitsForWhatsApp(eventData.organizer_phone).length >= 8 ? (
+                        <a
+                          href={`https://wa.me/${digitsForWhatsApp(eventData.organizer_phone)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex shrink-0 text-green-500 transition hover:text-[#25D366]"
+                          aria-label="WhatsApp"
+                        >
+                          <svg viewBox="0 0 24 24" fill="currentColor" className="h-7 w-7" aria-hidden>
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                          </svg>
+                        </a>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+                {eventData.organizer_notes?.trim() ? (
+                  <div className="space-y-2 border-t border-gray-100 pt-4">
+                    <p className="text-sm font-medium text-gray-800">
+                      <span aria-hidden>📋</span> Notas del organizador
+                    </p>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-600">
+                      {eventData.organizer_notes}
+                    </p>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </article>
+
+        {/* CARD 2 — Current response summary */}
+        {baselinePayload ? (
+          <article className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl sm:p-6">
+            <h2 className="text-base font-semibold text-gray-900">Tu respuesta actual</h2>
+            <div className="mt-4 flex flex-col gap-3 text-sm">
+              <span
+                className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold ${savedResponseBadgeClasses(baselinePayload.attendance_status)}`}
+              >
+                {statusSummaryLabels[baselinePayload.attendance_status]}
+              </span>
+              <p className="text-gray-800">
+                <span className="text-gray-500">Niño/a:</span>{' '}
+                <span className="font-medium text-gray-900">{baselinePayload.child_name || '—'}</span>
+              </p>
+              <p className="text-gray-800">
+                <span className="text-gray-500">Padre/madre:</span>{' '}
+                <span className="font-medium text-gray-900">{baselinePayload.guest_parent_name || '—'}</span>
+              </p>
+              {baselinePayload.food_preference ? (
+                <p className="text-gray-800">
+                  <span className="text-gray-500">Comida:</span>{' '}
+                  <span className="font-medium text-gray-900">{baselinePayload.food_preference}</span>
+                </p>
+              ) : null}
+              {baselinePayload.allergy_notes ? (
+                <p className="text-gray-800">
+                  <span className="text-gray-500">Alergias:</span>{' '}
+                  <span className="text-gray-900">{baselinePayload.allergy_notes}</span>
+                </p>
+              ) : null}
+              {baselinePayload.extra_notes ? (
+                <p className="whitespace-pre-wrap text-gray-800">
+                  <span className="text-gray-500">Mensaje:</span>{' '}
+                  <span className="text-gray-900">{baselinePayload.extra_notes}</span>
+                </p>
+              ) : null}
+            </div>
+            <p className="mt-6 text-center text-xs text-gray-500">¿Quieres cambiar tu respuesta?</p>
+            <div className="relative z-20 mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => handleAttendancePickFromSummary('confirmed')}
+                className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
+                  attendance === 'confirmed'
+                    ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
+                    : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
+                }`}
+              >
+                ✅ ¡Sí!
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAttendancePickFromSummary('declined')}
+                className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
+                  attendance === 'declined'
+                    ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
+                    : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
+                }`}
+              >
+                ❌ No
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAttendancePickFromSummary('maybe')}
+                className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
+                  attendance === 'maybe'
+                    ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
+                    : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
+                }`}
+              >
+                <span className="text-sm">🤔 Aún no lo sé</span>
+              </button>
+            </div>
+          </article>
+        ) : null}
+
+        {/* CARD 3 — Details form (revealed after choosing attendance above) */}
+        {detailsFormVisible && attendance ? (
+          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl sm:p-6">
+            <h2 className="text-base font-semibold text-gray-900">Actualiza los detalles</h2>
+
+            <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label htmlFor="edit-childName" className="mb-1.5 block text-sm font-medium text-gray-900">
@@ -1013,19 +1085,35 @@ export default function RsvpEditPage() {
 
               <button
                 type="submit"
-                disabled={loading || !attendance || !hasFormChanges}
+                disabled={loading || !attendance || !detailsFormVisible || !hasFormChanges}
                 className={`inline-flex w-full items-center justify-center rounded-lg px-3 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed ${
-                  loading || !attendance || !hasFormChanges
+                  loading || !attendance || !detailsFormVisible || !hasFormChanges
                     ? 'border border-gray-200 bg-gray-200 text-gray-500'
                     : `${activeTheme.button} text-gray-900 ${activeTheme.buttonHover}`
                 }`}
               >
-                {loading ? 'Guardando...' : submitText}
+                {loading ? 'Guardando...' : 'Guardar respuesta'}
               </button>
             </form>
-          ) : null}
-        </section>
+          </section>
+        ) : null}
       </div>
+
+      {hasSavedOnce && token ? (
+        <div className="mx-auto mt-6 w-full max-w-md px-1 pb-2 text-center sm:mt-8">
+          <p className="text-xs leading-relaxed text-gray-500">¿Necesitas hacer otro cambio en el futuro?</p>
+          <div className="mt-3 flex flex-col items-center gap-2 rounded-xl border border-gray-100 bg-white/60 px-3 py-3 sm:flex-row sm:justify-between sm:gap-3">
+            <code className="max-w-full break-all text-left text-[11px] text-gray-500">{`miparty.net/rsvp/${token}`}</code>
+            <button
+              type="button"
+              onClick={() => void copySavedEditLink()}
+              className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-800"
+            >
+              {savedEditCopyDone ? '¡Copiado!' : 'Copiar'}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }

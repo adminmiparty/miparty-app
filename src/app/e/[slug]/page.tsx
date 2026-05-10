@@ -207,6 +207,8 @@ export default async function PublicEventPage({
             foodOptions={foodOptions}
             hasFoodOptions={Boolean(event.enable_food_options)}
             organizerNotes={null}
+            organizerPhone={event.organizer_phone}
+            invitationThemeKey={event.invitation_theme}
             invitationImageUrl={event.invitation_image_url}
             invitationImageFit={event.invitation_image_fit}
             invitationImagePosition={event.invitation_image_position}
