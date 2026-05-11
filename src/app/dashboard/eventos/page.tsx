@@ -234,8 +234,21 @@ export default function EventosPage() {
     'flex w-full cursor-pointer list-none items-center justify-between gap-2 px-4 py-2 text-left font-semibold text-gray-900 marker:content-none sm:px-6 [&::-webkit-details-marker]:hidden'
 
   return (
-    <main className={`min-h-screen ${brand.pageBg} px-4 py-6 pb-12 sm:py-8`}>
-      <div className="mx-auto w-full max-w-4xl">
+    <main className={`min-h-screen ${brand.pageBg} pb-12`}>
+      <div className="sticky top-0 z-50 w-full border-b border-gray-200 bg-yellow-50/95 shadow-sm backdrop-blur-sm">
+        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 py-3">
+          <Link
+            href="/"
+            className="inline-flex items-center text-sm font-medium text-gray-600 transition hover:text-gray-900"
+          >
+            ⬅️ Inicio
+          </Link>
+          <Link href="/dashboard" className={`text-sm font-bold no-underline ${brand.textBrand}`}>
+            MiParty
+          </Link>
+        </div>
+      </div>
+      <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-8">
         <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Eventos</h1>

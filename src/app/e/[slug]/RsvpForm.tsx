@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { brand } from '@/lib/brand'
 import { getTheme } from '@/lib/themes'
 
 const previewBrandMap: Record<
@@ -37,10 +38,15 @@ export function InvitationPreviewTopBar({
   const brandClass = previewBrandMap[t] ?? previewBrandMap.yellow
 
   return (
-    <div className={`sticky top-0 z-50 mb-4 w-full border-b border-gray-200 ${theme.bg}/95 shadow-sm backdrop-blur-sm`}>
+    <div
+      className={`sticky top-0 z-50 w-full border-b border-gray-200 ${theme.bg}/95 shadow-sm backdrop-blur-sm`}
+    >
       <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-3">
-        <Link href={backHref} className="text-sm font-medium text-gray-900 hover:underline">
-          ← Volver
+        <Link
+          href={backHref}
+          className={`text-sm font-medium ${brand.navText} ${brand.navTextHover}`}
+        >
+          ⬅️ Volver
         </Link>
         <p className={`text-sm font-semibold ${brandClass}`}>MiParty</p>
       </div>

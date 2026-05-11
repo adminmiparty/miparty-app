@@ -31,6 +31,7 @@ type EventShareRow = {
   rsvp_deadline_days: number | null
   enable_food_options: boolean | null
   organizer_phone: string | null
+  invitation_theme: string | null
 }
 
 function parseThemeParam(raw: string | null): ThemeKey {
@@ -234,7 +235,7 @@ export default function EventSharePage() {
         supabase
           .from('events')
           .select(
-            'id, user_id, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_notes, organizer_phone, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, public_slug, birthday_number, rsvp_deadline_days, enable_food_options'
+            'id, user_id, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_notes, organizer_phone, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, public_slug, birthday_number, rsvp_deadline_days, enable_food_options, invitation_theme'
           )
           .eq('public_slug', slug)
           .maybeSingle<EventShareRow>(),
@@ -350,10 +351,15 @@ export default function EventSharePage() {
     ((event.location_name != null && String(event.location_name).trim() !== '') ||
       (event.location_address != null && String(event.location_address).trim() !== ''))
 
+  const stickyNavThemeDef = useMemo(() => {
+    const key = event ? parseThemeParam(event.invitation_theme) : themeKey
+    return themes[key] ?? themes.yellow
+  }, [event, themeKey])
+
   return (
     <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-8`}>
       <div
-        className={`sticky top-0 z-50 w-full border-b border-gray-200 ${themeDef.bg}/95 shadow-sm backdrop-blur-sm`}
+        className={`sticky top-0 z-50 w-full border-b border-gray-200 ${stickyNavThemeDef.bg}/95 shadow-sm backdrop-blur-sm`}
       >
         <div className="mx-auto w-full max-w-md px-4">
           <div className="flex items-center justify-between gap-3 py-3">
@@ -361,7 +367,7 @@ export default function EventSharePage() {
               href={`/dashboard/eventos/${slug}/editar?theme=${themeKey}&from=share`}
               className="inline-flex items-center text-sm font-medium text-gray-900 hover:underline"
             >
-              ← Volver al Paso 1
+              ⬅️ Volver al Paso 1
             </Link>
             <p className={`text-sm font-semibold ${brandClass}`}>MiParty</p>
           </div>

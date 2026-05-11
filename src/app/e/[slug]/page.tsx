@@ -203,19 +203,17 @@ export default async function PublicEventPage({
   return (
     <main className={`min-h-screen bg-gradient-to-b ${theme.pageBg}`}>
       {isPreview ? (
-        <div className="px-4 pt-8">
-          <InvitationPreviewTopBar publicSlug={slug} themeKey={previewNavTheme} />
-        </div>
+        <InvitationPreviewTopBar publicSlug={slug} themeKey={previewNavTheme} />
       ) : (
         <div
-          className={`sticky top-0 z-50 w-full ${brand.navBorder} ${brand.navBg} shadow-sm`}
+          className={`sticky top-0 z-50 w-full border-b border-gray-200 ${theme.bg}/95 shadow-sm backdrop-blur-sm`}
         >
           <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 py-3 md:max-w-6xl">
             <Link
               href="/"
               className={`inline-flex items-center text-sm font-medium ${brand.navText} transition ${brand.navTextHover}`}
             >
-              ← Inicio
+              ⬅️ Inicio
             </Link>
             {isLoggedIn ? (
               <span className={`text-sm font-bold ${brand.textBrand}`}>MiParty</span>
@@ -238,7 +236,7 @@ export default async function PublicEventPage({
           </div>
         </div>
       )}
-      <div className={`px-4 ${isPreview ? 'pb-8 pt-0' : 'py-8'}`}>
+      <div className={`px-4 ${isPreview ? 'pb-8 pt-4' : 'py-8'}`}>
         <div className="mx-auto w-full max-w-md space-y-4">
         <div
           id="invitation-recap"

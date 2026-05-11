@@ -1436,7 +1436,7 @@ export default function EditEventPage() {
               href={`/dashboard/eventos/${slug}`}
               className="inline-flex items-center text-sm font-medium text-gray-900 hover:underline"
             >
-              ← Volver
+              ⬅️ Volver
             </Link>
             <p className={`text-sm font-semibold ${brandClass}`}>MiParty</p>
           </div>

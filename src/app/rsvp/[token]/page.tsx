@@ -676,7 +676,7 @@ export default function RsvpEditPage() {
           href="/"
           className={`inline-flex items-center text-sm font-medium ${brand.navText} transition ${brand.navTextHover}`}
         >
-          ← Inicio
+          ⬅️ Inicio
         </Link>
         {navLoggedIn === true ? (
           <span className={`text-sm font-bold ${brand.textBrand}`}>MiParty</span>

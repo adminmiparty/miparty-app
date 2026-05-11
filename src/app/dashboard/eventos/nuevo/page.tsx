@@ -1233,7 +1233,7 @@ export default function NewEventPage() {
       <div className="mx-auto w-full max-w-sm pb-8">
         <div className="mb-5 flex items-center justify-between">
           <Link href="/dashboard" className={`inline-flex items-center text-sm font-medium ${accentTextClass}`}>
-            ← Volver al panel
+            ⬅️ Volver al panel
           </Link>
           <p className={`font-bold ${mipartyTextClass}`}>MiParty</p>
         </div>

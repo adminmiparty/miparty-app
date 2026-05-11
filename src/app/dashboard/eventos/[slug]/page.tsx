@@ -5,13 +5,14 @@
 // Do not confuse with the Eventos page at /dashboard/eventos
 
 import Link from 'next/link'
-import { Copy, LayoutGrid, Table2 } from 'lucide-react'
+import { Copy, LayoutGrid, MessageCircle, Share2, Table2 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { subDays } from 'date-fns'
 import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
+import { getTheme } from '@/lib/themes'
 import ShareButton from '@/components/ShareButton'
 
 type EventDetails = {
@@ -42,6 +43,7 @@ type RsvpItem = {
   id: string
   child_name: string
   guest_parent_name: string
+  guest_parent_phone: string | null
   attendance_status: 'confirmed' | 'declined' | 'maybe' | null
   food_preference: string | null
   allergy_notes: string | null
@@ -51,12 +53,13 @@ type RsvpItem = {
 function formatSpanishFullDate(isoDate: string) {
   const [year, month, day] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
   const date = new Date(year, month - 1, day)
-  return date.toLocaleDateString('es-ES', {
+  const raw = date.toLocaleDateString('es-ES', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric',
   })
+  return raw.charAt(0).toUpperCase() + raw.slice(1)
 }
 
 function formatTimeValue(time: string) {
@@ -84,7 +87,6 @@ function formatRsvpConfirmacionesDate(isoDate: string, daysBefore: number) {
   const eventDay = new Date(y, m - 1, d)
   const deadline = subDays(eventDay, daysBefore)
   const raw = deadline.toLocaleDateString('es-ES', {
-    weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -112,6 +114,67 @@ function formatDashboardGiftLine(event: {
     return `🎁 Hucha al móvil ${phone}`
   }
   return null
+}
+
+const EXPORT_MONTH_NAMES = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+] as const
+
+function formatExportEventDate(isoDate: string) {
+  const [y, m, d] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
+  const monthName = EXPORT_MONTH_NAMES[(m ?? 1) - 1] ?? ''
+  return `${d} ${monthName} ${y}`
+}
+
+type AllergyExportRow = { childName: string; foodSelected: string; note: string }
+
+function buildComidaYAlergiasExportText(
+  ev: EventDetails,
+  counts: { label: string; count: number }[],
+  allergies: AllergyExportRow[]
+) {
+  const header = `${ev.title}\n${formatExportEventDate(ev.event_date)} - ${formatTimeValue(ev.start_time)}`
+  const parts: string[] = [header]
+  if (ev.enable_food_options && counts.length > 0) {
+    parts.push('', '🍽️ RESUMEN DE COMIDA', ...counts.map((item) => `${item.label}: ${item.count}`))
+  }
+  if (allergies.length > 0) {
+    parts.push(
+      '',
+      '⚠️ ALERGIAS E INTOLERANCIAS',
+      ...allergies.map((a, i) => {
+        const foodCol = a.foodSelected ? a.foodSelected : 'Sin comida seleccionada'
+        return `${i + 1}. ${a.childName} | ${foodCol} | ${a.note}`
+      })
+    )
+  }
+  return parts.join('\n')
+}
+
+function buildConfirmedAttendeesExportText(ev: EventDetails, rsvpList: RsvpItem[]) {
+  const confirmed = rsvpList.filter((r) => r.attendance_status === 'confirmed')
+  const header = `${ev.title}\n${formatExportEventDate(ev.event_date)} - ${formatTimeValue(ev.start_time)}`
+  const rows = confirmed.map((rsvp, index) => {
+    const phone = (rsvp.guest_parent_phone ?? '').trim()
+    const phonePart = phone ? ` | ${phone}` : ''
+    const food = (rsvp.food_preference ?? '').trim()
+    const foodPart = food ? ` | ${food}` : ''
+    const allergy = (rsvp.allergy_notes ?? '').trim()
+    const allergyPart = allergy ? ` | ⚠️ ${allergy}` : ''
+    return `${index + 1}. ${rsvp.child_name.trim()} | Adulto: ${rsvp.guest_parent_name}${phonePart}${foodPart}${allergyPart}`
+  })
+  return [header, '', `✅ CONFIRMADOS (${confirmed.length})`, ...rows].join('\n')
 }
 
 function rsvpStatusMeta(status: RsvpItem['attendance_status']) {
@@ -143,6 +206,8 @@ export default function EventControlCenterPage() {
   const [activeFilters, setActiveFilters] = useState<string[]>(['confirmed', 'declined', 'maybe'])
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false)
   const copyInviteLinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const toggleFilter = (status: string) => {
     setActiveFilters((prev) =>
@@ -165,6 +230,9 @@ export default function EventControlCenterPage() {
     return () => {
       if (copyInviteLinkTimeoutRef.current != null) {
         clearTimeout(copyInviteLinkTimeoutRef.current)
+      }
+      if (toastTimeoutRef.current != null) {
+        clearTimeout(toastTimeoutRef.current)
       }
     }
   }, [])
@@ -222,7 +290,7 @@ export default function EventControlCenterPage() {
       const { data: rsvpRows } = await supabase
         .from('rsvps')
         .select(
-          'id, child_name, guest_parent_name, attendance_status, food_preference, allergy_notes, extra_notes'
+          'id, child_name, guest_parent_name, guest_parent_phone, attendance_status, food_preference, allergy_notes, extra_notes'
         )
         .eq('event_id', eventRow.id)
         .order('created_at', { ascending: false })
@@ -301,20 +369,13 @@ export default function EventControlCenterPage() {
       .sort((a, b) => b.count - a.count)
   }, [rsvps])
 
-  const foodSummaryGridClass = useMemo(() => {
-    const n = foodPreferenceCounts.length
-    if (n <= 1) return 'grid grid-cols-1 gap-3'
-    if (n === 2) return 'grid grid-cols-2 gap-3'
-    if (n === 3) return 'grid grid-cols-3 gap-3'
-    return 'grid grid-cols-2 gap-3 sm:grid-cols-4'
-  }, [foodPreferenceCounts.length])
-
   const allergyEntries = useMemo(
     () =>
       rsvps
         .filter((rsvp) => (rsvp.allergy_notes ?? '').trim() !== '')
         .map((rsvp) => ({
           childName: rsvp.child_name.trim(),
+          foodSelected: (rsvp.food_preference ?? '').trim(),
           note: (rsvp.allergy_notes ?? '').trim(),
         })),
     [rsvps]
@@ -379,20 +440,12 @@ export default function EventControlCenterPage() {
     green: 'bg-green-100',
     purple: 'bg-purple-100',
   }
-  const accentCountBubbleMap: Record<string, string> = {
-    yellow: 'bg-yellow-500 text-white',
-    pink: 'bg-pink-500 text-white',
-    blue: 'bg-blue-500 text-white',
-    green: 'bg-green-600 text-white',
-    purple: 'bg-purple-500 text-white',
-  }
   const pageBg = pageBgMap[themeKey] ?? pageBgMap.yellow
   const primaryButtonClass = buttonMap[themeKey] ?? buttonMap.yellow
   const accentBorderClass = accentBorderMap[themeKey] ?? accentBorderMap.yellow
   const accentSoftBgClass = accentSoftBgMap[themeKey] ?? accentSoftBgMap.yellow
   const accentTextClass = accentTextMap[themeKey] ?? accentTextMap.yellow
   const accentPillSoftBgClass = accentPillSoftBgMap[themeKey] ?? accentPillSoftBgMap.yellow
-  const accentCountBubbleClass = accentCountBubbleMap[themeKey] ?? accentCountBubbleMap.yellow
 
   const statRingActiveMap: Record<string, string> = {
     yellow: 'ring-yellow-400',
@@ -415,6 +468,81 @@ export default function EventControlCenterPage() {
     )[themeKey] ?? 'bg-yellow-400 text-white'
   const viewIconInactiveClass = 'bg-gray-100 text-gray-500'
 
+  const exportIconButtonClass =
+    'rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600'
+
+  const showToast = (message: string) => {
+    if (toastTimeoutRef.current != null) {
+      clearTimeout(toastTimeoutRef.current)
+    }
+    setToastMessage(message)
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastMessage(null)
+      toastTimeoutRef.current = null
+    }, 2000)
+  }
+
+  const shareOrCopyExport = async (text: string, title: string, copyToast: string) => {
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title, text })
+        return
+      } catch (e) {
+        if (e && typeof e === 'object' && 'name' in e && (e as { name?: string }).name === 'AbortError') {
+          return
+        }
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text)
+      showToast(copyToast)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const copyComidaYAlergias = async () => {
+    if (!event) {
+      return
+    }
+    const text = buildComidaYAlergiasExportText(event, foodPreferenceCounts, allergyEntries)
+    try {
+      await navigator.clipboard.writeText(text)
+      showToast('Resumen de comida copiado ✨')
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const shareComidaYAlergias = async () => {
+    if (!event) {
+      return
+    }
+    const text = buildComidaYAlergiasExportText(event, foodPreferenceCounts, allergyEntries)
+    await shareOrCopyExport(text, event.title, 'Resumen de comida copiado ✨')
+  }
+
+  const copyConfirmedAttendees = async () => {
+    if (!event) {
+      return
+    }
+    const text = buildConfirmedAttendeesExportText(event, rsvps)
+    try {
+      await navigator.clipboard.writeText(text)
+      showToast('Invitados confirmados copiados ✨')
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const shareConfirmedAttendees = async () => {
+    if (!event) {
+      return
+    }
+    const text = buildConfirmedAttendeesExportText(event, rsvps)
+    await shareOrCopyExport(text, event.title, 'Invitados confirmados copiados ✨')
+  }
+
   const responsesSectionHeader = (
     <div className="mt-3 flex items-center justify-between gap-2">
       <h2 className="text-base font-semibold text-gray-900">Respuestas</h2>
@@ -434,6 +562,24 @@ export default function EventControlCenterPage() {
           className={`rounded-lg p-1.5 transition ${viewMode === 'table' ? viewIconActiveClass : viewIconInactiveClass}`}
         >
           <Table2 className="h-4 w-4" aria-hidden />
+        </button>
+        <button
+          type="button"
+          aria-label="Copiar confirmados"
+          title="Copiar confirmados"
+          onClick={() => void copyConfirmedAttendees()}
+          className={exportIconButtonClass}
+        >
+          <Copy className="h-4 w-4" aria-hidden />
+        </button>
+        <button
+          type="button"
+          aria-label="Compartir confirmados"
+          title="Compartir confirmados"
+          onClick={() => void shareConfirmedAttendees()}
+          className={exportIconButtonClass}
+        >
+          <Share2 className="h-4 w-4" aria-hidden />
         </button>
       </div>
     </div>
@@ -457,15 +603,19 @@ export default function EventControlCenterPage() {
     )
   }
 
+  const themeDef = getTheme(event.invitation_theme)
+
   return (
     <main className={`min-h-screen bg-gradient-to-b ${pageBg}`}>
-      <div className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white shadow-sm">
+      <div
+        className={`sticky top-0 z-50 w-full border-b border-gray-200 ${themeDef.bg}/95 shadow-sm backdrop-blur-sm`}
+      >
         <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 py-3 md:max-w-6xl">
           <Link
             href="/dashboard/eventos"
             className="inline-flex items-center text-sm font-medium text-gray-600 transition hover:text-gray-900"
           >
-            ← Eventos
+            ⬅️ Eventos
           </Link>
           <Link
             href="/dashboard"
@@ -513,7 +663,7 @@ export default function EventControlCenterPage() {
                       rel="noopener noreferrer"
                       className={`inline-block text-sm font-medium no-underline ${accentTextClass}`}
                     >
-                      Ver en Google Maps ↗
+                      🗺️ Ver en Google Maps
                     </a>
                   ) : null}
                 </div>
@@ -623,7 +773,7 @@ export default function EventControlCenterPage() {
                 <button
                   type="button"
                   onClick={() => toggleFilter('confirmed')}
-                  className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm transition hover:shadow ${
+                  className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm transition-transform hover:scale-105 hover:shadow ${
                     activeFilters.includes('confirmed')
                       ? `opacity-100 ring-2 ring-offset-2 ring-offset-white ${statRingActiveClass} shadow-md`
                       : 'opacity-50'
@@ -635,7 +785,7 @@ export default function EventControlCenterPage() {
                 <button
                   type="button"
                   onClick={() => toggleFilter('declined')}
-                  className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm transition hover:shadow ${
+                  className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm transition-transform hover:scale-105 hover:shadow ${
                     activeFilters.includes('declined')
                       ? `opacity-100 ring-2 ring-offset-2 ring-offset-white ${statRingActiveClass} shadow-md`
                       : 'opacity-50'
@@ -647,7 +797,7 @@ export default function EventControlCenterPage() {
                 <button
                   type="button"
                   onClick={() => toggleFilter('maybe')}
-                  className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm transition hover:shadow ${
+                  className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm transition-transform hover:scale-105 hover:shadow ${
                     activeFilters.includes('maybe')
                       ? `opacity-100 ring-2 ring-offset-2 ring-offset-white ${statRingActiveClass} shadow-md`
                       : 'opacity-50'
@@ -857,20 +1007,21 @@ export default function EventControlCenterPage() {
                   ) : (
                     <div className="mt-3 w-full overflow-x-auto">
                       <table className="w-full table-auto text-left text-sm">
-                        <thead>
+                        <thead className="sticky top-0 z-10 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
                           <tr className="border-b border-gray-200 text-xs font-medium text-gray-600">
                             <th className="whitespace-nowrap px-3 py-2">Niño/a</th>
                             <th className="whitespace-nowrap px-3 py-2">Adulto</th>
+                            <th className="whitespace-nowrap px-3 py-2">Teléfono</th>
                             <th className="whitespace-nowrap px-3 py-2">Estado</th>
                             <th className="whitespace-nowrap px-3 py-2">Comida</th>
                             <th className="whitespace-nowrap px-3 py-2">Alergias</th>
-                            <th className="whitespace-nowrap px-3 py-2 min-w-[120px]">Mensaje</th>
+                            <th className="whitespace-nowrap px-3 py-2">Mensaje</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredRsvps.length === 0 ? (
                             <tr>
-                              <td colSpan={6} className="whitespace-nowrap px-3 py-4 text-center text-sm text-gray-600">
+                              <td colSpan={7} className="whitespace-nowrap px-3 py-4 text-center text-sm text-gray-600">
                                 No hay respuestas con estos filtros.
                               </td>
                             </tr>
@@ -882,6 +1033,7 @@ export default function EventControlCenterPage() {
                             const foodDisplay = foodRaw ? `🍽️ ${foodRaw}` : ''
                             const allergyRaw = (rsvp.allergy_notes ?? '').trim()
                             const messageRaw = (rsvp.extra_notes ?? '').trim()
+                            const phoneRaw = (rsvp.guest_parent_phone ?? '').trim()
                             return (
                               <tr key={rsvp.id} className="border-b border-gray-100">
                                 <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">{fullChildName}</td>
@@ -890,6 +1042,9 @@ export default function EventControlCenterPage() {
                                   title={rsvp.guest_parent_name || undefined}
                                 >
                                   {rsvp.guest_parent_name}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-2 text-sm text-gray-600">
+                                  {phoneRaw ? phoneRaw : <span className="text-gray-300">—</span>}
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-2">
                                   <span
@@ -908,11 +1063,14 @@ export default function EventControlCenterPage() {
                                 <td className="whitespace-nowrap px-3 py-2 text-gray-700" title={allergyRaw || undefined}>
                                   {allergyRaw ? allergyRaw : <span className="text-gray-300">—</span>}
                                 </td>
-                                <td
-                                  className="whitespace-nowrap px-3 py-2 min-w-[120px] text-gray-700"
-                                  title={messageRaw || undefined}
-                                >
-                                  {messageRaw ? messageRaw : <span className="text-gray-300">—</span>}
+                                <td className="whitespace-nowrap px-3 py-2 text-center text-gray-700">
+                                  {messageRaw ? (
+                                    <span title={messageRaw} className="inline-flex text-gray-600">
+                                      <MessageCircle className="h-4 w-4" aria-hidden />
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-300">—</span>
+                                  )}
                                 </td>
                               </tr>
                             )
@@ -926,43 +1084,79 @@ export default function EventControlCenterPage() {
               )}
             </section>
 
-            {event.enable_food_options && foodPreferenceCounts.length > 0 ? (
+            {(event.enable_food_options && foodPreferenceCounts.length > 0) || allergyEntries.length > 0 ? (
               <section className={`rounded-2xl border shadow-xl ${accentBorderClass} ${accentSoftBgClass}`}>
                 <div className="p-6">
-                  <h2 className="text-left text-base font-semibold text-gray-900">🍽️ Resumen de comida</h2>
-                  <div className={`mt-4 ${foodSummaryGridClass}`}>
-                    {foodPreferenceCounts.map((item) => (
-                      <div
-                        key={item.label}
-                        className={`flex w-full items-center justify-between rounded-full px-4 py-2.5 ${accentPillSoftBgClass}`}
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="text-left text-base font-semibold text-gray-900">🍽️ Comida y alergias</h2>
+                    <div className="flex shrink-0 gap-1">
+                      <button
+                        type="button"
+                        aria-label="Copiar comida y alergias"
+                        title="Copiar resumen"
+                        onClick={() => void copyComidaYAlergias()}
+                        className={exportIconButtonClass}
                       >
-                        <span className="min-w-0 pr-2 text-sm font-medium text-gray-700">{item.label}</span>
-                        <span
-                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${accentCountBubbleClass}`}
-                          aria-label={`${item.count} personas`}
-                        >
-                          {item.count}
-                        </span>
-                      </div>
-                    ))}
+                        <Copy className="h-4 w-4" aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Compartir comida y alergias"
+                        title="Compartir resumen"
+                        onClick={() => void shareComidaYAlergias()}
+                        className={exportIconButtonClass}
+                      >
+                        <Share2 className="h-4 w-4" aria-hidden />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </section>
-            ) : null}
-
-            {allergyEntries.length > 0 ? (
-              <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-xl">
-                <h2 className="text-base font-semibold text-amber-900">⚠️ Alergias e intolerancias</h2>
-                <div className="mt-2 space-y-1 text-sm text-amber-900">
-                  {allergyEntries.map((entry, index) => (
-                    <p key={`${entry.childName}-${index}`}>{`${entry.childName}: ${entry.note}`}</p>
-                  ))}
+                  {event.enable_food_options && foodPreferenceCounts.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {foodPreferenceCounts.map((item) => (
+                        <div
+                          key={item.label}
+                          className={`inline-flex min-w-0 max-w-full flex-[1_1_calc(33.333%-0.34rem)] items-center gap-2 rounded-full px-3 py-1.5 text-sm ${accentPillSoftBgClass} ${accentTextClass}`}
+                        >
+                          <span className="min-w-0 truncate">{item.label}</span>
+                          <span className="shrink-0 font-bold" aria-label={`${item.count} personas`}>
+                            {item.count}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {allergyEntries.length > 0 ? (
+                    <div
+                      className={`rounded-lg border border-yellow-200 bg-yellow-50 p-3 ${
+                        event.enable_food_options && foodPreferenceCounts.length > 0 ? 'mt-4' : 'mt-3'
+                      }`}
+                    >
+                      <h3 className="text-sm font-semibold text-amber-900">⚠️ Alergias e intolerancias</h3>
+                      <div className="mt-2 space-y-1.5 text-sm leading-snug text-amber-900">
+                        {allergyEntries.map((entry, index) => (
+                          <p key={`${entry.childName}-${index}`} className="break-words">
+                            {entry.childName} |{' '}
+                            {entry.foodSelected ? entry.foodSelected : 'Sin comida seleccionada'} | {entry.note}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </section>
             ) : null}
           </div>
         </div>
       </div>
+
+      {toastMessage ? (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
+        >
+          {toastMessage}
+        </div>
+      ) : null}
     </main>
   )
 }
