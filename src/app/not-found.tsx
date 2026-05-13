@@ -14,7 +14,7 @@ export default async function NotFound() {
       <div className="sticky top-0 z-50 w-full border-b border-gray-200 bg-yellow-50/95 shadow-sm backdrop-blur-sm">
         <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 py-3 md:max-w-6xl">
           <Link
-            href={isLoggedIn ? '/dashboard' : '/'}
+            href="/dashboard"
             className={`inline-flex items-center text-sm font-medium ${brand.navText} transition ${brand.navTextHover}`}
           >
             ⬅️ Inicio
