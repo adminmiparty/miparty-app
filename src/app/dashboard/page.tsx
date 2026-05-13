@@ -112,17 +112,6 @@ function initialsFromDisplay(name: string | null, email: string) {
   return local.slice(0, 2).toUpperCase() || '?'
 }
 
-function formatSpanishDateMedium(isoDate: string) {
-  const [year, month, day] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
-  const date = new Date(year, month - 1, day)
-  const raw = date.toLocaleDateString('es-ES', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-  return raw.charAt(0).toUpperCase() + raw.slice(1)
-}
-
 function formatTimeShort(time: string | null) {
   if (!time || String(time).trim() === '') {
     return null
@@ -139,20 +128,6 @@ function formatEventDayMonthShort(isoDate: string) {
     .replace(/\./g, '')
     .trim()
     .toLowerCase()
-}
-
-function invitedAttendanceLabel(status: string | null) {
-  if (status === 'confirmed') return 'Confirmado'
-  if (status === 'declined') return 'No puede'
-  if (status === 'maybe') return 'Quizá'
-  return 'Pendiente'
-}
-
-function invitedAttendanceBadgeClass(status: string | null) {
-  if (status === 'confirmed') return 'bg-green-100 text-green-800'
-  if (status === 'declined') return 'bg-red-100 text-red-800'
-  if (status === 'maybe') return 'bg-amber-100 text-amber-800'
-  return 'bg-gray-100 text-gray-600'
 }
 
 function eventStatusLabel(eventDate: string, todayStr: string): 'Próximo' | 'Hoy' | 'Pasado' {
@@ -183,11 +158,12 @@ function EventRow({
   const timeLabel = formatTimeShort(event.start_time)
   const dateShort = formatEventDayMonthShort(event.event_date)
   const loc = event.location_name?.trim()
+  const to = `/dashboard/eventos/${event.public_slug}`
 
   return (
     <li className="w-full">
       <Link
-        href={`/dashboard/eventos/${event.public_slug}`}
+        href={to}
         className={`flex w-full flex-col gap-1.5 rounded-xl border border-gray-100 border-l-4 ${leftBorderClass} bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:ring-2 ${hoverRingClass}`}
       >
         <div className="flex w-full min-w-0 items-center gap-2">
@@ -247,6 +223,19 @@ function normalizeInvitedNestedEvent(
   return raw
 }
 
+function invitedItemToEventListItem(item: InvitedListItem): EventListItem {
+  return {
+    id: item.eventId,
+    public_slug: item.public_slug,
+    title: item.title,
+    child_name: item.child_name,
+    event_date: item.event_date,
+    start_time: null,
+    location_name: null,
+    invitation_theme: item.invitation_theme,
+  }
+}
+
 export default function DashboardHomePage() {
   const supabase = createClient()
   const [events, setEvents] = useState<EventListItem[]>([])
@@ -261,26 +250,53 @@ export default function DashboardHomePage() {
 
   const todayStr = useMemo(() => todayLocalIso(), [])
 
-  const eventsSortedDesc = useMemo(() => {
-    return [...events].sort((a, b) => (a.event_date < b.event_date ? 1 : a.event_date > b.event_date ? -1 : 0))
-  }, [events])
-
-  const { upcoming, past, total } = useMemo(() => {
-    const up: EventListItem[] = []
-    const pa: EventListItem[] = []
-    for (const e of events) {
-      if (e.event_date >= todayStr) up.push(e)
-      else pa.push(e)
-    }
-    up.sort((a, b) => (a.event_date < b.event_date ? -1 : a.event_date > b.event_date ? 1 : 0))
-    pa.sort((a, b) => (a.event_date > b.event_date ? -1 : a.event_date < b.event_date ? 1 : 0))
-    return { upcoming: up, past: pa, total: events.length }
-  }, [events, todayStr])
-
   const totalConfirmedRsvps = useMemo(
     () => Object.values(rsvpCountsByEventId).reduce((sum, c) => sum + c.confirmed, 0),
     [rsvpCountsByEventId]
   )
+
+  const { upcomingCount, pastCount } = useMemo(() => {
+    const upIds = new Set<string>()
+    const pastIds = new Set<string>()
+    for (const e of events) {
+      if (e.event_date >= todayStr) upIds.add(e.id)
+      else pastIds.add(e.id)
+    }
+    for (const i of invitedItems) {
+      if (i.event_date >= todayStr) upIds.add(i.eventId)
+      else pastIds.add(i.eventId)
+    }
+    return { upcomingCount: upIds.size, pastCount: pastIds.size }
+  }, [events, invitedItems, todayStr])
+
+  const dashboardUpcomingEvents = useMemo((): EventListItem[] => {
+    const byId = new Map<string, EventListItem>()
+    for (const e of events) {
+      if (e.event_date >= todayStr) byId.set(e.id, e)
+    }
+    for (const item of invitedItems) {
+      if (item.event_date >= todayStr && !byId.has(item.eventId)) {
+        byId.set(item.eventId, invitedItemToEventListItem(item))
+      }
+    }
+    return Array.from(byId.values()).sort((a, b) => a.event_date.localeCompare(b.event_date))
+  }, [events, invitedItems, todayStr])
+
+  const lastPastEvent = useMemo((): EventListItem | null => {
+    const byId = new Map<string, EventListItem>()
+    for (const e of events) {
+      if (e.event_date < todayStr) byId.set(e.id, e)
+    }
+    for (const item of invitedItems) {
+      if (item.event_date < todayStr && !byId.has(item.eventId)) {
+        byId.set(item.eventId, invitedItemToEventListItem(item))
+      }
+    }
+    const sorted = Array.from(byId.values()).sort((a, b) => b.event_date.localeCompare(a.event_date))
+    return sorted[0] ?? null
+  }, [events, invitedItems, todayStr])
+
+  const hasAnyEvents = events.length > 0 || invitedItems.length > 0
 
   useEffect(() => {
     let isMounted = true
@@ -436,23 +452,6 @@ export default function DashboardHomePage() {
     }
   }, [supabase])
 
-  const newEventPlusLink = (
-    <Link
-      href="/dashboard/eventos/nuevo"
-      className={`inline-flex shrink-0 rounded-full p-1.5 text-gray-400 transition hover:bg-yellow-50 ${brand.accentText} ${brand.textBrandHover}`}
-      aria-label="Crear nueva fiesta"
-    >
-      <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
-    </Link>
-  )
-
-  const misEventosHeadingRow = (
-    <div className="mb-4 mt-2 flex items-center justify-between gap-3">
-      <h2 className="text-lg font-semibold text-gray-800">Mis eventos</h2>
-      {newEventPlusLink}
-    </div>
-  )
-
   const greetingTitle = userFirstName ? `Hola, ${userFirstName} 👋` : 'Hola 👋'
   const navBrandLine = userFirstName ? `MiParty · ${userFirstName}` : 'MiParty'
 
@@ -523,27 +522,6 @@ export default function DashboardHomePage() {
           <ChildrenSection userId={userId} initialChildren={children} isLoading={loading} />
         ) : null}
 
-        {!loading && !error ? (
-          <div className="mb-4 grid grid-cols-3 gap-2 sm:mb-6">
-            <div
-              className={`rounded-lg border ${brand.borderLight} ${brand.accentBg} px-3 py-2 text-sm text-gray-700 shadow-sm`}
-            >
-              <span className="text-gray-600">Próximos:</span>{' '}
-              <span className={`font-semibold tabular-nums ${brand.accentText}`}>{upcoming.length}</span>
-            </div>
-            <div className="rounded-lg border border-gray-100 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm">
-              <span className="text-gray-600">Pasados:</span>{' '}
-              <span className="font-semibold tabular-nums text-gray-800">{past.length}</span>
-            </div>
-            <div
-              className={`rounded-lg border ${brand.borderLight} ${brand.accentBg} px-3 py-2 text-sm text-gray-700 shadow-sm`}
-            >
-              <span className="text-gray-600">Confirmados:</span>{' '}
-              <span className={`font-semibold tabular-nums ${brand.accentText}`}>{totalConfirmedRsvps}</span>
-            </div>
-          </div>
-        ) : null}
-
         <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-xl sm:p-6">
           {loading ? <p className="text-sm text-gray-500">Cargando eventos...</p> : null}
 
@@ -553,8 +531,43 @@ export default function DashboardHomePage() {
 
           {!loading && !error ? (
             <div className="px-4 sm:px-6">
-              {misEventosHeadingRow}
-              {total === 0 ? (
+              <div className="mb-4 mt-2 flex items-center justify-between gap-2">
+                <h2 className="text-lg font-semibold text-gray-900">Eventos</h2>
+                <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                  <Link
+                    href="/dashboard/eventos"
+                    className="text-xs font-medium text-gray-500 underline-offset-2 transition hover:text-gray-700 hover:underline"
+                  >
+                    Ver todos
+                  </Link>
+                  <Link
+                    href="/dashboard/eventos/nuevo"
+                    className={`inline-flex shrink-0 rounded-full p-1.5 text-gray-400 transition hover:bg-yellow-50 ${brand.accentText} ${brand.textBrandHover}`}
+                    aria-label="Crear nueva fiesta"
+                  >
+                    <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
+                  </Link>
+                </div>
+              </div>
+
+              <div className="mb-4 grid w-full grid-cols-3 gap-3">
+                <div className="w-full rounded-xl border border-gray-100 bg-white px-3 py-3 text-center shadow-sm">
+                  <p className="text-xs text-gray-500">Próximos</p>
+                  <p className={`mt-0.5 text-xl font-bold tabular-nums ${brand.accentText}`}>{upcomingCount}</p>
+                </div>
+                <div className="w-full rounded-xl border border-gray-100 bg-white px-3 py-3 text-center shadow-sm">
+                  <p className="text-xs text-gray-500">Pasados</p>
+                  <p className={`mt-0.5 text-xl font-bold tabular-nums ${brand.accentText}`}>{pastCount}</p>
+                </div>
+                <div className="w-full rounded-xl border border-gray-100 bg-white px-3 py-3 text-center shadow-sm">
+                  <p className="text-xs text-gray-500">Confirmados</p>
+                  <p className={`mt-0.5 text-xl font-bold tabular-nums ${brand.accentText}`}>
+                    {totalConfirmedRsvps}
+                  </p>
+                </div>
+              </div>
+
+              {!hasAnyEvents ? (
                 <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-8 text-center">
                   <p className="text-2xl" aria-hidden>
                     🎉
@@ -568,63 +581,60 @@ export default function DashboardHomePage() {
                   </Link>
                 </div>
               ) : (
-                <ul className="grid w-full grid-cols-1 gap-3">
-                  {eventsSortedDesc.map((event) => (
-                    <EventRow
-                      key={event.id}
-                      event={event}
-                      rsvpCounts={rsvpCountsByEventId[event.id] ?? { confirmed: 0, declined: 0, maybe: 0 }}
-                      todayStr={todayStr}
-                    />
-                  ))}
-                </ul>
+                <>
+                  <p className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Próximos eventos
+                  </p>
+                  {dashboardUpcomingEvents.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-6 text-center">
+                      <p className="text-sm text-gray-600">No hay próximos eventos.</p>
+                    </div>
+                  ) : (
+                    <ul className="grid w-full grid-cols-1 gap-3">
+                      {dashboardUpcomingEvents.map((event) => (
+                        <EventRow
+                          key={event.id}
+                          event={event}
+                          rsvpCounts={rsvpCountsByEventId[event.id] ?? { confirmed: 0, declined: 0, maybe: 0 }}
+                          todayStr={todayStr}
+                        />
+                      ))}
+                    </ul>
+                  )}
+
+                  {lastPastEvent ? (
+                    <div>
+                      <p className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        Último evento
+                      </p>
+                      <ul className="grid w-full grid-cols-1 gap-3">
+                        <EventRow
+                          key={`past-${lastPastEvent.id}`}
+                          event={lastPastEvent}
+                          rsvpCounts={
+                            rsvpCountsByEventId[lastPastEvent.id] ?? {
+                              confirmed: 0,
+                              declined: 0,
+                              maybe: 0,
+                            }
+                          }
+                          todayStr={todayStr}
+                        />
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4">
+                    <Link
+                      href="/dashboard/eventos"
+                      className="text-sm text-gray-500 underline-offset-2 transition hover:text-gray-600 hover:underline"
+                    >
+                      Ver todos los eventos →
+                    </Link>
+                  </div>
+                </>
               )}
             </div>
-          ) : null}
-        </section>
-
-        <section className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-800">Eventos a los que mis hijos fueron invitados</h2>
-          {!loading && invitedItems.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-8 text-center">
-              <p className="text-2xl" aria-hidden>
-                🎈
-              </p>
-              <p className="mt-3 text-sm font-medium text-gray-700">Aún no aparecen eventos aquí.</p>
-              <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-gray-500">
-                Cuando tus hijos sean invitados a fiestas y confirmen asistencia, aparecerán aquí.
-              </p>
-            </div>
-          ) : null}
-          {!loading && invitedItems.length > 0 ? (
-            <ul className="grid grid-cols-1 gap-3">
-              {invitedItems.map((item) => {
-                const themeKey = item.invitation_theme ?? 'yellow'
-                const leftBorder = themeCardBorder[themeKey] ?? themeCardBorder.yellow
-                return (
-                  <li key={`${item.eventId}-${item.child_name}`} className="w-full">
-                    <Link
-                      href={`/e/${item.public_slug}`}
-                      className={`flex w-full items-center justify-between gap-3 rounded-xl border border-gray-200 border-l-4 ${leftBorder} bg-white p-4 shadow-sm transition-shadow hover:shadow-md`}
-                    >
-                      <div className="min-w-0 flex-1 text-left">
-                        <p className="text-base font-bold text-gray-900">{item.title}</p>
-                        <p className="mt-0.5 text-sm text-gray-700">{item.child_name}</p>
-                        <p className="mt-1 text-sm text-gray-600">{formatSpanishDateMedium(item.event_date)}</p>
-                        <span
-                          className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${invitedAttendanceBadgeClass(item.attendance_status)}`}
-                        >
-                          {invitedAttendanceLabel(item.attendance_status)}
-                        </span>
-                      </div>
-                      <span className="shrink-0 text-lg text-gray-400" aria-hidden>
-                        →
-                      </span>
-                    </Link>
-                  </li>
-                )
-              })}
-            </ul>
           ) : null}
         </section>
 
