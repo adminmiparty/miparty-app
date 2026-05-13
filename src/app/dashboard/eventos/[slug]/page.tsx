@@ -612,10 +612,10 @@ export default function EventControlCenterPage() {
       >
         <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 py-3 md:max-w-6xl">
           <Link
-            href="/dashboard/eventos"
+            href="/dashboard"
             className="inline-flex items-center text-sm font-medium text-gray-600 transition hover:text-gray-900"
           >
-            ⬅️ Eventos
+            ⬅️ Mi espacio
           </Link>
           <Link
             href="/dashboard"

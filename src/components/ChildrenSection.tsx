@@ -43,18 +43,6 @@ function childDisplayName(child: DashboardChildRow) {
   return `${first} ${last}`.trim()
 }
 
-function childInitials(child: DashboardChildRow): string {
-  const first = child.name.trim()
-  const last = (child.last_name ?? '').trim()
-  if (first && last) {
-    return `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase()
-  }
-  if (first.length >= 2) {
-    return first.slice(0, 2).toUpperCase()
-  }
-  return (first[0] ?? '?').toUpperCase()
-}
-
 type ChildrenSectionProps = {
   userId: string
   initialChildren: DashboardChildRow[]
@@ -160,7 +148,6 @@ export function ChildrenSection({ userId, initialChildren, isLoading }: Children
             const age = birth ? computeAgeYears(birth, todayDate()) : null
             const birthFmt = birth ? formatBirthDdMmYyyy(birth) : ''
             const uploading = uploadingId === child.id
-            const initials = childInitials(child)
             let line2 = ''
             if (age != null && birthFmt) {
               line2 = `${age} años · ${birthFmt}`
@@ -172,36 +159,49 @@ export function ChildrenSection({ userId, initialChildren, isLoading }: Children
             return (
               <div
                 key={child.id}
-                className="relative flex flex-row items-center gap-3 rounded-xl bg-white p-3 shadow-sm"
+                className="relative flex min-h-[7.5rem] flex-row items-center gap-3 rounded-xl bg-white p-3 shadow-sm"
               >
-                <div className="relative shrink-0">
+                <div className="relative h-16 w-16 shrink-0">
                   {child.avatar_url ? (
-                    <img
-                      src={child.avatar_url}
-                      alt=""
-                      className="h-10 w-10 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-semibold ${brand.accentBg} ${brand.accentText}`}
-                      aria-hidden
+                    <button
+                      type="button"
+                      onClick={() => openPicker(child.id)}
+                      disabled={uploading}
+                      className="group relative h-16 w-16 cursor-pointer overflow-hidden rounded-full border-0 p-0 disabled:opacity-50"
+                      aria-label="Cambiar foto"
                     >
-                      {initials}
-                    </div>
+                      <img
+                        src={child.avatar_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                      <div
+                        className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/30 transition ${
+                          uploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}
+                      >
+                        {uploading ? (
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                        ) : (
+                          <Camera className="h-4 w-4 text-white" strokeWidth={2} aria-hidden />
+                        )}
+                      </div>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => openPicker(child.id)}
+                      disabled={uploading}
+                      className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-full bg-gray-100 transition hover:bg-gray-200 disabled:opacity-50"
+                      aria-label="Añadir foto"
+                    >
+                      {uploading ? (
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+                      ) : (
+                        <Camera className="h-5 w-5 text-gray-400" strokeWidth={2} aria-hidden />
+                      )}
+                    </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => openPicker(child.id)}
-                    disabled={uploading}
-                    className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
-                    aria-label="Cambiar foto"
-                  >
-                    {uploading ? (
-                      <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
-                    ) : (
-                      <Camera className="h-3 w-3" aria-hidden />
-                    )}
-                  </button>
                 </div>
                 <div className="min-w-0 flex-1 pr-1 text-left">
                   <p className="truncate text-sm font-medium text-gray-900" title={display}>
