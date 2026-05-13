@@ -1,5 +1,6 @@
 'use client'
 
+import AppNav from '@/components/AppNav'
 import Link from 'next/link'
 import { subDays } from 'date-fns'
 import { format } from 'date-fns'
@@ -280,7 +281,6 @@ export default function RsvpEditPage() {
   const [parentDialOpen, setParentDialOpen] = useState(false)
   const parentDialRef = useRef<HTMLDivElement>(null)
   const messageRef = useRef<HTMLTextAreaElement>(null)
-  const [navLoggedIn, setNavLoggedIn] = useState<boolean | null>(null)
 
   const resolvedThemeKey: ThemeKeyType =
     themeKey === 'yellow' || themeKey === 'pink' || themeKey === 'blue' || themeKey === 'green' || themeKey === 'purple'
@@ -306,13 +306,6 @@ export default function RsvpEditPage() {
       if (saveToastUnmountRef.current != null) clearTimeout(saveToastUnmountRef.current)
       if (savedEditCopyTimeoutRef.current != null) clearTimeout(savedEditCopyTimeoutRef.current)
     }
-  }, [])
-
-  useEffect(() => {
-    const client = createClient()
-    void client.auth.getUser().then(({ data: { user } }) => {
-      setNavLoggedIn(Boolean(user))
-    })
   }, [])
 
   function showSavedResponseToast() {
@@ -669,36 +662,7 @@ export default function RsvpEditPage() {
     setLoading(false)
   }
 
-  const rsvpTopNav = (
-    <div className={`sticky top-0 z-50 w-full ${brand.navBorder} ${brand.navBg} shadow-sm`}>
-      <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 py-3 md:max-w-6xl">
-        <Link
-          href="/dashboard"
-          className={`inline-flex items-center text-sm font-medium ${brand.navText} transition ${brand.navTextHover}`}
-        >
-          ⬅️ Inicio
-        </Link>
-        {navLoggedIn === true ? (
-          <span className={`text-sm font-bold ${brand.textBrand}`}>MiParty</span>
-        ) : (
-          <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className={`text-sm font-medium ${brand.navText} ${brand.navTextHover}`}
-            >
-              Iniciar sesión
-            </Link>
-            <Link
-              href="/registro"
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${brand.buttonPrimary}`}
-            >
-              Registrarse
-            </Link>
-          </div>
-        )}
-      </div>
-    </div>
-  )
+  const rsvpTopNav = <AppNav backHref="/" backLabel="⬅️ Inicio" />
 
   if (loadState === 'loading') {
     return (

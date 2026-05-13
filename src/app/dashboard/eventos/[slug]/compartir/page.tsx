@@ -1,5 +1,6 @@
 'use client'
 
+import AppNav from '@/components/AppNav'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
@@ -351,35 +352,21 @@ export default function EventSharePage() {
     ((event.location_name != null && String(event.location_name).trim() !== '') ||
       (event.location_address != null && String(event.location_address).trim() !== ''))
 
-  const stickyNavThemeDef = useMemo(() => {
-    const key = event ? parseThemeParam(event.invitation_theme) : themeKey
-    return themes[key] ?? themes.yellow
-  }, [event, themeKey])
-
   return (
     <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-8`}>
-      <div
-        className={`sticky top-0 z-50 w-full border-b border-gray-200 ${stickyNavThemeDef.bg}/95 shadow-sm backdrop-blur-sm`}
-      >
-        <div className="mx-auto w-full max-w-md px-4">
-          <div className="flex items-center justify-between gap-3 py-3">
-            <Link
-              href={`/dashboard/eventos/${slug}/editar?theme=${themeKey}&from=share`}
-              className="inline-flex items-center text-sm font-medium text-gray-900 hover:underline"
-            >
-              ⬅️ Volver al Paso 1
-            </Link>
-            <p className={`text-sm font-semibold ${brandClass}`}>MiParty</p>
-          </div>
-          <div className="border-t border-gray-200/60 pb-3 pt-2">
-            <div className={`rounded-xl border ${progressCardBorderClass} bg-white/80 p-3`}>
-              <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
-                <span className="text-gray-400 font-normal">Paso 1 — Crea tu evento</span>
-                <span className="text-gray-900 font-semibold">Paso 2 — Revisa tu invitación</span>
-              </div>
-              <div className={`h-2 w-full rounded-full ${progressTrackClass}`}>
-                <div className={`h-2 w-full rounded-full ${progressAccentClass}`} />
-              </div>
+      <AppNav
+        backHref={`/dashboard/eventos/${slug}/editar?theme=${themeKey}&from=share`}
+        backLabel="⬅️ Volver al Paso 1"
+      />
+      <div className="mx-auto w-full max-w-md border-b border-gray-200 bg-yellow-50/95 px-4 shadow-sm backdrop-blur-sm md:max-w-6xl">
+        <div className="border-t border-gray-200/60 pb-3 pt-2">
+          <div className={`rounded-xl border ${progressCardBorderClass} bg-white/80 p-3`}>
+            <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
+              <span className="font-normal text-gray-400">Paso 1 — Crea tu evento</span>
+              <span className="font-semibold text-gray-900">Paso 2 — Revisa tu invitación</span>
+            </div>
+            <div className={`h-2 w-full rounded-full ${progressTrackClass}`}>
+              <div className={`h-2 w-full rounded-full ${progressAccentClass}`} />
             </div>
           </div>
         </div>

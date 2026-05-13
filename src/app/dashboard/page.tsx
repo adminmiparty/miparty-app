@@ -3,6 +3,7 @@
 // Dashboard home — profile, children, events summary, invited events, favorites
 // Route: /dashboard
 
+import AppNav from '@/components/AppNav'
 import { ChildrenSection, type DashboardChildRow } from '@/components/ChildrenSection'
 import { brand } from '@/lib/brand'
 import { CalendarDays, Map as MapIcon, Plus } from 'lucide-react'
@@ -502,7 +503,6 @@ export default function DashboardHomePage() {
   }, [supabase])
 
   const greetingTitle = userFirstName ? `Hola ${userFirstName} 👋` : 'Hola 👋'
-  const navBrandLine = userFirstName ? `MiParty · ${userFirstName}` : 'MiParty'
 
   const profileInitials = parentProfile
     ? initialsFromDisplay(parentProfile.fullName, parentProfile.email)
@@ -510,12 +510,7 @@ export default function DashboardHomePage() {
 
   return (
     <main className={`min-h-screen ${brand.pageBg} pb-12`}>
-      <div className={`sticky top-0 z-50 w-full ${brand.navBorder} ${brand.navBg} shadow-sm backdrop-blur-sm`}>
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 py-3">
-          <span className={`text-sm font-bold ${brand.textBrand}`}>MiParty</span>
-          <span className={`text-sm font-bold ${brand.textBrand}`}>{navBrandLine}</span>
-        </div>
-      </div>
+      <AppNav />
       <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-8">
         <header className="mb-6 sm:mb-8">
           <div>

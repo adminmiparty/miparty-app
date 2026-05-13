@@ -1,5 +1,6 @@
 ﻿'use client'
 
+import AppNav from '@/components/AppNav'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { type ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react'
@@ -1427,21 +1428,10 @@ export default function EditEventPage() {
 
   return (
     <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-8`}>
-      <div
-        className={`sticky top-0 z-50 w-full border-b border-gray-200 ${themeDef.bg}/95 shadow-sm backdrop-blur-sm`}
-      >
-        <div className="mx-auto w-full max-w-md px-4">
-          <div className="flex items-center justify-between gap-3 py-3">
-            <Link
-              href={`/dashboard/eventos/${slug}`}
-              className="inline-flex items-center text-sm font-medium text-gray-900 hover:underline"
-            >
-              ⬅️ Volver
-            </Link>
-            <p className={`text-sm font-semibold ${brandClass}`}>MiParty</p>
-          </div>
-        </div>
-      </div>
+      <AppNav
+        backHref={`/dashboard/eventos/${slug}`}
+        backLabel="⬅️ Volver"
+      />
 
       <div className="mx-auto w-full max-w-md pb-8 pt-4">
         <section className={`rounded-2xl border p-5 shadow-xl ${activePreviewTheme.card}`}>

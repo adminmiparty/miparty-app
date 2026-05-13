@@ -1,3 +1,4 @@
+import AppNav from '@/components/AppNav'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { subDays } from 'date-fns'
@@ -152,10 +153,6 @@ export default async function PublicEventPage({
   const isPreview =
     previewRaw === 'true' || (Array.isArray(previewRaw) && previewRaw[0] === 'true')
   const supabase = await createClient()
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser()
-  const isLoggedIn = Boolean(authUser)
 
   const { data: event } = await supabase
     .from('events')
@@ -205,36 +202,7 @@ export default async function PublicEventPage({
       {isPreview ? (
         <InvitationPreviewTopBar publicSlug={slug} themeKey={previewNavTheme} />
       ) : (
-        <div
-          className={`sticky top-0 z-50 w-full border-b border-gray-200 ${theme.bg}/95 shadow-sm backdrop-blur-sm`}
-        >
-          <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 py-3 md:max-w-6xl">
-            <Link
-              href="/dashboard"
-              className={`inline-flex items-center text-sm font-medium ${brand.navText} transition ${brand.navTextHover}`}
-            >
-              ⬅️ Inicio
-            </Link>
-            {isLoggedIn ? (
-              <span className={`text-sm font-bold ${brand.textBrand}`}>MiParty</span>
-            ) : (
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/login"
-                  className={`text-sm font-medium ${brand.navText} ${brand.navTextHover}`}
-                >
-                  Iniciar sesión
-                </Link>
-                <Link
-                  href="/registro"
-                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${brand.buttonPrimary}`}
-                >
-                  Registrarse
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
+        <AppNav backHref="/" backLabel="⬅️ Inicio" />
       )}
       <div className={`px-4 ${isPreview ? 'pb-8 pt-4' : 'py-8'}`}>
         <div className="mx-auto w-full max-w-md space-y-4">

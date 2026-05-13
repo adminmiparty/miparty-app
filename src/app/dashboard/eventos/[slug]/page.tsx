@@ -4,15 +4,14 @@
 // Route: /dashboard/eventos/[slug]
 // Do not confuse with the Eventos page at /dashboard/eventos
 
+import AppNav from '@/components/AppNav'
 import Link from 'next/link'
 import { Copy, LayoutGrid, MessageCircle, Share2, Table2 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { User } from '@supabase/supabase-js'
 import { subDays } from 'date-fns'
 import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
-import { getTheme } from '@/lib/themes'
 import ShareButton from '@/components/ShareButton'
 
 type EventDetails = {
@@ -64,22 +63,6 @@ function formatSpanishFullDate(isoDate: string) {
 
 function formatTimeValue(time: string) {
   return time.slice(0, 5)
-}
-
-function userFirstDisplayName(user: User): string {
-  const rawMeta = user.user_metadata?.full_name
-  const fullName = typeof rawMeta === 'string' ? rawMeta.trim() : ''
-  if (fullName) {
-    const first = fullName.split(/\s+/).filter(Boolean)[0]
-    if (first) return first
-  }
-  const email = user.email?.trim() ?? ''
-  if (email) {
-    const local = email.split('@')[0] ?? ''
-    const first = local.split(/[._+\s-]/).filter(Boolean)[0]
-    if (first) return first
-  }
-  return 'Invitado'
 }
 
 function formatRsvpConfirmacionesDate(isoDate: string, daysBefore: number) {
@@ -198,7 +181,6 @@ export default function EventControlCenterPage() {
 
   const [event, setEvent] = useState<EventDetails | null>(null)
   const [foodOptionLabels, setFoodOptionLabels] = useState<string[]>([])
-  const [navUserFirstName, setNavUserFirstName] = useState('')
   const [rsvps, setRsvps] = useState<RsvpItem[]>([])
   const [loadError, setLoadError] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -260,10 +242,6 @@ export default function EventControlCenterPage() {
         }
         router.replace('/login')
         return
-      }
-
-      if (!cancelled) {
-        setNavUserFirstName(userFirstDisplayName(user))
       }
 
       const { data: eventRow, error: eventError } = await supabase
@@ -603,28 +581,9 @@ export default function EventControlCenterPage() {
     )
   }
 
-  const themeDef = getTheme(event.invitation_theme)
-
   return (
     <main className={`min-h-screen bg-gradient-to-b ${pageBg}`}>
-      <div
-        className={`sticky top-0 z-50 w-full border-b border-gray-200 ${themeDef.bg}/95 shadow-sm backdrop-blur-sm`}
-      >
-        <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 py-3 md:max-w-6xl">
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center text-sm font-medium text-gray-600 transition hover:text-gray-900"
-          >
-            ⬅️ Mi espacio
-          </Link>
-          <Link
-            href="/dashboard"
-            className={`text-sm font-bold no-underline ${brand.textBrand}`}
-          >
-            {navUserFirstName ? `MiParty · ${navUserFirstName}` : 'MiParty'}
-          </Link>
-        </div>
-      </div>
+      <AppNav backHref="/dashboard" backLabel="⬅️ Mi espacio" />
 
       <div className="mx-auto w-full max-w-7xl px-6 pt-10">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[360px_minmax(0,1fr)] md:gap-6">

@@ -3,10 +3,10 @@
 // Eventos list — all organized parties
 // Route: /dashboard/eventos
 
+import AppNav from '@/components/AppNav'
 import { brand } from '@/lib/brand'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 
 const themeCardBorder: Record<string, string> = {
@@ -48,22 +48,6 @@ function todayLocalIso() {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
-}
-
-function userFirstDisplayName(user: User): string {
-  const rawMeta = user.user_metadata?.full_name
-  const fullName = typeof rawMeta === 'string' ? rawMeta.trim() : ''
-  if (fullName) {
-    const first = fullName.split(/\s+/).filter(Boolean)[0]
-    if (first) return first
-  }
-  const email = user.email?.trim() ?? ''
-  if (email) {
-    const local = email.split('@')[0] ?? ''
-    const first = local.split(/[._+\s-]/).filter(Boolean)[0]
-    if (first) return first
-  }
-  return ''
 }
 
 function formatSpanishDateMedium(isoDate: string) {
@@ -139,7 +123,6 @@ export default function EventosListPage() {
   const supabase = createClient()
   const [events, setEvents] = useState<EventListItem[]>([])
   const [rsvpCountsByEventId, setRsvpCountsByEventId] = useState<Record<string, RsvpCounts>>({})
-  const [userFirstName, setUserFirstName] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
@@ -205,14 +188,9 @@ export default function EventosListPage() {
           setError(userError?.message ?? 'No se pudo obtener tu sesión.')
           setEvents([])
           setRsvpCountsByEventId({})
-          setUserFirstName('')
           setLoading(false)
         }
         return
-      }
-
-      if (isMounted) {
-        setUserFirstName(userFirstDisplayName(user))
       }
 
       const { data, error: eventsError } = await supabase
@@ -274,8 +252,6 @@ export default function EventosListPage() {
     }
   }, [supabase])
 
-  const navBrandLine = userFirstName ? `MiParty · ${userFirstName}` : 'MiParty'
-
   const sectionHeaderClass =
     'flex w-full cursor-pointer list-none items-center justify-between gap-2 px-4 py-2 text-left font-semibold text-gray-900 marker:content-none sm:px-6 [&::-webkit-details-marker]:hidden'
 
@@ -323,17 +299,7 @@ export default function EventosListPage() {
 
   return (
     <main className={`min-h-screen ${brand.pageBg} pb-12`}>
-      <div className={`sticky top-0 z-50 w-full ${brand.navBorder} ${brand.navBg} shadow-sm`}>
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 py-3">
-          <Link
-            href="/dashboard"
-            className={`inline-flex items-center text-sm font-medium ${brand.navText} transition ${brand.navTextHover}`}
-          >
-            ⬅️ Panel
-          </Link>
-          <span className={`text-sm font-bold ${brand.textBrand}`}>{navBrandLine}</span>
-        </div>
-      </div>
+      <AppNav backHref="/dashboard" backLabel="⬅️ Mi espacio" />
 
       <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-8">
         <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
