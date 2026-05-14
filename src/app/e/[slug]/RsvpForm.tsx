@@ -90,6 +90,41 @@ const inputFocusMap: Record<ThemeKeyType, string> = {
   purple: 'ring-purple-400 focus:border-purple-400',
 }
 
+const POST_RSVP_STORAGE_KEY = 'miparty_post_rsvp_v1'
+
+type PostRsvpPersist = {
+  rsvpId: string
+  attendance: AttendanceStatus
+  editToken: string | null
+  parentName: string
+  parentPhone: string
+  childFirst: string
+  childLast: string
+}
+
+async function linkRsvpAndProfile(
+  sb: ReturnType<typeof createClient>,
+  userId: string,
+  rsvpId: string,
+  profile: { parentName: string; parentPhone: string; childFirst: string; childLast: string }
+) {
+  await sb.from('rsvps').update({ user_id: userId }).eq('id', rsvpId)
+  const { error: childErr } = await sb.from('children').insert({
+    user_id: userId,
+    name: profile.childFirst,
+    last_name: profile.childLast || null,
+    birth_date: null,
+  })
+  if (childErr && !childErr.message.includes('duplicate')) {
+    console.warn('children insert:', childErr.message)
+  }
+  await sb.from('users').upsert({
+    id: userId,
+    full_name: profile.parentName,
+    phone: profile.parentPhone || null,
+  })
+}
+
 function sanitizeDialPrefix(raw: string): string {
   const digitsPlus = raw.replace(/[^\d+]/g, '')
   if (digitsPlus.length === 0) return ''
@@ -196,6 +231,23 @@ function RsvpFormInner({
   const [copyEditLinkDone, setCopyEditLinkDone] = useState(false)
   const copyEditLinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null)
+  const [signupToggle, setSignupToggle] = useState(false)
+  const [showSignupModal, setShowSignupModal] = useState(false)
+  const [modalView, setModalView] = useState<'signup' | 'login' | 'success'>('signup')
+  const [submittedRsvpId, setSubmittedRsvpId] = useState<string | null>(null)
+  const submittedRsvpIdRef = useRef<string | null>(null)
+  const [inlineSignupEmail, setInlineSignupEmail] = useState('')
+  const [inlineSignupPassword, setInlineSignupPassword] = useState('')
+  const [modalSignupEmail, setModalSignupEmail] = useState('')
+  const [modalSignupPassword, setModalSignupPassword] = useState('')
+  const [modalLoginEmail, setModalLoginEmail] = useState('')
+  const [modalLoginPassword, setModalLoginPassword] = useState('')
+  const [modalShowEmailFields, setModalShowEmailFields] = useState(false)
+  const [signupFlowError, setSignupFlowError] = useState<string | null>(null)
+  const oauthLinkDoneRef = useRef(false)
+
   function handleMessageInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const el = e.target
     el.style.height = 'auto'
@@ -279,6 +331,80 @@ function RsvpFormInner({
   }, [parentDialOpen])
 
   useEffect(() => {
+    submittedRsvpIdRef.current = submittedRsvpId
+  }, [submittedRsvpId])
+
+  useEffect(() => {
+    const sb = createClient()
+    void sb.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setIsLoggedIn(true)
+        setLoggedInUserId(user.id)
+      }
+    })
+
+    try {
+      const raw = sessionStorage.getItem(POST_RSVP_STORAGE_KEY)
+      if (raw) {
+        const p = JSON.parse(raw) as PostRsvpPersist
+        if (p?.rsvpId && p?.attendance) {
+          submittedRsvpIdRef.current = p.rsvpId
+          setSubmittedRsvpId(p.rsvpId)
+          setSubmittedStatus(p.attendance)
+          setSubmittedEditToken(p.editToken ?? null)
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange(async (event, session) => {
+      if (!session?.user) return
+      const pending = sessionStorage.getItem('miparty_oauth_pending')
+      if (!pending) return
+      if (event !== 'SIGNED_IN' && event !== 'INITIAL_SESSION') return
+      if (oauthLinkDoneRef.current) return
+
+      let stored: PostRsvpPersist | null = null
+      try {
+        const raw = sessionStorage.getItem(POST_RSVP_STORAGE_KEY)
+        if (raw) stored = JSON.parse(raw) as PostRsvpPersist
+      } catch {
+        return
+      }
+      if (!stored?.rsvpId) return
+
+      oauthLinkDoneRef.current = true
+
+      await linkRsvpAndProfile(sb, session.user.id, stored.rsvpId, {
+        parentName: stored.parentName,
+        parentPhone: stored.parentPhone,
+        childFirst: stored.childFirst,
+        childLast: stored.childLast,
+      })
+      setIsLoggedIn(true)
+      setLoggedInUserId(session.user.id)
+      setShowSignupModal(true)
+      setModalView('success')
+      sessionStorage.removeItem('miparty_oauth_pending')
+      sessionStorage.removeItem(POST_RSVP_STORAGE_KEY)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (modalView === 'success' && showSignupModal) {
+      const timer = setTimeout(() => {
+        setShowSignupModal(false)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [modalView, showSignupModal])
+
+  useEffect(() => {
     return () => {
       if (copyEditLinkTimeoutRef.current != null) {
         clearTimeout(copyEditLinkTimeoutRef.current)
@@ -320,6 +446,127 @@ function RsvpFormInner({
     }
   }
 
+  const handleGoogleSignup = async () => {
+    const sb = createClient()
+    sessionStorage.setItem('miparty_oauth_pending', '1')
+    oauthLinkDoneRef.current = false
+    await sb.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: typeof window !== 'undefined' ? window.location.href : undefined,
+      },
+    })
+  }
+
+  const handleEmailSignupInline = async () => {
+    setSignupFlowError(null)
+    const sb = createClient()
+    const email = inlineSignupEmail.trim()
+    const password = inlineSignupPassword
+    if (!email || !password) {
+      setSignupFlowError('Introduce email y contraseña.')
+      return
+    }
+    const { data, error: signErr } = await sb.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: parentName.trim(),
+        },
+      },
+    })
+    if (signErr) {
+      setSignupFlowError(signErr.message)
+      return
+    }
+    const uid = data.user?.id ?? data.session?.user?.id
+    if (uid) {
+      setIsLoggedIn(true)
+      setLoggedInUserId(uid)
+    } else {
+      setSignupFlowError('Revisa tu correo para confirmar la cuenta, si es necesario.')
+    }
+  }
+
+  const handleEmailSignupModal = async () => {
+    setSignupFlowError(null)
+    if (!submittedRsvpId) {
+      setSignupFlowError('No se encontró la confirmación. Recarga la página.')
+      return
+    }
+    const sb = createClient()
+    const email = modalSignupEmail.trim()
+    const password = modalSignupPassword
+    if (!email || !password) {
+      setSignupFlowError('Introduce email y contraseña.')
+      return
+    }
+    const trimmedParentName = parentName.trim()
+    const trimmedChildName = childName.trim()
+    const trimmedChildLastName = childLastName.trim()
+    const trimmedParentPhoneNumber = parentPhoneNumber.trim()
+    const finalParentDial = resolveDialCode(parentCountryCode, parentCustomCode)
+    const trimmedParentPhone =
+      trimmedParentPhoneNumber.length > 0 ? `${finalParentDial}${trimmedParentPhoneNumber}` : ''
+
+    const { data, error: signErr } = await sb.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: trimmedParentName,
+        },
+      },
+    })
+    if (signErr) {
+      setSignupFlowError(signErr.message)
+      return
+    }
+    const uid = data.user?.id ?? data.session?.user?.id
+    if (!uid) {
+      setSignupFlowError('Revisa tu correo para confirmar la cuenta, si es necesario.')
+      return
+    }
+    await linkRsvpAndProfile(sb, uid, submittedRsvpId, {
+      parentName: trimmedParentName,
+      parentPhone: trimmedParentPhone,
+      childFirst: trimmedChildName,
+      childLast: trimmedChildLastName,
+    })
+    setIsLoggedIn(true)
+    setLoggedInUserId(uid)
+    setModalView('success')
+  }
+
+  const handleLoginAndLink = async () => {
+    setSignupFlowError(null)
+    if (!submittedRsvpId) {
+      setSignupFlowError('No se encontró la confirmación. Recarga la página.')
+      return
+    }
+    const sb = createClient()
+    const email = modalLoginEmail.trim()
+    const password = modalLoginPassword
+    if (!email || !password) {
+      setSignupFlowError('Introduce email y contraseña.')
+      return
+    }
+    const { data, error: signErr } = await sb.auth.signInWithPassword({ email, password })
+    if (signErr) {
+      setSignupFlowError(signErr.message)
+      return
+    }
+    if (!data.user) {
+      setSignupFlowError('No se pudo iniciar sesión.')
+      return
+    }
+    await sb.from('rsvps').update({ user_id: data.user.id }).eq('id', submittedRsvpId)
+    setIsLoggedIn(true)
+    setLoggedInUserId(data.user.id)
+    setModalView('success')
+  }
+
   const handleUpdateExistingRsvp = async () => {
     if (isPreview || !attendance || !duplicatePrompt) return
     setError(null)
@@ -351,7 +598,7 @@ function RsvpFormInner({
       setError('El apellido es obligatorio.')
       return
     }
-    if (attendance === 'confirmed' && hasFoodOptions && !trimmedFoodPreference) {
+    if (attendance === 'confirmed' && hasFoodOptions && foodOptions.length > 0 && !trimmedFoodPreference) {
       setError('Selecciona una opción de comida.')
       return
     }
@@ -371,6 +618,7 @@ function RsvpFormInner({
         food_preference: attendance === 'confirmed' && hasFoodOptions ? trimmedFoodPreference || null : null,
         allergy_notes: attendance === 'confirmed' && hasFoodOptions ? trimmedAllergyNotes || null : null,
         extra_notes: trimmedExtraNotes || null,
+        user_id: loggedInUserId || null,
       })
       .eq('id', duplicatePrompt.id)
 
@@ -382,6 +630,30 @@ function RsvpFormInner({
 
     setSubmittedEditToken(duplicatePrompt.edit_token ?? null)
     setSubmittedStatus(attendance)
+    const rid = duplicatePrompt.id
+    setSubmittedRsvpId(rid)
+    submittedRsvpIdRef.current = rid
+    try {
+      const persistPayload: PostRsvpPersist = {
+        rsvpId: rid,
+        attendance,
+        editToken: duplicatePrompt.edit_token ?? null,
+        parentName: trimmedParentName,
+        parentPhone: trimmedParentPhone,
+        childFirst: trimmedChildName,
+        childLast: trimmedChildLastName,
+      }
+      sessionStorage.setItem(POST_RSVP_STORAGE_KEY, JSON.stringify(persistPayload))
+    } catch {
+      // ignore
+    }
+    oauthLinkDoneRef.current = false
+    if (!isLoggedIn && !signupToggle) {
+      setModalView('signup')
+      setModalShowEmailFields(false)
+      setSignupFlowError(null)
+      setShowSignupModal(true)
+    }
     setDuplicatePrompt(null)
     setIgnoreDuplicate(false)
     setLoading(false)
@@ -431,7 +703,7 @@ function RsvpFormInner({
       return
     }
 
-    if (attendance === 'confirmed' && hasFoodOptions && !trimmedFoodPreference) {
+    if (attendance === 'confirmed' && hasFoodOptions && foodOptions.length > 0 && !trimmedFoodPreference) {
       setError('Selecciona una opción de comida.')
       return
     }
@@ -472,8 +744,9 @@ function RsvpFormInner({
         food_preference: attendance === 'confirmed' && hasFoodOptions ? trimmedFoodPreference || null : null,
         allergy_notes: attendance === 'confirmed' && hasFoodOptions ? trimmedAllergyNotes || null : null,
         extra_notes: trimmedExtraNotes || null,
+        user_id: loggedInUserId || null,
       })
-      .select('edit_token')
+      .select('id, edit_token')
       .single()
 
     if (insertError) {
@@ -482,8 +755,38 @@ function RsvpFormInner({
       return
     }
 
-    setSubmittedEditToken(inserted?.edit_token ?? null)
+    const rowId = inserted?.id as string | undefined
+    const token = inserted?.edit_token ?? null
+    setSubmittedEditToken(token)
     setSubmittedStatus(attendance)
+    if (rowId) {
+      setSubmittedRsvpId(rowId)
+      submittedRsvpIdRef.current = rowId
+      try {
+        const persistPayload: PostRsvpPersist = {
+          rsvpId: rowId,
+          attendance,
+          editToken: token,
+          parentName: trimmedParentName,
+          parentPhone: trimmedParentPhone,
+          childFirst: trimmedChildName,
+          childLast: trimmedChildLastName,
+        }
+        sessionStorage.setItem(POST_RSVP_STORAGE_KEY, JSON.stringify(persistPayload))
+      } catch {
+        // ignore
+      }
+    }
+
+    oauthLinkDoneRef.current = false
+
+    if (!isLoggedIn && !signupToggle) {
+      setModalView('signup')
+      setModalShowEmailFields(false)
+      setSignupFlowError(null)
+      setShowSignupModal(true)
+    }
+
     setLoading(false)
   }
 
@@ -542,8 +845,210 @@ END:VCALENDAR`
     }
   }
 
+  function renderPostSignupModal() {
+    if (!showSignupModal || isPreview) return null
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
+        <div className="relative mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+          <button
+            type="button"
+            className="absolute right-3 top-2 text-2xl leading-none text-gray-400 hover:text-gray-700"
+            aria-label="Cerrar"
+            onClick={() => setShowSignupModal(false)}
+          >
+            ×
+          </button>
+
+          {modalView === 'signup' ? (
+            <div className="pt-2">
+              <p className="text-center text-2xl" aria-hidden>
+                🎉
+              </p>
+              <h3 className="mt-2 text-center text-lg font-bold text-gray-900">
+                ¡Estás a punto de confirmar tu asistencia a {eventTitle}!
+              </h3>
+              <p className="mt-2 text-center text-sm text-gray-600">Pero antes, crea tu cuenta gratis y:</p>
+              <ul className="mt-3 space-y-3">
+                <li className="flex gap-2">
+                  <span className="mt-0.5 shrink-0 text-base leading-none text-green-600" aria-hidden>
+                    ✓
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Olvídate del caos de los grupos de WhatsApp</p>
+                    <p className="mt-0.5 text-xs text-gray-500">Todas las confirmaciones en un solo lugar</p>
+                  </div>
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-0.5 shrink-0 text-base leading-none text-green-600" aria-hidden>
+                    ✓
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Ten claridad de quién viene</p>
+                    <p className="mt-0.5 text-xs text-gray-500">Sin perseguir a nadie el día antes</p>
+                  </div>
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-0.5 shrink-0 text-base leading-none text-green-600" aria-hidden>
+                    ✓
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Alergias e intolerancias bajo control</p>
+                    <p className="mt-0.5 text-xs text-gray-500">Nunca más un susto en la mesa</p>
+                  </div>
+                </li>
+                <li className="rounded-lg border border-yellow-200 bg-yellow-50 p-2">
+                  <div className="flex gap-2">
+                    <span className="mt-0.5 shrink-0 text-base leading-none text-green-600" aria-hidden>
+                      ✓
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-yellow-800">
+                        Tu primer evento completamente gratis 🎁
+                      </p>
+                      <p className="mt-0.5 text-xs text-yellow-600">Sin tarjeta de crédito. Sin compromisos.</p>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+              <button
+                type="button"
+                onClick={() => void handleGoogleSignup()}
+                className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-green-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"
+              >
+                Continuar con Google
+              </button>
+              <p className="mt-2 text-center text-xs text-gray-500">o</p>
+              {!modalShowEmailFields ? (
+                <button
+                  type="button"
+                  onClick={() => setModalShowEmailFields(true)}
+                  className="mt-2 inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
+                >
+                  Usar mi email
+                </button>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="Email"
+                    value={modalSignupEmail}
+                    onChange={(e) => setModalSignupEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="Contraseña"
+                    value={modalSignupPassword}
+                    onChange={(e) => setModalSignupPassword(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleEmailSignupModal()}
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-gray-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800"
+                  >
+                    Crear cuenta
+                  </button>
+                </div>
+              )}
+              <div className="mt-2 flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalView('login')
+                    setSignupFlowError(null)
+                  }}
+                  className="text-sm text-gray-500 underline hover:text-gray-700"
+                >
+                  Ya tengo cuenta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSignupModal(false)}
+                  className="text-xs text-gray-400 hover:text-gray-600"
+                >
+                  No gracias, continuar
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {modalView === 'login' ? (
+            <div className="pt-2">
+              <h3 className="text-center text-lg font-bold text-gray-900">Inicia sesión</h3>
+              <p className="mt-1 text-center text-sm text-gray-600">Vincula tu confirmación a tu cuenta</p>
+              <div className="mt-4 space-y-2">
+                <input
+                  type="email"
+                  autoComplete="email"
+                  placeholder="Email"
+                  value={modalLoginEmail}
+                  onChange={(e) => setModalLoginEmail(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="Contraseña"
+                  value={modalLoginPassword}
+                  onChange={(e) => setModalLoginPassword(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleLoginAndLink()}
+                  className="inline-flex w-full items-center justify-center rounded-lg bg-gray-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800"
+                >
+                  Iniciar sesión
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleGoogleSignup()}
+                  className="inline-flex w-full items-center justify-center rounded-lg bg-green-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"
+                >
+                  Continuar con Google
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalView('signup')
+                  setSignupFlowError(null)
+                }}
+                className="mt-3 text-sm font-medium text-gray-600 hover:text-gray-900"
+              >
+                ← Volver
+              </button>
+            </div>
+          ) : null}
+
+          {modalView === 'success' ? (
+            <div className="pt-2 text-center">
+              <p className="text-4xl" aria-hidden>
+                🎊
+              </p>
+              <h3 className="mt-2 text-lg font-bold text-gray-900">¡Bienvenido/a!</h3>
+              <p className="mt-2 text-sm text-gray-600">
+                Tu cuenta ha sido creada y tu confirmación ha sido vinculada.
+              </p>
+            </div>
+          ) : null}
+
+          {signupFlowError && modalView !== 'success' ? (
+            <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-center text-xs text-red-700">
+              {signupFlowError}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    )
+  }
+
   if (submittedStatus === 'confirmed') {
     return (
+      <>
       <section className={`rounded-2xl border ${activeTheme.border} bg-white p-5 shadow-xl`}>
         <p
           className={`text-center text-sm font-medium ${
@@ -604,11 +1109,14 @@ END:VCALENDAR`
           </div>
         ) : null}
       </section>
+        {renderPostSignupModal()}
+      </>
     )
   }
 
   if (submittedStatus === 'declined') {
     return (
+      <>
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
         <p className="whitespace-pre-line text-center text-sm font-medium text-gray-800">
           {'Gracias por avisar 🙌\n¡Esperamos veros en la próxima!'}
@@ -631,11 +1139,14 @@ END:VCALENDAR`
           </div>
         ) : null}
       </section>
+        {renderPostSignupModal()}
+      </>
     )
   }
 
   if (submittedStatus === 'maybe') {
     return (
+      <>
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
         <p className="whitespace-pre-line text-center text-sm font-medium text-gray-800">
           {
@@ -660,10 +1171,13 @@ END:VCALENDAR`
           </div>
         ) : null}
       </section>
+        {renderPostSignupModal()}
+      </>
     )
   }
 
   return (
+    <>
     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
       {isPreview ? <div className="relative z-20 mb-3 pointer-events-auto">{previewHelperBlock}</div> : null}
       <h2 className="text-base font-semibold text-gray-900">Confirma tu asistencia</h2>
@@ -758,7 +1272,7 @@ END:VCALENDAR`
             </div>
           </div>
 
-          {attendance === 'confirmed' && hasFoodOptions && foodOptions.length > 1 ? (
+          {attendance === 'confirmed' && hasFoodOptions && foodOptions.length > 0 ? (
             <fieldset className="space-y-2">
               <p className="text-sm font-medium text-gray-900">Preferencia de comida *</p>
               {foodOptions.map((option) => (
@@ -972,6 +1486,67 @@ END:VCALENDAR`
             </div>
           ) : null}
 
+          {!isLoggedIn ? (
+            <div
+              className={`rounded-xl border border-gray-200 p-3 ${isPreview ? 'pointer-events-none opacity-60' : ''}`}
+            >
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={signupToggle}
+                  onChange={(e) => setSignupToggle(e.target.checked)}
+                  disabled={isPreview}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
+                />
+                <span className="text-sm text-gray-600">
+                  ¿Quieres organizar tus propios eventos y gestionar tus confirmaciones?
+                </span>
+              </label>
+              {signupToggle ? (
+                <div className={`mt-3 space-y-2 ${isPreview ? 'pointer-events-none' : ''}`}>
+                  <button
+                    type="button"
+                    disabled={isPreview}
+                    onClick={() => void handleGoogleSignup()}
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-green-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Continuar con Google
+                  </button>
+                  <p className="text-center text-xs text-gray-500">o</p>
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    disabled={isPreview}
+                    placeholder="Email"
+                    value={inlineSignupEmail}
+                    onChange={(e) => setInlineSignupEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+                  />
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    disabled={isPreview}
+                    placeholder="Contraseña"
+                    value={inlineSignupPassword}
+                    onChange={(e) => setInlineSignupPassword(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+                  />
+                  <button
+                    type="button"
+                    disabled={isPreview}
+                    onClick={() => void handleEmailSignupInline()}
+                    className="inline-flex w-full items-center justify-center rounded-lg border border-gray-900 bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Crear cuenta
+                  </button>
+                  {signupFlowError ? (
+                    <p className="text-center text-xs text-red-600">{signupFlowError}</p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {!isPreview && !duplicatePrompt ? (
             <button
               type="submit"
@@ -993,6 +1568,8 @@ END:VCALENDAR`
         </button>
       ) : null}
     </section>
+    {renderPostSignupModal()}
+    </>
   )
 }
 

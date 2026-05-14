@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { brand } from '@/lib/brand'
 
@@ -12,17 +13,32 @@ export type AppNavProps = {
 
 const DEFAULT_BACK_LABEL = '⬅️ Atrás'
 
+function extractName(user: User): string | null {
+  const full = user.user_metadata?.full_name as string | undefined
+  return full?.split(' ')[0] || user.email?.split('@')[0] || null
+}
+
 export default function AppNav({ backHref, backLabel = DEFAULT_BACK_LABEL }: AppNavProps) {
   const [displayName, setDisplayName] = useState<string | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
+
     void supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      const full = user.user_metadata?.full_name as string | undefined
-      const name = full?.split(' ')[0] || user.email?.split('@')[0] || null
-      setDisplayName(name)
+      if (user) setDisplayName(extractName(user))
     })
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setDisplayName(extractName(session.user))
+      } else {
+        setDisplayName(null)
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   return (

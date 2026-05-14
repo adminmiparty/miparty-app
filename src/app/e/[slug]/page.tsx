@@ -164,11 +164,14 @@ export default async function PublicEventPage({
 
   if (!event) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-10">
-        <div className="mx-auto w-full max-w-md rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
-          <p className="text-center text-sm text-gray-700">Este evento no existe o ha sido eliminado.</p>
-        </div>
-      </main>
+      <>
+        <AppNav backHref="/" backLabel="⬅️ Inicio" />
+        <main className="min-h-screen bg-gradient-to-b from-yellow-50 to-white px-4 py-10">
+          <div className="mx-auto w-full max-w-md rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
+            <p className="text-center text-sm text-gray-700">Este evento no existe o ha sido eliminado.</p>
+          </div>
+        </main>
+      </>
     )
   }
 
