@@ -118,9 +118,15 @@ async function linkRsvpAndProfile(
   if (childErr && !childErr.message.includes('duplicate')) {
     console.warn('children insert:', childErr.message)
   }
+  const trimmedParentName = profile.parentName.trim()
+  const nameParts = trimmedParentName.split(/\s+/).filter(Boolean)
+  const firstName = nameParts[0] ?? ''
+  const lastName = nameParts.slice(1).join(' ')
+
   await sb.from('users').upsert({
     id: userId,
-    full_name: profile.parentName,
+    first_name: firstName,
+    last_name: lastName || null,
     phone: profile.parentPhone || null,
   })
 }

@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { brand } from '@/lib/brand'
 
@@ -14,34 +13,51 @@ export type AppNavProps = {
 
 const DEFAULT_BACK_LABEL = '⬅️ Atrás'
 
-function extractName(user: User): string | null {
-  const full = user.user_metadata?.full_name as string | undefined
-  return full?.split(' ')[0] || user.email?.split('@')[0] || null
-}
-
 export default function AppNav({ backHref, backLabel = DEFAULT_BACK_LABEL }: AppNavProps) {
   const [displayName, setDisplayName] = useState<string | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  const fetchName = async () => {
+    const supabase = createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: profile } = await supabase
+      .from('users')
+      .select('first_name')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (profile?.first_name) {
+      setDisplayName(profile.first_name)
+      return
+    }
+
+    const full = user.user_metadata?.full_name as string | undefined
+    const name = full?.split(' ')[0] || user.email?.split('@')[0] || null
+    setDisplayName(name)
+  }
+
   useEffect(() => {
     const supabase = createClient()
 
-    void supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setDisplayName(extractName(user))
-    })
+    void fetchName()
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setDisplayName(extractName(session.user))
-      } else {
-        setDisplayName(null)
-      }
+    } = supabase.auth.onAuthStateChange(() => {
+      void fetchName()
     })
 
-    return () => subscription.unsubscribe()
+    window.addEventListener('profile-updated', fetchName)
+
+    return () => {
+      subscription.unsubscribe()
+      window.removeEventListener('profile-updated', fetchName)
+    }
   }, [])
 
   useEffect(() => {

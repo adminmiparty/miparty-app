@@ -213,6 +213,82 @@ function initialsFromDisplay(name: string | null, email: string) {
   return local.slice(0, 2).toUpperCase() || '?'
 }
 
+const SPANISH_MONTHS = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+]
+
+const profileInputClassName = `w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${brand.inputFocus}`
+
+const profileBirthDateSelectClassName =
+  'w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2'
+
+function isGoogleUser(user: User): boolean {
+  return (
+    user.app_metadata?.provider === 'google' ||
+    (user.identities?.some((identity) => identity.provider === 'google') ?? false)
+  )
+}
+
+function splitFullName(full: string | null | undefined) {
+  const trimmed = full?.trim() ?? ''
+  if (!trimmed) {
+    return { first: '', last: '' }
+  }
+  const parts = trimmed.split(/\s+/).filter(Boolean)
+  return { first: parts[0] ?? '', last: parts.slice(1).join(' ') }
+}
+
+function composeBirthDateIso(day: string, month: string, year: string): string | null {
+  if (!day || !month || !year) {
+    return null
+  }
+  const dayNumber = Number.parseInt(day, 10)
+  const monthNumber = Number.parseInt(month, 10)
+  const yearNumber = Number.parseInt(year, 10)
+  if (
+    Number.isNaN(dayNumber) ||
+    Number.isNaN(monthNumber) ||
+    Number.isNaN(yearNumber) ||
+    monthNumber < 1 ||
+    monthNumber > 12 ||
+    dayNumber < 1 ||
+    dayNumber > 31
+  ) {
+    return null
+  }
+  const parsed = new Date(yearNumber, monthNumber - 1, dayNumber)
+  if (
+    parsed.getFullYear() !== yearNumber ||
+    parsed.getMonth() + 1 !== monthNumber ||
+    parsed.getDate() !== dayNumber
+  ) {
+    return null
+  }
+  return `${year}-${month}-${day}`
+}
+
+function isoToBirthParts(iso: string | null) {
+  if (!iso) {
+    return { day: '', month: '', year: '' }
+  }
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) {
+    return { day: '', month: '', year: '' }
+  }
+  return { day: match[3], month: match[2], year: match[1] }
+}
+
 function formatTimeShort(time: string | null) {
   if (!time || String(time).trim() === '') {
     return null
@@ -399,6 +475,38 @@ export default function DashboardHomePage() {
   const [partnerModalError, setPartnerModalError] = useState<string | null>(null)
   const [partnerSaveSuccess, setPartnerSaveSuccess] = useState(false)
   const partnerDialRef = useRef<HTMLDivElement>(null)
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  const [authUser, setAuthUser] = useState<User | null>(null)
+  const [userDbProfile, setUserDbProfile] = useState<{
+    first_name: string | null
+    last_name: string | null
+    phone: string | null
+    birth_date: string | null
+  } | null>(null)
+  const [profileFirstName, setProfileFirstName] = useState('')
+  const [profileLastName, setProfileLastName] = useState('')
+  const [profileBirthDay, setProfileBirthDay] = useState('')
+  const [profileBirthMonth, setProfileBirthMonth] = useState('')
+  const [profileBirthYear, setProfileBirthYear] = useState('')
+  const [profileEmail, setProfileEmail] = useState('')
+  const [profileEmailInitial, setProfileEmailInitial] = useState('')
+  const [profileCountryCode, setProfileCountryCode] = useState<string>('+34')
+  const [profileCustomCode, setProfileCustomCode] = useState('')
+  const [profilePhoneNumber, setProfilePhoneNumber] = useState('')
+  const [profileInitialPhone, setProfileInitialPhone] = useState('')
+  const [profileIsGoogle, setProfileIsGoogle] = useState(false)
+  const [profileDialOpen, setProfileDialOpen] = useState(false)
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const [profileSuccessToast, setProfileSuccessToast] = useState(false)
+  const [profilePhoneNotice, setProfilePhoneNotice] = useState(false)
+  const [showPasswordSection, setShowPasswordSection] = useState(false)
+  const [profileNewPassword, setProfileNewPassword] = useState('')
+  const [profileConfirmPassword, setProfileConfirmPassword] = useState('')
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [passwordSuccess, setPasswordSuccess] = useState(false)
+  const profileDialRef = useRef<HTMLDivElement>(null)
 
   const todayStr = useMemo(() => todayLocalIso(), [])
 
@@ -500,7 +608,7 @@ export default function DashboardHomePage() {
 
       const { data: userProfile } = await supabase
         .from('users')
-        .select('phone')
+        .select('first_name, last_name, phone, birth_date')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -509,12 +617,27 @@ export default function DashboardHomePage() {
           ? userProfile.phone.trim()
           : null
 
+      const dbDisplayName = userProfile
+        ? `${userProfile.first_name ?? ''} ${userProfile.last_name ?? ''}`.trim()
+        : ''
+
       if (isMounted) {
         setUserId(user.id)
+        setAuthUser(user)
+        setUserDbProfile(
+          userProfile
+            ? {
+                first_name: userProfile.first_name ?? null,
+                last_name: userProfile.last_name ?? null,
+                phone: userProfile.phone ?? null,
+                birth_date: userProfile.birth_date ?? null,
+              }
+            : null
+        )
         setUserFirstName(userFirstDisplayName(user))
         setParentProfile({
           email: user.email ?? '',
-          fullName: parentFullNameFromUser(user),
+          fullName: dbDisplayName || parentFullNameFromUser(user),
           avatarUrl: parentAvatarFromUser(user),
           phone,
         })
@@ -659,6 +782,25 @@ export default function DashboardHomePage() {
   }, [partnerDialOpen])
 
   useEffect(() => {
+    if (!profileDialOpen) return
+    const onPointerDown = (event: MouseEvent) => {
+      if (profileDialRef.current?.contains(event.target as Node)) return
+      setProfileDialOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [profileDialOpen])
+
+  useEffect(() => {
+    if (!profileSuccessToast) return
+    const t = window.setTimeout(() => {
+      setProfileSuccessToast(false)
+      setProfilePhoneNotice(false)
+    }, 3000)
+    return () => window.clearTimeout(t)
+  }, [profileSuccessToast])
+
+  useEffect(() => {
     if (!showAddPartnerModal) return
     setPartnerModalError(null)
     if (partner) {
@@ -742,6 +884,226 @@ export default function DashboardHomePage() {
     window.setTimeout(() => setPartnerSaveSuccess(false), 2000)
   }
 
+  const profileBirthYears = Array.from({ length: 101 }, (_, index) =>
+    String(new Date().getFullYear() - index)
+  )
+
+  const openProfileModal = () => {
+    let first = userDbProfile?.first_name?.trim() ?? ''
+    let last = userDbProfile?.last_name?.trim() ?? ''
+    if (!first && !last) {
+      const full =
+        parentProfile?.fullName?.trim() ||
+        (authUser ? parentFullNameFromUser(authUser) : null)
+      const split = splitFullName(full)
+      first = split.first
+      last = split.last
+    }
+    setProfileFirstName(first)
+    setProfileLastName(last)
+    const birth = isoToBirthParts(userDbProfile?.birth_date ?? null)
+    setProfileBirthDay(birth.day)
+    setProfileBirthMonth(birth.month)
+    setProfileBirthYear(birth.year)
+    const email = parentProfile?.email ?? ''
+    setProfileEmail(email)
+    setProfileEmailInitial(email)
+    const phone = userDbProfile?.phone ?? parentProfile?.phone ?? ''
+    setProfileInitialPhone(phone)
+    const dial = splitDialPhone(phone)
+    setProfileCountryCode(dial.countryCode)
+    setProfileCustomCode(dial.customCode)
+    setProfilePhoneNumber(dial.number)
+    setProfileIsGoogle(authUser ? isGoogleUser(authUser) : false)
+    setShowPasswordSection(false)
+    setProfileNewPassword('')
+    setProfileConfirmPassword('')
+    setPasswordError(null)
+    setPasswordSuccess(false)
+    setProfileError(null)
+    setProfilePhoneNotice(false)
+    setShowProfileModal(true)
+  }
+
+  const handleProfileBirthDateChange = (day: string, month: string, year: string) => {
+    setProfileBirthDay(day)
+    setProfileBirthMonth(month)
+    setProfileBirthYear(year)
+  }
+
+  const handleProfileSave = async () => {
+    if (!userId) return
+    setProfileError(null)
+    setProfileSaving(true)
+
+    const trimmedFirst = profileFirstName.trim()
+    const trimmedLast = profileLastName.trim()
+    if (!trimmedFirst) {
+      setProfileError('El nombre es obligatorio.')
+      setProfileSaving(false)
+      return
+    }
+
+    const fullName = trimmedLast ? `${trimmedFirst} ${trimmedLast}` : trimmedFirst
+
+    if (profileBirthDay || profileBirthMonth || profileBirthYear) {
+      const combined = composeBirthDateIso(profileBirthDay, profileBirthMonth, profileBirthYear)
+      if (!combined) {
+        setProfileError('La fecha de nacimiento no es válida.')
+        setProfileSaving(false)
+        return
+      }
+    }
+
+    const birthIso = composeBirthDateIso(profileBirthDay, profileBirthMonth, profileBirthYear)
+
+    const dial = resolveDialCode(profileCountryCode, profileCustomCode)
+    if (profileCountryCode === 'otro' && dial.length <= 1 && profilePhoneNumber.trim()) {
+      setProfileError('Indica un prefijo internacional válido.')
+      setProfileSaving(false)
+      return
+    }
+
+    const fullPhone = buildFullPhone(profileCountryCode, profileCustomCode, profilePhoneNumber)
+
+    const combinedBirthDate = birthIso
+
+    console.log('Attempting to save profile:', {
+      id: userId,
+      first_name: trimmedFirst,
+      last_name: trimmedLast || null,
+      phone: fullPhone || null,
+      birth_date: combinedBirthDate || null,
+    })
+
+    const { data, error } = await supabase
+      .from('users')
+      .upsert({
+        id: userId,
+        first_name: trimmedFirst,
+        last_name: trimmedLast || null,
+        phone: fullPhone || null,
+        birth_date: birthIso,
+      })
+      .select()
+
+    console.log('Upsert error:', error)
+    console.log('Upsert data:', data)
+
+    if (error) {
+      setProfileError(error.message)
+      setProfileSaving(false)
+      return
+    }
+
+    window.dispatchEvent(new Event('profile-updated'))
+
+    const trimmedEmail = profileEmail.trim()
+    if (!profileIsGoogle && trimmedEmail && trimmedEmail !== profileEmailInitial) {
+      const { error: emailError } = await supabase.auth.updateUser({ email: trimmedEmail })
+      if (emailError) {
+        setProfileError(emailError.message)
+        setProfileSaving(false)
+        return
+      }
+    }
+
+    const { error: metaError } = await supabase.auth.updateUser({
+      data: { full_name: fullName },
+    })
+    if (metaError) {
+      setProfileError(metaError.message)
+      setProfileSaving(false)
+      return
+    }
+
+    const phoneChanged = fullPhone !== profileInitialPhone
+
+    const { data: refreshed } = await supabase
+      .from('users')
+      .select('first_name, last_name, phone, birth_date')
+      .eq('id', userId)
+      .maybeSingle()
+
+    const refreshedProfile = refreshed ?? {
+      first_name: trimmedFirst,
+      last_name: trimmedLast || null,
+      phone: fullPhone || null,
+      birth_date: birthIso,
+    }
+
+    setUserDbProfile({
+      first_name: refreshedProfile.first_name ?? null,
+      last_name: refreshedProfile.last_name ?? null,
+      phone: refreshedProfile.phone ?? null,
+      birth_date: refreshedProfile.birth_date ?? null,
+    })
+
+    setProfileFirstName(refreshedProfile.first_name?.trim() ?? '')
+    setProfileLastName(refreshedProfile.last_name?.trim() ?? '')
+    const birth = isoToBirthParts(refreshedProfile.birth_date ?? null)
+    setProfileBirthDay(birth.day)
+    setProfileBirthMonth(birth.month)
+    setProfileBirthYear(birth.year)
+
+    const refreshedPhone =
+      typeof refreshedProfile.phone === 'string' && refreshedProfile.phone.trim()
+        ? refreshedProfile.phone.trim()
+        : ''
+    setProfileInitialPhone(refreshedPhone)
+    const refreshedDial = splitDialPhone(refreshedPhone)
+    setProfileCountryCode(refreshedDial.countryCode)
+    setProfileCustomCode(refreshedDial.customCode)
+    setProfilePhoneNumber(refreshedDial.number)
+
+    const displayFullName =
+      `${refreshedProfile.first_name ?? ''} ${refreshedProfile.last_name ?? ''}`.trim() || fullName
+    setParentProfile((prev) =>
+      prev
+        ? {
+            ...prev,
+            fullName: displayFullName,
+            phone: refreshedPhone || null,
+            email: profileIsGoogle ? prev.email : trimmedEmail || prev.email,
+          }
+        : prev
+    )
+    setProfileEmailInitial(trimmedEmail)
+    setProfileSaving(false)
+    setShowProfileModal(false)
+    setProfilePhoneNotice(phoneChanged)
+    setProfileSuccessToast(true)
+  }
+
+  const handlePasswordUpdate = async () => {
+    setPasswordError(null)
+    setPasswordSuccess(false)
+
+    if (profileNewPassword.length < 6) {
+      setPasswordError('La contraseña debe tener al menos 6 caracteres.')
+      return
+    }
+    if (profileNewPassword !== profileConfirmPassword) {
+      setPasswordError('Las contraseñas no coinciden.')
+      return
+    }
+
+    setPasswordSaving(true)
+    const { error: passwordUpdateError } = await supabase.auth.updateUser({
+      password: profileNewPassword,
+    })
+    setPasswordSaving(false)
+
+    if (passwordUpdateError) {
+      setPasswordError(passwordUpdateError.message)
+      return
+    }
+
+    setProfileNewPassword('')
+    setProfileConfirmPassword('')
+    setPasswordSuccess(true)
+  }
+
   const greetingTitle = userFirstName ? `Hola ${userFirstName} 👋` : 'Hola 👋'
 
   const profileInitials = parentProfile
@@ -795,12 +1157,13 @@ export default function DashboardHomePage() {
                   <p className="truncate text-sm text-gray-500">{parentProfile.phone}</p>
                 ) : null}
                 <p className="truncate text-sm text-gray-400">{parentProfile.email}</p>
-                <Link
-                  href="/dashboard/perfil"
+                <button
+                  type="button"
+                  onClick={openProfileModal}
                   className={`mt-1 inline-block text-xs font-medium underline ${brand.accentText} ${brand.textBrandHover}`}
                 >
                   Editar perfil
-                </Link>
+                </button>
               </div>
             </div>
             <div
@@ -1026,6 +1389,355 @@ export default function DashboardHomePage() {
         >
           Pareja guardada ✓
         </p>
+      ) : null}
+
+      {profileSuccessToast ? (
+        <div className="fixed bottom-6 left-1/2 z-[60] flex max-w-sm -translate-x-1/2 flex-col items-center gap-2 px-2">
+          <div className="rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-lg">
+            Cambios guardados ✓
+          </div>
+          {profilePhoneNotice ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-800 shadow-lg">
+              Tu nuevo número aparecerá en los próximos eventos que crees.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showProfileModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div
+            className="relative mx-4 flex max-h-[85vh] w-full max-w-sm flex-col rounded-2xl bg-white pt-4 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-modal-title"
+          >
+            <div className="max-h-[85vh] overflow-y-auto px-6 pb-6">
+              <div className="mb-4 mt-1 flex items-center justify-between gap-2">
+                <h2 id="profile-modal-title" className="text-lg font-semibold text-gray-900">
+                  Mi perfil
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowProfileModal(false)}
+                  className="shrink-0 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                  aria-label="Cerrar"
+                >
+                  <X className="h-5 w-5" strokeWidth={2} aria-hidden />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="profileFirstName" className="mb-1.5 block text-sm font-medium text-gray-900">
+                    Nombre
+                  </label>
+                  <input
+                    id="profileFirstName"
+                    type="text"
+                    value={profileFirstName}
+                    onChange={(e) => setProfileFirstName(e.target.value)}
+                    className={profileInputClassName}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="profileLastName" className="mb-1.5 block text-sm font-medium text-gray-900">
+                    Apellido(s)
+                  </label>
+                  <input
+                    id="profileLastName"
+                    type="text"
+                    value={profileLastName}
+                    onChange={(e) => setProfileLastName(e.target.value)}
+                    className={profileInputClassName}
+                  />
+                </div>
+
+                <div>
+                  <p className="mb-1.5 block text-sm font-medium text-gray-900">Fecha de nacimiento</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <select
+                      value={profileBirthDay}
+                      onChange={(e) =>
+                        handleProfileBirthDateChange(e.target.value, profileBirthMonth, profileBirthYear)
+                      }
+                      className={profileBirthDateSelectClassName}
+                      aria-label="Día"
+                    >
+                      <option value="">Día</option>
+                      {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((day) => (
+                        <option key={day} value={day}>
+                          {day}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={profileBirthMonth}
+                      onChange={(e) =>
+                        handleProfileBirthDateChange(profileBirthDay, e.target.value, profileBirthYear)
+                      }
+                      className={profileBirthDateSelectClassName}
+                      aria-label="Mes"
+                    >
+                      <option value="">Mes</option>
+                      {SPANISH_MONTHS.map((monthName, index) => {
+                        const monthValue = String(index + 1).padStart(2, '0')
+                        return (
+                          <option key={monthValue} value={monthValue}>
+                            {monthName}
+                          </option>
+                        )
+                      })}
+                    </select>
+                    <select
+                      value={profileBirthYear}
+                      onChange={(e) =>
+                        handleProfileBirthDateChange(profileBirthDay, profileBirthMonth, e.target.value)
+                      }
+                      className={profileBirthDateSelectClassName}
+                      aria-label="Año"
+                    >
+                      <option value="">Año</option>
+                      {profileBirthYears.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="profileEmail" className="mb-1.5 block text-sm font-medium text-gray-900">
+                    Email
+                  </label>
+                  {profileIsGoogle ? (
+                    <div>
+                      <div className="rounded-full bg-gray-100 px-3 py-2 text-sm text-gray-500">
+                        {profileEmail}
+                      </div>
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-400">
+                        <span
+                          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-bold text-blue-600 shadow-sm"
+                          aria-hidden
+                        >
+                          G
+                        </span>
+                        Vinculado con Google
+                      </p>
+                    </div>
+                  ) : (
+                    <input
+                      id="profileEmail"
+                      type="email"
+                      autoComplete="email"
+                      value={profileEmail}
+                      onChange={(e) => setProfileEmail(e.target.value)}
+                      className={profileInputClassName}
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="profilePhone" className="mb-1.5 block text-sm font-medium text-gray-900">
+                    Teléfono
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div
+                      ref={profileDialRef}
+                      className={
+                        profileCountryCode === 'otro'
+                          ? 'relative w-20 max-w-20 shrink-0'
+                          : 'relative w-28 max-w-28 shrink-0'
+                      }
+                    >
+                      <button
+                        type="button"
+                        aria-expanded={profileDialOpen}
+                        aria-haspopup="listbox"
+                        onClick={() => setProfileDialOpen((open) => !open)}
+                        className="flex h-10 w-full items-center justify-between gap-0.5 rounded-lg border border-gray-300 bg-white px-1.5 py-2 text-left text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {dialCodeShortLabel(profileCountryCode)}
+                        </span>
+                        <span className="shrink-0 text-[10px] leading-none text-gray-500" aria-hidden>
+                          ▾
+                        </span>
+                      </button>
+                      {profileDialOpen ? (
+                        <ul
+                          role="listbox"
+                          className="absolute left-0 top-full z-[60] mt-0.5 min-w-[12rem] rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+                        >
+                          <li role="presentation">
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={profileCountryCode === '+34'}
+                              className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                              onClick={() => {
+                                setProfileCountryCode('+34')
+                                setProfileDialOpen(false)
+                              }}
+                            >
+                              🇪🇸 +34 (España)
+                            </button>
+                          </li>
+                          <li role="presentation">
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={profileCountryCode === '+57'}
+                              className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                              onClick={() => {
+                                setProfileCountryCode('+57')
+                                setProfileDialOpen(false)
+                              }}
+                            >
+                              🇨🇴 +57 (Colombia)
+                            </button>
+                          </li>
+                          <li role="presentation">
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={profileCountryCode === 'otro'}
+                              className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                              onClick={() => {
+                                setProfileCountryCode('otro')
+                                setProfileDialOpen(false)
+                              }}
+                            >
+                              ✏️ Otro
+                            </button>
+                          </li>
+                        </ul>
+                      ) : null}
+                    </div>
+                    {profileCountryCode === 'otro' ? (
+                      <input
+                        type="text"
+                        inputMode="tel"
+                        autoComplete="tel-country-code"
+                        value={profileCustomCode}
+                        onChange={(e) => setProfileCustomCode(sanitizeDialPrefix(e.target.value))}
+                        maxLength={5}
+                        placeholder="+00"
+                        aria-label="Prefijo internacional"
+                        className="w-16 shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                      />
+                    ) : null}
+                    <input
+                      id="profilePhone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel-national"
+                      value={profilePhoneNumber}
+                      onChange={(e) => setProfilePhoneNumber(e.target.value)}
+                      placeholder="Ej. 612345678"
+                      className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                    />
+                  </div>
+                </div>
+
+                {!profileIsGoogle ? (
+                  <div className="rounded-lg border border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPasswordSection((open) => !open)
+                        setPasswordError(null)
+                        setPasswordSuccess(false)
+                      }}
+                      className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-medium text-gray-900"
+                    >
+                      Cambiar contraseña
+                      <span className="text-xs text-gray-400">{showPasswordSection ? '▲' : '▼'}</span>
+                    </button>
+                    {showPasswordSection ? (
+                      <div className="space-y-3 border-t border-gray-200 px-3 pb-3 pt-3">
+                        <div>
+                          <label
+                            htmlFor="profileNewPassword"
+                            className="mb-1.5 block text-sm font-medium text-gray-900"
+                          >
+                            Nueva contraseña
+                          </label>
+                          <input
+                            id="profileNewPassword"
+                            type="password"
+                            autoComplete="new-password"
+                            value={profileNewPassword}
+                            onChange={(e) => setProfileNewPassword(e.target.value)}
+                            className={profileInputClassName}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="profileConfirmPassword"
+                            className="mb-1.5 block text-sm font-medium text-gray-900"
+                          >
+                            Confirmar contraseña
+                          </label>
+                          <input
+                            id="profileConfirmPassword"
+                            type="password"
+                            autoComplete="new-password"
+                            value={profileConfirmPassword}
+                            onChange={(e) => setProfileConfirmPassword(e.target.value)}
+                            className={profileInputClassName}
+                          />
+                        </div>
+                        {passwordError ? (
+                          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                            {passwordError}
+                          </p>
+                        ) : null}
+                        {passwordSuccess ? (
+                          <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                            Contraseña actualizada ✓
+                          </p>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={passwordSaving}
+                          onClick={() => void handlePasswordUpdate()}
+                          className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonOutline} disabled:cursor-not-allowed disabled:opacity-60`}
+                        >
+                          {passwordSaving ? 'Actualizando…' : 'Actualizar contraseña'}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {profileError ? (
+                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {profileError}
+                  </p>
+                ) : null}
+
+                <button
+                  type="button"
+                  disabled={profileSaving}
+                  onClick={() => void handleProfileSave()}
+                  className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary} disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                  {profileSaving ? 'Guardando…' : 'Guardar cambios'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowProfileModal(false)}
+                  className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonOutline}`}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {showAddPartnerModal ? (
