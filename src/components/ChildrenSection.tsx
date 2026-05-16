@@ -1,9 +1,9 @@
 'use client'
 
-import { Camera, Plus } from 'lucide-react'
-import Link from 'next/link'
-import { useCallback, useEffect, useRef, useState } from 'react'
 import { brand } from '@/lib/brand'
+import { Camera, Plus, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 export type DashboardChildRow = {
@@ -12,6 +12,7 @@ export type DashboardChildRow = {
   last_name: string | null
   birth_date: string | null
   avatar_url: string | null
+  short_name: string | null
 }
 
 function formatBirthDdMmYyyy(isoDate: string) {
@@ -35,12 +36,26 @@ function computeAgeYears(birthIso: string, today: Date): number {
 }
 
 function childDisplayName(child: DashboardChildRow) {
-  const first = child.name.trim()
+  const main = (child.short_name ?? '').trim() || child.name.trim()
   const last = (child.last_name ?? '').trim()
   if (!last) {
-    return first
+    return main
   }
-  return `${first} ${last}`.trim()
+  return `${main} ${last}`.trim()
+}
+
+const avatarColors = [
+  'bg-yellow-100 text-yellow-700',
+  'bg-pink-100 text-pink-700',
+  'bg-blue-100 text-blue-700',
+  'bg-green-100 text-green-700',
+  'bg-purple-100 text-purple-700',
+]
+
+function getInitials(name: string, lastName: string) {
+  const first = name.trim()[0]?.toUpperCase() || ''
+  const last = (lastName || '').trim()[0]?.toUpperCase() || ''
+  return first + last
 }
 
 type ChildrenSectionProps = {
@@ -50,10 +65,12 @@ type ChildrenSectionProps = {
 }
 
 export function ChildrenSection({ userId, initialChildren, isLoading }: ChildrenSectionProps) {
+  const router = useRouter()
   const supabase = createClient()
   const [children, setChildren] = useState<DashboardChildRow[]>(initialChildren)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [pickChildId, setPickChildId] = useState<string | null>(null)
+  const [showLimitModal, setShowLimitModal] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const todayDate = useCallback(() => {
@@ -122,13 +139,20 @@ export function ChildrenSection({ userId, initialChildren, isLoading }: Children
     <section className="mb-6 sm:mb-8">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-gray-900 sm:text-lg">Mis hijos/as</h2>
-        <Link
-          href="/dashboard/hijos/nuevo"
-          className={`inline-flex shrink-0 rounded-full p-1.5 text-gray-400 transition hover:bg-yellow-50 ${brand.accentText} ${brand.textBrandHover}`}
-          aria-label="Añadir hijo/a"
+        <button
+          type="button"
+          onClick={() => {
+            if (children.length >= 6) {
+              setShowLimitModal(true)
+            } else {
+              router.push('/dashboard/hijos/nuevo')
+            }
+          }}
+          className="flex items-center gap-1 rounded-lg bg-yellow-400 px-2 py-1 text-xs font-medium text-gray-900 hover:bg-yellow-500"
         >
-          <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
-        </Link>
+          <Plus className="h-3 w-3" strokeWidth={2} aria-hidden />
+          Añadir hijo/a
+        </button>
       </div>
       <input
         ref={fileInputRef}
@@ -142,12 +166,15 @@ export function ChildrenSection({ userId, initialChildren, isLoading }: Children
         <p className="text-sm text-gray-500">Cargando hijos…</p>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {displayed.map((child) => {
+          {displayed.map((child, index) => {
             const display = childDisplayName(child)
             const birth = child.birth_date?.trim()
             const age = birth ? computeAgeYears(birth, todayDate()) : null
             const birthFmt = birth ? formatBirthDdMmYyyy(birth) : ''
             const uploading = uploadingId === child.id
+            const hasPhoto = Boolean(child.avatar_url?.trim())
+            const initials = getInitials(child.name, child.last_name ?? '')
+            const avatarColorClass = avatarColors[index % avatarColors.length]
             let line2 = ''
             if (age != null && birthFmt) {
               line2 = `${age} años · ${birthFmt}`
@@ -159,50 +186,40 @@ export function ChildrenSection({ userId, initialChildren, isLoading }: Children
             return (
               <div
                 key={child.id}
-                className="relative flex min-h-[7.5rem] flex-row items-center gap-3 rounded-xl bg-white p-3 shadow-sm"
+                className="relative flex min-h-[5rem] flex-row items-center gap-3 rounded-xl bg-white p-2 shadow-sm"
               >
-                <div className="relative h-16 w-16 shrink-0">
-                  {child.avatar_url ? (
-                    <button
-                      type="button"
-                      onClick={() => openPicker(child.id)}
-                      disabled={uploading}
-                      className="group relative h-16 w-16 cursor-pointer overflow-hidden rounded-full border-0 p-0 disabled:opacity-50"
-                      aria-label="Cambiar foto"
-                    >
-                      <img
-                        src={child.avatar_url}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                      <div
-                        className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/30 transition ${
-                          uploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                        }`}
-                      >
-                        {uploading ? (
-                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                        ) : (
-                          <Camera className="h-4 w-4 text-white" strokeWidth={2} aria-hidden />
-                        )}
-                      </div>
-                    </button>
+                <button
+                  type="button"
+                  onClick={() => openPicker(child.id)}
+                  disabled={uploading}
+                  className="group relative h-16 w-16 shrink-0 cursor-pointer border-0 bg-transparent p-0 disabled:opacity-50"
+                  aria-label={hasPhoto ? 'Cambiar foto' : 'Añadir foto'}
+                >
+                  {hasPhoto ? (
+                    <img
+                      src={child.avatar_url!}
+                      alt=""
+                      className="h-16 w-16 rounded-full border border-dashed border-gray-300 object-cover"
+                    />
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => openPicker(child.id)}
-                      disabled={uploading}
-                      className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-full bg-gray-100 transition hover:bg-gray-200 disabled:opacity-50"
-                      aria-label="Añadir foto"
+                    <div
+                      className={`flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-semibold ${avatarColorClass}`}
                     >
-                      {uploading ? (
-                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
-                      ) : (
-                        <Camera className="h-5 w-5 text-gray-400" strokeWidth={2} aria-hidden />
-                      )}
-                    </button>
+                      {initials || '?'}
+                    </div>
                   )}
-                </div>
+                  <div
+                    className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/30 transition-opacity ${
+                      uploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                    }`}
+                  >
+                    {uploading ? (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                    ) : (
+                      <Camera className="h-3 w-3 text-white" strokeWidth={2} aria-hidden />
+                    )}
+                  </div>
+                </button>
                 <div className="min-w-0 flex-1 pr-1 text-left">
                   <p className="truncate text-sm font-medium text-gray-900" title={display}>
                     {display}
@@ -214,6 +231,43 @@ export function ChildrenSection({ userId, initialChildren, isLoading }: Children
           })}
         </div>
       )}
+
+      {showLimitModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div
+            className="relative mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="children-limit-title"
+          >
+            <button
+              type="button"
+              onClick={() => setShowLimitModal(false)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Cerrar"
+            >
+              <X className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </button>
+            <div className="flex items-center gap-2">
+              <span aria-hidden>👶</span>
+              <h3 id="children-limit-title" className="text-lg font-semibold text-gray-900">
+                Has llegado al máximo
+              </h3>
+            </div>
+            <p className="mt-2 text-sm text-gray-500">
+              Has llegado al máximo de 6 perfiles infantiles. Si necesitas añadir más, te invitamos a crear
+              otra cuenta o contactarnos.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowLimitModal(false)}
+              className={`mt-4 w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }

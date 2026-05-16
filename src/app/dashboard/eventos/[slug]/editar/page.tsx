@@ -1510,7 +1510,7 @@ export default function EditEventPage() {
                         </div>
                         <div>
                           <label htmlFor="childLastName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                            Apellido *
+                            Apellido(s) *
                           </label>
                           <input
                             id="childLastName"

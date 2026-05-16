@@ -927,7 +927,7 @@ export default function RsvpEditPage() {
                 </div>
                 <div>
                   <label htmlFor="edit-childLastName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                    Apellido *
+                    Apellido(s) *
                   </label>
                   <input
                     id="edit-childLastName"

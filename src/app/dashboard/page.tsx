@@ -6,9 +6,9 @@
 import AppNav from '@/components/AppNav'
 import { ChildrenSection, type DashboardChildRow } from '@/components/ChildrenSection'
 import { brand } from '@/lib/brand'
-import { CalendarDays, Map as MapIcon, Plus, X } from 'lucide-react'
+import { CalendarDays, Map as MapIcon, X } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 
@@ -62,6 +62,81 @@ type ParentProfile = {
   email: string
   fullName: string | null
   avatarUrl: string | null
+  phone: string | null
+}
+
+type FamilyMemberPartner = {
+  id: string
+  full_name: string
+  last_name: string | null
+  phone: string | null
+}
+
+const partnerAvatarColors = [
+  'bg-yellow-100 text-yellow-700',
+  'bg-pink-100 text-pink-700',
+  'bg-blue-100 text-blue-700',
+  'bg-green-100 text-green-700',
+  'bg-purple-100 text-purple-700',
+]
+
+const partnerInputClassName = `w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${brand.inputFocus}`
+
+function getPartnerInitials(name: string, lastName: string | null) {
+  const first = name.trim()[0]?.toUpperCase() || ''
+  const last = (lastName ?? '').trim()[0]?.toUpperCase() || ''
+  return first + last || '?'
+}
+
+function sanitizeDialPrefix(raw: string): string {
+  const digitsPlus = raw.replace(/[^\d+]/g, '')
+  if (digitsPlus.length === 0) return ''
+  let body = digitsPlus.startsWith('+') ? digitsPlus.slice(1) : digitsPlus
+  body = body.replace(/\+/g, '')
+  return ('+' + body).slice(0, 5)
+}
+
+function splitDialPhone(full: string): {
+  countryCode: '+34' | '+57' | 'otro'
+  customCode: string
+  number: string
+} {
+  const trimmed = full.trim()
+  if (!trimmed) return { countryCode: '+34', customCode: '', number: '' }
+  if (trimmed.startsWith('+57')) {
+    return { countryCode: '+57', customCode: '', number: trimmed.slice(3) }
+  }
+  if (trimmed.startsWith('+34')) {
+    return { countryCode: '+34', customCode: '', number: trimmed.slice(3) }
+  }
+  const match = trimmed.match(/^(\+\d{1,4})(.*)$/)
+  if (match && match[1] && match[2] !== undefined) {
+    return { countryCode: 'otro', customCode: match[1], number: match[2].replace(/\s/g, '') }
+  }
+  return { countryCode: 'otro', customCode: '', number: trimmed.replace(/^\+/, '') }
+}
+
+function resolveDialCode(countryCode: string, customCode: string): string {
+  return countryCode === 'otro' ? sanitizeDialPrefix(customCode) : countryCode
+}
+
+function dialCodeShortLabel(code: string): string {
+  if (code === '+57') return '🇨🇴 +57'
+  if (code === 'otro') return '✏️ Otro'
+  return '🇪🇸 +34'
+}
+
+function buildFullPhone(countryCode: string, customDialCode: string, phoneNumber: string): string {
+  const dial = resolveDialCode(countryCode, customDialCode)
+  const trimmedPhone = phoneNumber.replace(/\s/g, '')
+  return trimmedPhone ? `${dial}${trimmedPhone}` : ''
+}
+
+function partnerDisplayLabel(partner: FamilyMemberPartner) {
+  const first = partner.full_name.trim()
+  const last = (partner.last_name ?? '').trim()
+  if (!last) return first
+  return `${first} ${last}`.trim()
 }
 
 function todayLocalIso() {
@@ -88,119 +163,40 @@ function userFirstDisplayName(user: User): string {
   return ''
 }
 
+function isValidUrl(url: string) {
+  return url.startsWith('http://') || url.startsWith('https://')
+}
+
+function pickAvatarUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) return null
+  return trimmed
+}
+
 function parentAvatarFromUser(user: User): string | null {
   const meta = user.user_metadata as Record<string, unknown> | undefined
-  const a = meta?.avatar_url
-  const p = meta?.picture
-  if (typeof a === 'string' && a.trim()) return a.trim()
-  if (typeof p === 'string' && p.trim()) return p.trim()
+  const fromMeta =
+    pickAvatarUrl(meta?.picture) ??
+    pickAvatarUrl(meta?.avatar_url) ??
+    pickAvatarUrl(meta?.photoURL)
+  if (fromMeta) return fromMeta
+
+  for (const identity of user.identities ?? []) {
+    const data = identity.identity_data as Record<string, unknown> | undefined
+    const fromIdentity =
+      pickAvatarUrl(data?.picture) ??
+      pickAvatarUrl(data?.avatar_url) ??
+      pickAvatarUrl(data?.photoURL)
+    if (fromIdentity) return fromIdentity
+  }
+
   return null
 }
 
 function parentFullNameFromUser(user: User): string | null {
   const raw = user.user_metadata?.full_name
   return typeof raw === 'string' && raw.trim() ? raw.trim() : null
-}
-
-const SPANISH_MONTHS = [
-  'Enero',
-  'Febrero',
-  'Marzo',
-  'Abril',
-  'Mayo',
-  'Junio',
-  'Julio',
-  'Agosto',
-  'Septiembre',
-  'Octubre',
-  'Noviembre',
-  'Diciembre',
-]
-
-function sanitizeDialPrefix(raw: string): string {
-  const digitsPlus = raw.replace(/[^\d+]/g, '')
-  if (digitsPlus.length === 0) return ''
-  let body = digitsPlus.startsWith('+') ? digitsPlus.slice(1) : digitsPlus
-  body = body.replace(/\+/g, '')
-  return ('+' + body).slice(0, 5)
-}
-
-function splitDialPhone(full: string | null): {
-  countryCode: '+34' | '+57' | 'otro'
-  customCode: string
-  number: string
-} {
-  const trimmed = (full ?? '').trim()
-  if (!trimmed) return { countryCode: '+34', customCode: '', number: '' }
-  if (trimmed.startsWith('+57')) {
-    return { countryCode: '+57', customCode: '', number: trimmed.slice(3) }
-  }
-  if (trimmed.startsWith('+34')) {
-    return { countryCode: '+34', customCode: '', number: trimmed.slice(3) }
-  }
-  const match = trimmed.match(/^(\+\d{1,5})(\d[\d\s]*)$/)
-  if (match && match[1].length <= 5) {
-    return { countryCode: 'otro', customCode: match[1], number: match[2].replace(/\s/g, '') }
-  }
-  return { countryCode: 'otro', customCode: '', number: trimmed.replace(/^\+/, '') }
-}
-
-function resolveDialCode(countryCode: string, customCode: string): string {
-  return countryCode === 'otro' ? sanitizeDialPrefix(customCode) : countryCode
-}
-
-function dialCodeShortLabel(code: string): string {
-  if (code === '+57') return '🇨🇴 +57'
-  if (code === 'otro') return '✏️ Otro'
-  return '🇪🇸 +34'
-}
-
-function formatDisplayToIsoDate(displayDate: string) {
-  const match = displayDate.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
-  if (!match) return null
-  const [, day, month, year] = match
-  const dayNumber = Number.parseInt(day, 10)
-  const monthNumber = Number.parseInt(month, 10)
-  const yearNumber = Number.parseInt(year, 10)
-  if (
-    Number.isNaN(dayNumber) ||
-    Number.isNaN(monthNumber) ||
-    Number.isNaN(yearNumber) ||
-    monthNumber < 1 ||
-    monthNumber > 12 ||
-    dayNumber < 1 ||
-    dayNumber > 31
-  ) {
-    return null
-  }
-  const parsed = new Date(yearNumber, monthNumber - 1, dayNumber)
-  if (
-    parsed.getFullYear() !== yearNumber ||
-    parsed.getMonth() + 1 !== monthNumber ||
-    parsed.getDate() !== dayNumber
-  ) {
-    return null
-  }
-  return `${year}-${month}-${day}`
-}
-
-function isoToBirthParts(iso: string | null): { day: string; month: string; year: string } {
-  if (!iso?.match(/^\d{4}-\d{2}-\d{2}$/)) return { day: '', month: '', year: '' }
-  const [y, m, d] = iso.split('-')
-  return { day: d, month: m, year: y }
-}
-
-function splitFullName(full: string | null): { first: string; last: string } {
-  if (!full?.trim()) return { first: '', last: '' }
-  const parts = full.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return { first: '', last: '' }
-  if (parts.length === 1) return { first: parts[0]!, last: '' }
-  return { first: parts[0]!, last: parts.slice(1).join(' ') }
-}
-
-function isGoogleUser(user: User): boolean {
-  if (user.app_metadata?.provider === 'google') return true
-  return user.identities?.some((identity) => identity.provider === 'google') === true
 }
 
 function initialsFromDisplay(name: string | null, email: string) {
@@ -386,41 +382,40 @@ export default function DashboardHomePage() {
   const [userFirstName, setUserFirstName] = useState('')
   const [userId, setUserId] = useState('')
   const [parentProfile, setParentProfile] = useState<ParentProfile | null>(null)
-  const [parentAvatarError, setParentAvatarError] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showProximos, setShowProximos] = useState(true)
   const [showPasados, setShowPasados] = useState(true)
-  const [showProfileModal, setShowProfileModal] = useState(false)
-  const [authUser, setAuthUser] = useState<User | null>(null)
-  const [userDbProfile, setUserDbProfile] = useState<{
-    full_name: string | null
-    phone: string | null
-    birth_date: string | null
-  } | null>(null)
-  const [profileFirstName, setProfileFirstName] = useState('')
-  const [profileLastName, setProfileLastName] = useState('')
-  const [profileBirthDay, setProfileBirthDay] = useState('')
-  const [profileBirthMonth, setProfileBirthMonth] = useState('')
-  const [profileBirthYear, setProfileBirthYear] = useState('')
-  const [profileEmail, setProfileEmail] = useState('')
-  const [profileEmailInitial, setProfileEmailInitial] = useState('')
-  const [profileCountryCode, setProfileCountryCode] = useState<string>('+34')
-  const [profileCustomCode, setProfileCustomCode] = useState('')
-  const [profilePhoneNumber, setProfilePhoneNumber] = useState('')
-  const [profileInitialPhone, setProfileInitialPhone] = useState('')
-  const [profileIsGoogle, setProfileIsGoogle] = useState(false)
-  const [profileDialOpen, setProfileDialOpen] = useState(false)
-  const [profileSaving, setProfileSaving] = useState(false)
-  const [profileError, setProfileError] = useState<string | null>(null)
-  const [profileSuccessToast, setProfileSuccessToast] = useState(false)
-  const [profilePhoneNotice, setProfilePhoneNotice] = useState(false)
-  const [showPasswordSection, setShowPasswordSection] = useState(false)
-  const [profileNewPassword, setProfileNewPassword] = useState('')
-  const [profileConfirmPassword, setProfileConfirmPassword] = useState('')
-  const profileDialRef = useRef<HTMLDivElement>(null)
+  const [avatarError, setAvatarError] = useState(false)
+  const [partner, setPartner] = useState<FamilyMemberPartner | null>(null)
+  const [showAddPartnerModal, setShowAddPartnerModal] = useState(false)
+  const [partnerFirstName, setPartnerFirstName] = useState('')
+  const [partnerLastName, setPartnerLastName] = useState('')
+  const [partnerCountryCode, setPartnerCountryCode] = useState<string>('+34')
+  const [partnerCustomDialCode, setPartnerCustomDialCode] = useState('')
+  const [partnerPhoneNumber, setPartnerPhoneNumber] = useState('')
+  const [partnerDialOpen, setPartnerDialOpen] = useState(false)
+  const [partnerSaving, setPartnerSaving] = useState(false)
+  const [partnerModalError, setPartnerModalError] = useState<string | null>(null)
+  const [partnerSaveSuccess, setPartnerSaveSuccess] = useState(false)
+  const partnerDialRef = useRef<HTMLDivElement>(null)
 
   const todayStr = useMemo(() => todayLocalIso(), [])
+
+  const loadPartner = useCallback(
+    async (uid: string) => {
+      const { data: familyMembers } = await supabase
+        .from('family_members')
+        .select('id, full_name, last_name, phone')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: true })
+
+      const first = (familyMembers?.[0] as FamilyMemberPartner | undefined) ?? null
+      setPartner(first)
+      return first
+    },
+    [supabase]
+  )
 
   const { upcomingCount, pastCount } = useMemo(() => {
     const upIds = new Set<string>()
@@ -496,21 +491,36 @@ export default function DashboardHomePage() {
           setRsvpCountsByEventId({})
           setUserFirstName('')
           setUserId('')
-          setAuthUser(null)
-          setUserDbProfile(null)
           setParentProfile(null)
+          setPartner(null)
           setLoading(false)
         }
         return
       }
 
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('phone')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      const phone =
+        typeof userProfile?.phone === 'string' && userProfile.phone.trim()
+          ? userProfile.phone.trim()
+          : null
+
       if (isMounted) {
         setUserId(user.id)
-        setAuthUser(user)
         setUserFirstName(userFirstDisplayName(user))
+        setParentProfile({
+          email: user.email ?? '',
+          fullName: parentFullNameFromUser(user),
+          avatarUrl: parentAvatarFromUser(user),
+          phone,
+        })
       }
 
-      const [eventsRes, childrenRes, userRowRes] = await Promise.all([
+      const [eventsRes, childrenRes, familyRes] = await Promise.all([
         supabase
           .from('events')
           .select(
@@ -519,29 +529,20 @@ export default function DashboardHomePage() {
           .eq('user_id', user.id),
         supabase
           .from('children')
-          .select('id, name, last_name, birth_date, avatar_url')
+          .select('id, name, last_name, birth_date, avatar_url, short_name')
           .eq('user_id', user.id)
           .order('created_at', { ascending: true }),
-        supabase.from('users').select('full_name, phone, birth_date').eq('id', user.id).maybeSingle(),
+        supabase
+          .from('family_members')
+          .select('id, full_name, last_name, phone')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true }),
       ])
 
-      if (isMounted) {
-        const userRow = userRowRes.data as {
-          full_name: string | null
-          phone: string | null
-          birth_date: string | null
-        } | null
-        setUserDbProfile(userRow ?? null)
-        const displayFull =
-          userRow?.full_name?.trim() || parentFullNameFromUser(user) || null
-        setParentProfile({
-          email: user.email ?? '',
-          fullName: displayFull,
-          avatarUrl: parentAvatarFromUser(user),
-        })
-      }
-
       if (!isMounted) return
+
+      const familyMembers = familyRes.data as FamilyMemberPartner[] | null
+      setPartner(familyMembers?.[0] ?? null)
 
       const loadedChildren = (childrenRes.data ?? []) as DashboardChildRow[]
       if (childrenRes.error) {
@@ -648,166 +649,97 @@ export default function DashboardHomePage() {
   }, [supabase])
 
   useEffect(() => {
-    if (!profileDialOpen) return
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target as Node
-      if (profileDialRef.current?.contains(target)) return
-      setProfileDialOpen(false)
+    if (!partnerDialOpen) return
+    const onPointerDown = (event: MouseEvent) => {
+      if (partnerDialRef.current?.contains(event.target as Node)) return
+      setPartnerDialOpen(false)
     }
-    document.addEventListener('pointerdown', handlePointerDown, true)
-    return () => document.removeEventListener('pointerdown', handlePointerDown, true)
-  }, [profileDialOpen])
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [partnerDialOpen])
 
   useEffect(() => {
-    if (!profileSuccessToast) return
-    const t = setTimeout(() => {
-      setProfileSuccessToast(false)
-      setProfilePhoneNotice(false)
-    }, 3000)
-    return () => clearTimeout(t)
-  }, [profileSuccessToast])
+    if (!showAddPartnerModal) return
+    setPartnerModalError(null)
+    if (partner) {
+      setPartnerFirstName(partner.full_name)
+      setPartnerLastName(partner.last_name ?? '')
+      const phoneParts = splitDialPhone(partner.phone ?? '')
+      setPartnerCountryCode(phoneParts.countryCode)
+      setPartnerCustomDialCode(phoneParts.customCode)
+      setPartnerPhoneNumber(phoneParts.number)
+    } else {
+      setPartnerFirstName('')
+      setPartnerLastName('')
+      setPartnerCountryCode('+34')
+      setPartnerCustomDialCode('')
+      setPartnerPhoneNumber('')
+    }
+  }, [showAddPartnerModal, partner])
 
-  const openProfileModal = () => {
-    const full =
-      userDbProfile?.full_name?.trim() ||
-      parentProfile?.fullName?.trim() ||
-      (authUser ? parentFullNameFromUser(authUser) : null)
-    const { first, last } = splitFullName(full)
-    setProfileFirstName(first)
-    setProfileLastName(last)
-    const birth = isoToBirthParts(userDbProfile?.birth_date ?? null)
-    setProfileBirthDay(birth.day)
-    setProfileBirthMonth(birth.month)
-    setProfileBirthYear(birth.year)
-    const email = parentProfile?.email ?? ''
-    setProfileEmail(email)
-    setProfileEmailInitial(email)
-    const phone = userDbProfile?.phone ?? ''
-    setProfileInitialPhone(phone)
-    const dial = splitDialPhone(phone)
-    setProfileCountryCode(dial.countryCode)
-    setProfileCustomCode(dial.customCode)
-    setProfilePhoneNumber(dial.number)
-    setProfileIsGoogle(authUser ? isGoogleUser(authUser) : false)
-    setShowPasswordSection(false)
-    setProfileNewPassword('')
-    setProfileConfirmPassword('')
-    setProfileError(null)
-    setProfilePhoneNotice(false)
-    setShowProfileModal(true)
-  }
+  const handlePartnerSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setPartnerModalError(null)
+    setPartnerSaving(true)
 
-  const handleProfileSave = async () => {
-    if (!userId) return
-    setProfileError(null)
-    setProfileSaving(true)
-
-    const trimmedFirst = profileFirstName.trim()
-    const trimmedLast = profileLastName.trim()
-    if (!trimmedFirst) {
-      setProfileError('El nombre es obligatorio.')
-      setProfileSaving(false)
+    const trimmedName = partnerFirstName.trim()
+    const trimmedLastName = partnerLastName.trim()
+    if (!trimmedName) {
+      setPartnerModalError('El nombre es obligatorio.')
+      setPartnerSaving(false)
       return
     }
 
-    const fullName = trimmedLast ? `${trimmedFirst} ${trimmedLast}` : trimmedFirst
-    let birthIso: string | null = null
-    if (profileBirthDay || profileBirthMonth || profileBirthYear) {
-      if (!profileBirthDay || !profileBirthMonth || !profileBirthYear) {
-        setProfileError('Completa día, mes y año de nacimiento, o déjalos todos vacíos.')
-        setProfileSaving(false)
+    if (!userId) {
+      setPartnerModalError('No se pudo obtener tu sesión.')
+      setPartnerSaving(false)
+      return
+    }
+
+    const dial = resolveDialCode(partnerCountryCode, partnerCustomDialCode)
+    if (partnerCountryCode === 'otro' && dial.length <= 1 && partnerPhoneNumber.trim()) {
+      setPartnerModalError('Indica un prefijo internacional válido.')
+      setPartnerSaving(false)
+      return
+    }
+
+    const fullPhone = buildFullPhone(partnerCountryCode, partnerCustomDialCode, partnerPhoneNumber)
+
+    if (partner) {
+      const { error: updateError } = await supabase
+        .from('family_members')
+        .update({
+          full_name: trimmedName,
+          last_name: trimmedLastName || null,
+          phone: fullPhone || null,
+        })
+        .eq('id', partner.id)
+
+      if (updateError) {
+        setPartnerModalError(updateError.message)
+        setPartnerSaving(false)
         return
       }
-      birthIso = formatDisplayToIsoDate(
-        `${profileBirthDay}/${profileBirthMonth}/${profileBirthYear}`
-      )
-      if (!birthIso) {
-        setProfileError('La fecha de nacimiento no es válida.')
-        setProfileSaving(false)
-        return
-      }
-    }
+    } else {
+      const { error: insertError } = await supabase.from('family_members').insert({
+        user_id: userId,
+        full_name: trimmedName,
+        last_name: trimmedLastName || null,
+        phone: fullPhone || null,
+      })
 
-    const finalDial = resolveDialCode(profileCountryCode, profileCustomCode)
-    if (profileCountryCode === 'otro' && profilePhoneNumber.trim() && finalDial.length <= 1) {
-      setProfileError('Indica el prefijo internacional (ej. +44).')
-      setProfileSaving(false)
-      return
-    }
-    const trimmedPhone = profilePhoneNumber.trim()
-    const fullPhone = trimmedPhone ? `${finalDial}${trimmedPhone}` : null
-    const phoneChanged = (fullPhone ?? '') !== (profileInitialPhone ?? '')
-
-    const { error: upsertError } = await supabase.from('users').upsert({
-      id: userId,
-      full_name: fullName,
-      phone: fullPhone,
-      birth_date: birthIso,
-    })
-
-    if (upsertError) {
-      setProfileError(upsertError.message)
-      setProfileSaving(false)
-      return
-    }
-
-    const trimmedEmail = profileEmail.trim()
-    if (!profileIsGoogle && trimmedEmail && trimmedEmail !== profileEmailInitial) {
-      const { error: emailError } = await supabase.auth.updateUser({ email: trimmedEmail })
-      if (emailError) {
-        setProfileError(emailError.message)
-        setProfileSaving(false)
+      if (insertError) {
+        setPartnerModalError(insertError.message)
+        setPartnerSaving(false)
         return
       }
     }
 
-    const { error: metaError } = await supabase.auth.updateUser({
-      data: { full_name: fullName },
-    })
-    if (metaError) {
-      setProfileError(metaError.message)
-      setProfileSaving(false)
-      return
-    }
-
-    setUserDbProfile({ full_name: fullName, phone: fullPhone, birth_date: birthIso })
-    setProfileInitialPhone(fullPhone ?? '')
-    setParentProfile((prev) =>
-      prev
-        ? {
-            ...prev,
-            fullName,
-            email: profileIsGoogle ? prev.email : trimmedEmail || prev.email,
-          }
-        : prev
-    )
-    const firstFromFull = fullName.split(/\s+/).filter(Boolean)[0]
-    if (firstFromFull) setUserFirstName(firstFromFull)
-
-    setProfilePhoneNotice(phoneChanged)
-    setShowProfileModal(false)
-    setProfileSuccessToast(true)
-    setProfileSaving(false)
-  }
-
-  const handleUpdatePassword = async () => {
-    setProfileError(null)
-    if (!profileNewPassword || profileNewPassword !== profileConfirmPassword) {
-      setProfileError('Las contraseñas no coinciden.')
-      return
-    }
-    setProfileSaving(true)
-    const { error: pwError } = await supabase.auth.updateUser({ password: profileNewPassword })
-    if (pwError) {
-      setProfileError(pwError.message)
-      setProfileSaving(false)
-      return
-    }
-    setProfileNewPassword('')
-    setProfileConfirmPassword('')
-    setShowPasswordSection(false)
-    setProfileSaving(false)
-    setProfileSuccessToast(true)
+    await loadPartner(userId)
+    setShowAddPartnerModal(false)
+    setPartnerSaving(false)
+    setPartnerSaveSuccess(true)
+    window.setTimeout(() => setPartnerSaveSuccess(false), 2000)
   }
 
   const greetingTitle = userFirstName ? `Hola ${userFirstName} 👋` : 'Hola 👋'
@@ -815,6 +747,13 @@ export default function DashboardHomePage() {
   const profileInitials = parentProfile
     ? initialsFromDisplay(parentProfile.fullName, parentProfile.email)
     : '?'
+
+  const avatarUrl = parentProfile?.avatarUrl ?? null
+  const showParentAvatar = avatarUrl != null && isValidUrl(avatarUrl) && !avatarError
+
+  useEffect(() => {
+    setAvatarError(false)
+  }, [avatarUrl])
 
   return (
     <main className={`min-h-screen ${brand.pageBg} pb-12`}>
@@ -831,45 +770,85 @@ export default function DashboardHomePage() {
 
         {parentProfile ? (
           <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8">
-            <div className="flex min-h-[7.5rem] flex-row items-center gap-3 rounded-2xl bg-white p-4 shadow-sm sm:gap-4">
-              {parentProfile.avatarUrl && !parentAvatarError ? (
-                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full">
-                  <img
-                    src={parentProfile.avatarUrl}
-                    alt=""
-                    referrerPolicy="no-referrer"
-                    onError={() => setParentAvatarError(true)}
-                    className="h-full w-full rounded-full object-cover"
-                  />
-                </div>
+            <div className="flex min-h-[5.625rem] flex-row items-center gap-3 rounded-2xl bg-white p-3 shadow-sm sm:gap-4">
+              {showParentAvatar ? (
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  onError={() => setAvatarError(true)}
+                  className="h-16 w-16 shrink-0 rounded-full object-cover"
+                />
               ) : (
                 <div
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-semibold ${brand.accentBg} ${brand.accentText}`}
+                  className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-white ${brand.accentBg}`}
                   aria-hidden
                 >
-                  {profileInitials}
+                  {profileInitials.slice(0, 1)}
                 </div>
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-base font-semibold text-gray-900">
                   {parentProfile.fullName ?? 'Tu cuenta'}
                 </p>
-                <p className="truncate text-sm text-gray-600">{parentProfile.email}</p>
-                <button
-                  type="button"
-                  onClick={openProfileModal}
+                {parentProfile.phone ? (
+                  <p className="truncate text-sm text-gray-500">{parentProfile.phone}</p>
+                ) : null}
+                <p className="truncate text-sm text-gray-400">{parentProfile.email}</p>
+                <Link
+                  href="/dashboard/perfil"
                   className={`mt-1 inline-block text-xs font-medium underline ${brand.accentText} ${brand.textBrandHover}`}
                 >
                   Editar perfil
-                </button>
+                </Link>
               </div>
             </div>
             <div
-              className="pointer-events-none flex min-h-[7.5rem] cursor-default select-none flex-col items-center justify-center gap-0.5 rounded-2xl border border-dashed border-gray-200 bg-white p-3 text-center shadow-sm"
-              aria-disabled
+              role="button"
+              tabIndex={0}
+              onClick={() => setShowAddPartnerModal(true)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  setShowAddPartnerModal(true)
+                }
+              }}
+              className={`flex min-h-[5.625rem] cursor-pointer flex-row items-center gap-3 rounded-2xl bg-white p-3 shadow-sm sm:gap-4 ${
+                partner ? 'border border-gray-100' : 'border border-dashed border-gray-200'
+              }`}
             >
-              <Plus className="h-5 w-5 text-gray-300" strokeWidth={2} aria-hidden />
-              <p className="text-xs font-medium text-gray-400">Añadir pareja</p>
+              <div
+                className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-semibold ${
+                  partner ? partnerAvatarColors[0] : 'border-2 bg-gray-50 text-gray-400'
+                }`}
+                aria-hidden
+              >
+                {partner ? getPartnerInitials(partner.full_name, partner.last_name) : '+'}
+              </div>
+              <div className="min-w-0 flex-1 text-left">
+                {partner ? (
+                  <>
+                    <p className="truncate text-base font-semibold text-gray-900">
+                      {partnerDisplayLabel(partner)}
+                    </p>
+                    {partner.phone ? (
+                      <p className="truncate text-sm text-gray-500">{partner.phone}</p>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setShowAddPartnerModal(true)
+                      }}
+                      className={`mt-1 inline-block text-xs font-medium underline ${brand.accentText} ${brand.textBrandHover}`}
+                    >
+                      Editar
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-xs font-medium text-gray-400">Añadir pareja</p>
+                )}
+              </div>
             </div>
           </div>
         ) : null}
@@ -999,14 +978,13 @@ export default function DashboardHomePage() {
         <section className="mt-8 rounded-2xl border border-gray-100 bg-white p-4 shadow-xl sm:p-6">
           <div className="px-4 sm:px-6">
             <h2 className="mb-4 mt-2 text-lg font-semibold text-gray-900">
-              <span aria-hidden>📍 </span>
-              Ubicaciones
+              📍 Lugares
             </h2>
             {loading ? (
               <p className="text-sm text-gray-500">Cargando…</p>
-            ) : distinctLocations.length === 0 ? (
-              <p className="text-center text-sm text-gray-400">
-                Tus ubicaciones aparecerán aquí una vez crees tu primer evento.
+            ) : events.length === 0 || distinctLocations.length === 0 ? (
+              <p className="text-center text-sm text-gray-400 py-4">
+                📍 Los lugares de tus eventos aparecerán aquí automáticamente.
               </p>
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -1016,19 +994,22 @@ export default function DashboardHomePage() {
                     href={googleMapsSearchUrl(name, address)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="relative flex min-h-[64px] flex-col justify-center rounded-xl border border-gray-100 bg-gray-50 p-3 pr-8 pb-6 transition hover:border-yellow-200 hover:bg-yellow-50/50 hover:shadow-sm"
+                    className="flex w-full flex-row items-center gap-3 rounded-xl border border-gray-100 bg-white p-3 shadow-sm transition hover:border-yellow-200 hover:bg-yellow-50/50"
                   >
-                    <p className="text-sm font-medium text-gray-700">{name}</p>
-                    {address ? (
-                      <p className="mt-0.5 truncate text-xs text-gray-400" title={address}>
-                        {address}
-                      </p>
-                    ) : null}
-                    <MapIcon
-                      className="pointer-events-none absolute bottom-2 right-2 h-4 w-4 text-gray-400"
-                      strokeWidth={2}
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100"
                       aria-hidden
-                    />
+                    >
+                      <MapIcon className="h-4 w-4 text-gray-400" strokeWidth={2} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-gray-700">{name}</p>
+                      {address ? (
+                        <p className="mt-0.5 truncate text-xs text-gray-400" title={address}>
+                          {address}
+                        </p>
+                      ) : null}
+                    </div>
                     <span className="sr-only">Abrir en Google Maps</span>
                   </a>
                 ))}
@@ -1038,305 +1019,191 @@ export default function DashboardHomePage() {
         </section>
       </div>
 
-      {showProfileModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div
-            className="relative mx-4 flex max-h-[80vh] w-full max-w-sm flex-col rounded-2xl bg-white pt-4 shadow-xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="profile-modal-title"
-          >
-            <div className="overflow-y-auto px-6 pb-6">
-              <div className="mb-4 mt-1 flex items-center justify-between">
-                <h2 id="profile-modal-title" className="text-lg font-semibold text-gray-900">
-                  Mi perfil
-                </h2>
-                <button
-                  type="button"
-                  aria-label="Cerrar"
-                  onClick={() => setShowProfileModal(false)}
-                  className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="profileFirstName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                    Nombre
-                  </label>
-                  <input
-                    id="profileFirstName"
-                    type="text"
-                    value={profileFirstName}
-                    onChange={(e) => setProfileFirstName(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 focus:border-yellow-400 focus:ring-2"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="profileLastName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                    Apellido(s)
-                  </label>
-                  <input
-                    id="profileLastName"
-                    type="text"
-                    value={profileLastName}
-                    onChange={(e) => setProfileLastName(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 focus:border-yellow-400 focus:ring-2"
-                  />
-                </div>
-
-                <div>
-                  <p className="mb-1.5 block text-sm font-medium text-gray-900">Fecha de nacimiento</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <select
-                      value={profileBirthDay}
-                      onChange={(e) => setProfileBirthDay(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 ring-yellow-400"
-                      aria-label="Día"
-                    >
-                      <option value="">Día</option>
-                      {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((day) => (
-                        <option key={day} value={day}>
-                          {day}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={profileBirthMonth}
-                      onChange={(e) => setProfileBirthMonth(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 ring-yellow-400"
-                      aria-label="Mes"
-                    >
-                      <option value="">Mes</option>
-                      {SPANISH_MONTHS.map((monthName, index) => {
-                        const monthValue = String(index + 1).padStart(2, '0')
-                        return (
-                          <option key={monthValue} value={monthValue}>
-                            {monthName}
-                          </option>
-                        )
-                      })}
-                    </select>
-                    <select
-                      value={profileBirthYear}
-                      onChange={(e) => setProfileBirthYear(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 ring-yellow-400"
-                      aria-label="Año"
-                    >
-                      <option value="">Año</option>
-                      {Array.from(
-                        { length: new Date().getFullYear() - 1926 + 1 },
-                        (_, index) => String(new Date().getFullYear() - index)
-                      ).map((year) => (
-                        <option key={year} value={year}>
-                          {year}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="profileEmail" className="mb-1.5 block text-sm font-medium text-gray-900">
-                    Email
-                  </label>
-                  {profileIsGoogle ? (
-                    <div>
-                      <div className="rounded-full bg-gray-100 px-3 py-2 text-sm text-gray-500">
-                        {profileEmail}
-                      </div>
-                      <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-400">
-                        <span
-                          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-bold text-blue-600 shadow-sm"
-                          aria-hidden
-                        >
-                          G
-                        </span>
-                        Vinculado con Google
-                      </p>
-                    </div>
-                  ) : (
-                    <input
-                      id="profileEmail"
-                      type="email"
-                      autoComplete="email"
-                      value={profileEmail}
-                      onChange={(e) => setProfileEmail(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 focus:border-yellow-400 focus:ring-2"
-                    />
-                  )}
-                </div>
-
-                <div>
-                  <label htmlFor="profilePhone" className="mb-1.5 block text-sm font-medium text-gray-900">
-                    Teléfono
-                  </label>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div
-                      ref={profileDialRef}
-                      className={
-                        profileCountryCode === 'otro'
-                          ? 'relative w-20 max-w-20 shrink-0'
-                          : 'relative w-28 max-w-28 shrink-0'
-                      }
-                    >
-                      <button
-                        type="button"
-                        aria-expanded={profileDialOpen}
-                        aria-haspopup="listbox"
-                        onClick={() => setProfileDialOpen((open) => !open)}
-                        className="flex h-10 w-full items-center justify-between gap-0.5 rounded-lg border border-gray-300 bg-white px-1.5 py-2 text-left text-sm text-gray-900 outline-none ring-yellow-400 focus:ring-2"
-                      >
-                        <span className="min-w-0 flex-1 truncate">
-                          {dialCodeShortLabel(profileCountryCode)}
-                        </span>
-                        <span className="shrink-0 text-[10px] text-gray-500" aria-hidden>
-                          ▾
-                        </span>
-                      </button>
-                      {profileDialOpen ? (
-                        <ul
-                          role="listbox"
-                          className="absolute left-0 top-full z-[60] mt-0.5 min-w-[12rem] rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
-                        >
-                          <li role="presentation">
-                            <button
-                              type="button"
-                              role="option"
-                              className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
-                              onClick={() => {
-                                setProfileCountryCode('+34')
-                                setProfileDialOpen(false)
-                              }}
-                            >
-                              🇪🇸 +34 (España)
-                            </button>
-                          </li>
-                          <li role="presentation">
-                            <button
-                              type="button"
-                              role="option"
-                              className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
-                              onClick={() => {
-                                setProfileCountryCode('+57')
-                                setProfileDialOpen(false)
-                              }}
-                            >
-                              🇨🇴 +57 (Colombia)
-                            </button>
-                          </li>
-                          <li role="presentation">
-                            <button
-                              type="button"
-                              role="option"
-                              className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
-                              onClick={() => {
-                                setProfileCountryCode('otro')
-                                setProfileDialOpen(false)
-                              }}
-                            >
-                              ✏️ Otro
-                            </button>
-                          </li>
-                        </ul>
-                      ) : null}
-                    </div>
-                    {profileCountryCode === 'otro' ? (
-                      <input
-                        type="text"
-                        inputMode="tel"
-                        value={profileCustomCode}
-                        onChange={(e) => setProfileCustomCode(sanitizeDialPrefix(e.target.value))}
-                        maxLength={5}
-                        placeholder="+00"
-                        aria-label="Prefijo internacional"
-                        className="w-16 shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm outline-none ring-yellow-400 focus:ring-2"
-                      />
-                    ) : null}
-                    <input
-                      id="profilePhone"
-                      type="tel"
-                      value={profilePhoneNumber}
-                      onChange={(e) => setProfilePhoneNumber(e.target.value)}
-                      placeholder="Ej. 612345678"
-                      className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 focus:ring-2"
-                    />
-                  </div>
-                </div>
-
-                {!profileIsGoogle ? (
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setShowPasswordSection((v) => !v)}
-                      className="text-sm font-medium text-gray-700 underline underline-offset-2 hover:text-gray-900"
-                    >
-                      Cambiar contraseña
-                    </button>
-                    {showPasswordSection ? (
-                      <div className="mt-3 space-y-2">
-                        <input
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder="Nueva contraseña"
-                          value={profileNewPassword}
-                          onChange={(e) => setProfileNewPassword(e.target.value)}
-                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none ring-yellow-400 focus:ring-2"
-                        />
-                        <input
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder="Confirmar contraseña"
-                          value={profileConfirmPassword}
-                          onChange={(e) => setProfileConfirmPassword(e.target.value)}
-                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none ring-yellow-400 focus:ring-2"
-                        />
-                        <button
-                          type="button"
-                          disabled={profileSaving}
-                          onClick={() => void handleUpdatePassword()}
-                          className={`w-full rounded-lg px-3 py-2.5 text-sm font-semibold ${brand.buttonSecondary}`}
-                        >
-                          Actualizar contraseña
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {profileError ? (
-                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {profileError}
-                  </p>
-                ) : null}
-
-                <button
-                  type="button"
-                  disabled={profileSaving}
-                  onClick={() => void handleProfileSave()}
-                  className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary} disabled:cursor-not-allowed disabled:opacity-60`}
-                >
-                  {profileSaving ? 'Guardando...' : 'Guardar cambios'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {partnerSaveSuccess ? (
+        <p
+          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
+          role="status"
+        >
+          Pareja guardada ✓
+        </p>
       ) : null}
 
-      {profileSuccessToast ? (
-        <div className="fixed bottom-6 left-1/2 z-[60] flex max-w-sm -translate-x-1/2 flex-col items-center gap-2 px-2">
-          <div className="rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-lg">
-            Cambios guardados ✓
+      {showAddPartnerModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div
+            className="relative mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="partner-modal-title"
+          >
+            <button
+              type="button"
+              onClick={() => setShowAddPartnerModal(false)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Cerrar"
+            >
+              <X className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </button>
+            <h2 id="partner-modal-title" className="pr-8 text-lg font-semibold text-gray-900">
+              {partner ? 'Editar pareja' : 'Añadir pareja'}
+            </h2>
+            <form onSubmit={handlePartnerSave} className="mt-4 space-y-4">
+              <div>
+                <label htmlFor="partnerFirstName" className="mb-1.5 block text-sm font-medium text-gray-900">
+                  Nombre
+                </label>
+                <input
+                  id="partnerFirstName"
+                  type="text"
+                  autoComplete="given-name"
+                  value={partnerFirstName}
+                  onChange={(event) => setPartnerFirstName(event.target.value)}
+                  required
+                  className={partnerInputClassName}
+                  placeholder="Ej. Carlos"
+                />
+              </div>
+              <div>
+                <label htmlFor="partnerLastName" className="mb-1.5 block text-sm font-medium text-gray-900">
+                  Apellido(s)
+                </label>
+                <input
+                  id="partnerLastName"
+                  type="text"
+                  autoComplete="family-name"
+                  value={partnerLastName}
+                  onChange={(event) => setPartnerLastName(event.target.value)}
+                  className={partnerInputClassName}
+                  placeholder="Ej. López"
+                />
+              </div>
+              <div>
+                <label htmlFor="partnerPhoneNumber" className="mb-1.5 block text-sm font-medium text-gray-900">
+                  Teléfono
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div
+                    ref={partnerDialRef}
+                    className={
+                      partnerCountryCode === 'otro'
+                        ? 'relative w-20 max-w-20 shrink-0'
+                        : 'relative w-28 max-w-28 shrink-0'
+                    }
+                  >
+                    <button
+                      type="button"
+                      aria-expanded={partnerDialOpen}
+                      aria-haspopup="listbox"
+                      onClick={() => setPartnerDialOpen((open) => !open)}
+                      className="flex h-10 w-full items-center justify-between gap-0.5 rounded-lg border border-gray-300 bg-white px-1.5 py-2 text-left text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                    >
+                      <span className="min-w-0 flex-1 truncate">
+                        {dialCodeShortLabel(partnerCountryCode)}
+                      </span>
+                      <span className="shrink-0 text-[10px] leading-none text-gray-500" aria-hidden>
+                        ▾
+                      </span>
+                    </button>
+                    {partnerDialOpen ? (
+                      <ul
+                        role="listbox"
+                        className="absolute left-0 top-full z-[60] mt-0.5 min-w-[12rem] rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+                      >
+                        <li role="presentation">
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={partnerCountryCode === '+34'}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                            onClick={() => {
+                              setPartnerCountryCode('+34')
+                              setPartnerDialOpen(false)
+                            }}
+                          >
+                            🇪🇸 +34 (España)
+                          </button>
+                        </li>
+                        <li role="presentation">
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={partnerCountryCode === '+57'}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                            onClick={() => {
+                              setPartnerCountryCode('+57')
+                              setPartnerDialOpen(false)
+                            }}
+                          >
+                            🇨🇴 +57 (Colombia)
+                          </button>
+                        </li>
+                        <li role="presentation">
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={partnerCountryCode === 'otro'}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50"
+                            onClick={() => {
+                              setPartnerCountryCode('otro')
+                              setPartnerDialOpen(false)
+                            }}
+                          >
+                            ✏️ Otro
+                          </button>
+                        </li>
+                      </ul>
+                    ) : null}
+                  </div>
+                  {partnerCountryCode === 'otro' ? (
+                    <input
+                      type="text"
+                      inputMode="tel"
+                      autoComplete="tel-country-code"
+                      value={partnerCustomDialCode}
+                      onChange={(event) =>
+                        setPartnerCustomDialCode(sanitizeDialPrefix(event.target.value))
+                      }
+                      maxLength={5}
+                      placeholder="+00"
+                      aria-label="Prefijo internacional"
+                      className="w-16 shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                    />
+                  ) : null}
+                  <input
+                    id="partnerPhoneNumber"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel-national"
+                    value={partnerPhoneNumber}
+                    onChange={(event) => setPartnerPhoneNumber(event.target.value)}
+                    placeholder="Ej. 612345678"
+                    className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  />
+                </div>
+              </div>
+
+              {partnerModalError ? (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {partnerModalError}
+                </p>
+              ) : null}
+
+              <button
+                type="submit"
+                disabled={partnerSaving}
+                className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-60 ${brand.buttonPrimary}`}
+              >
+                {partnerSaving ? 'Guardando…' : 'Guardar'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddPartnerModal(false)}
+                className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonOutline}`}
+              >
+                Cancelar
+              </button>
+            </form>
           </div>
-          {profilePhoneNotice ? (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-800 shadow-lg">
-              Tu nuevo número aparecerá en los próximos eventos que crees.
-            </p>
-          ) : null}
         </div>
       ) : null}
     </main>

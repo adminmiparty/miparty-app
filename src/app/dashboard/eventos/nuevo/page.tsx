@@ -1,7 +1,7 @@
 ﻿'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import AppNav from '@/components/AppNav'
 import { type ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { DayPicker, type Matcher } from 'react-day-picker'
 import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
@@ -1229,15 +1229,9 @@ export default function NewEventPage() {
   }
 
   return (
-    <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-6`}>
-      <div className="mx-auto w-full max-w-sm pb-8">
-        <div className="mb-5 flex items-center justify-between">
-          <Link href="/dashboard" className={`inline-flex items-center text-sm font-medium ${accentTextClass}`}>
-            ⬅️ Volver al panel
-          </Link>
-          <p className={`font-bold ${mipartyTextClass}`}>MiParty</p>
-        </div>
-
+    <main className={`min-h-screen bg-gradient-to-b ${pageBg}`}>
+      <AppNav backHref="/dashboard" backLabel="⬅️ Mi espacio" />
+      <div className="mx-auto w-full max-w-sm px-4 py-6 pb-8">
         <div className="mb-4 rounded-xl border border-yellow-100 bg-white/80 p-3">
           <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
             <span>Paso 1 de 2 — Crear evento</span>
@@ -1323,7 +1317,7 @@ export default function NewEventPage() {
                         </div>
                         <div>
                           <label htmlFor="childLastName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                            Apellido *
+                            Apellido(s) *
                           </label>
                           <input
                             id="childLastName"
