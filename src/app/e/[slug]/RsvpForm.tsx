@@ -768,6 +768,10 @@ function RsvpFormInner({
         phone: trimmedParentPhone || null,
       })
       setSubmittedStatus(attendance)
+      if (!isLoggedIn && !signupToggle && !isPreview) {
+        setShowSignupModal(true)
+        setModalView('signup')
+      }
       setLoading(false)
       return
     }
@@ -1587,18 +1591,26 @@ END:VCALENDAR`
             <div
               className={`rounded-xl border border-gray-200 p-3 ${isPreview ? 'pointer-events-none opacity-60' : ''}`}
             >
-              <label className="flex cursor-pointer items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={signupToggle}
-                  onChange={(e) => setSignupToggle(e.target.checked)}
-                  disabled={isPreview}
-                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
-                />
-                <span className="text-sm text-gray-600">
-                  ¿Quieres organizar tus propios eventos y gestionar tus confirmaciones?
-                </span>
-              </label>
+              <div className="flex items-center justify-between gap-3">
+                <p className="flex-1 text-sm text-gray-600">
+                  ¿Tú también organizas fiestas? Regístrate y gestiona todo desde un solo lugar.
+                </p>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={signupToggle}
+                  onClick={() => setSignupToggle(!signupToggle)}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    signupToggle ? 'bg-green-500' : 'bg-gray-200'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
+                      signupToggle ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
               {signupToggle ? (
                 <div className={`mt-3 space-y-2 ${isPreview ? 'pointer-events-none' : ''}`}>
                   <button
