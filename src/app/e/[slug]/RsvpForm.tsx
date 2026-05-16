@@ -219,6 +219,14 @@ function RsvpFormInner({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submittedStatus, setSubmittedStatus] = useState<AttendanceStatus | null>(null)
+  const [submittedData, setSubmittedData] = useState<{
+    childName: string
+    parentName: string
+    foodPreference: string | null
+    allergyNotes: string | null
+    extraNotes: string | null
+    phone: string | null
+  } | null>(null)
   const [previewSubmitted, setPreviewSubmitted] = useState(false)
   const [showCalendarOptions, setShowCalendarOptions] = useState(false)
   const childNameInputRef = useRef<HTMLInputElement | null>(null)
@@ -636,6 +644,14 @@ function RsvpFormInner({
 
     setSubmittedEditToken(duplicatePrompt.edit_token ?? null)
     setSubmittedStatus(attendance)
+    setSubmittedData({
+      childName: combinedChildName,
+      parentName: trimmedParentName,
+      foodPreference: trimmedFoodPreference || null,
+      allergyNotes: trimmedAllergyNotes || null,
+      extraNotes: trimmedExtraNotes || null,
+      phone: trimmedParentPhone || null,
+    })
     const rid = duplicatePrompt.id
     setSubmittedRsvpId(rid)
     submittedRsvpIdRef.current = rid
@@ -719,6 +735,43 @@ function RsvpFormInner({
 
     setLoading(true)
 
+    const rsvpPayload = {
+      guest_parent_name: trimmedParentName,
+      guest_parent_email: trimmedParentEmail || null,
+      guest_parent_phone: trimmedParentPhone || null,
+      child_name: combinedChildName,
+      attendance_status: attendance,
+      food_preference: attendance === 'confirmed' && hasFoodOptions ? trimmedFoodPreference || null : null,
+      allergy_notes: attendance === 'confirmed' && hasFoodOptions ? trimmedAllergyNotes || null : null,
+      extra_notes: trimmedExtraNotes || null,
+      user_id: loggedInUserId || null,
+    }
+
+    if (submittedRsvpId) {
+      const { error: updateError } = await supabase
+        .from('rsvps')
+        .update(rsvpPayload)
+        .eq('id', submittedRsvpId)
+
+      if (updateError) {
+        setError(updateError.message)
+        setLoading(false)
+        return
+      }
+
+      setSubmittedData({
+        childName: combinedChildName,
+        parentName: trimmedParentName,
+        foodPreference: trimmedFoodPreference || null,
+        allergyNotes: trimmedAllergyNotes || null,
+        extraNotes: trimmedExtraNotes || null,
+        phone: trimmedParentPhone || null,
+      })
+      setSubmittedStatus(attendance)
+      setLoading(false)
+      return
+    }
+
     if (!ignoreDuplicate && trimmedParentPhone) {
       const { data: existingRsvp } = await supabase
         .from('rsvps')
@@ -742,15 +795,7 @@ function RsvpFormInner({
       .from('rsvps')
       .insert({
         event_id: eventId,
-        guest_parent_name: trimmedParentName,
-        guest_parent_email: trimmedParentEmail || null,
-        guest_parent_phone: trimmedParentPhone || null,
-        child_name: combinedChildName,
-        attendance_status: attendance,
-        food_preference: attendance === 'confirmed' && hasFoodOptions ? trimmedFoodPreference || null : null,
-        allergy_notes: attendance === 'confirmed' && hasFoodOptions ? trimmedAllergyNotes || null : null,
-        extra_notes: trimmedExtraNotes || null,
-        user_id: loggedInUserId || null,
+        ...rsvpPayload,
       })
       .select('id, edit_token')
       .single()
@@ -765,6 +810,14 @@ function RsvpFormInner({
     const token = inserted?.edit_token ?? null
     setSubmittedEditToken(token)
     setSubmittedStatus(attendance)
+    setSubmittedData({
+      childName: combinedChildName,
+      parentName: trimmedParentName,
+      foodPreference: trimmedFoodPreference || null,
+      allergyNotes: trimmedAllergyNotes || null,
+      extraNotes: trimmedExtraNotes || null,
+      phone: trimmedParentPhone || null,
+    })
     if (rowId) {
       setSubmittedRsvpId(rowId)
       submittedRsvpIdRef.current = rowId
@@ -821,6 +874,41 @@ END:VCALENDAR`
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+  }
+
+  const renderResponseSummary = () => {
+    if (!submittedData || !submittedStatus) return null
+    const statusLabel = {
+      confirmed: '✅ Confirmado',
+      declined: '❌ No puede asistir',
+      maybe: '🤔 Aún no lo sabe',
+    }
+    return (
+      <>
+        <div className="mt-4 space-y-1 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+          <p className="mb-2 text-xs font-medium text-gray-500">Tu respuesta</p>
+          <p className="text-sm font-medium text-gray-800">{statusLabel[submittedStatus]}</p>
+          <p className="text-sm text-gray-700">👶 {submittedData.childName}</p>
+          <p className="text-sm text-gray-700">👤 {submittedData.parentName}</p>
+          {submittedData.foodPreference ? (
+            <p className="text-sm text-gray-700">🍽️ {submittedData.foodPreference}</p>
+          ) : null}
+          {submittedData.allergyNotes ? (
+            <p className="text-sm text-red-600">⚠️ {submittedData.allergyNotes}</p>
+          ) : null}
+          {submittedData.extraNotes ? (
+            <p className="text-sm italic text-gray-500">💬 {submittedData.extraNotes}</p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => setSubmittedStatus(null)}
+          className="mt-3 w-full text-sm text-gray-500 underline hover:text-gray-700"
+        >
+          ¿Algo está mal? Cambiar respuesta
+        </button>
+      </>
+    )
   }
 
   const previewHelperBlock = isPreview ? (
@@ -1095,6 +1183,7 @@ END:VCALENDAR`
             </button>
           </div>
         ) : null}
+        {renderResponseSummary()}
         {!isPreview && submittedEditToken ? (
           <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
             <p className="text-center text-xs leading-relaxed text-gray-600">
@@ -1127,6 +1216,7 @@ END:VCALENDAR`
         <p className="whitespace-pre-line text-center text-sm font-medium text-gray-800">
           {'Gracias por avisar 🙌\n¡Esperamos veros en la próxima!'}
         </p>
+        {renderResponseSummary()}
         {!isPreview && submittedEditToken ? (
           <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
             <p className="text-center text-xs leading-relaxed text-gray-600">{editLinkIntroCopy.declined}</p>
@@ -1159,6 +1249,7 @@ END:VCALENDAR`
             'Gracias 🙌\nGuarda el enlace que aparece abajo para actualizar tu respuesta cuando lo tengas claro.'
           }
         </p>
+        {renderResponseSummary()}
         {!isPreview && submittedEditToken ? (
           <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
             <p className="text-center text-xs leading-relaxed text-gray-600">{editLinkIntroCopy.maybe}</p>
