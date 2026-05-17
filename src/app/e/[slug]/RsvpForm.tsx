@@ -149,6 +149,52 @@ function dialCodeShortLabel(code: string): string {
   return '🇪🇸 +34'
 }
 
+const SPANISH_MONTHS = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+]
+
+function composeBirthDateIso(day: string, month: string, year: string): string | null {
+  if (!day || !month || !year) {
+    return null
+  }
+  const dayNumber = Number.parseInt(day, 10)
+  const monthNumber = Number.parseInt(month, 10)
+  const yearNumber = Number.parseInt(year, 10)
+  if (
+    Number.isNaN(dayNumber) ||
+    Number.isNaN(monthNumber) ||
+    Number.isNaN(yearNumber) ||
+    monthNumber < 1 ||
+    monthNumber > 12 ||
+    dayNumber < 1 ||
+    dayNumber > 31
+  ) {
+    return null
+  }
+  const parsed = new Date(yearNumber, monthNumber - 1, dayNumber)
+  if (
+    parsed.getFullYear() !== yearNumber ||
+    parsed.getMonth() + 1 !== monthNumber ||
+    parsed.getDate() !== dayNumber
+  ) {
+    return null
+  }
+  return `${year}-${month}-${day}`
+}
+
+type ModalView = 'signup' | 'login' | 'success' | 'welcome'
+
 function splitDialPhone(full: string): {
   countryCode: '+34' | '+57' | 'otro'
   customCode: string
@@ -269,7 +315,21 @@ function RsvpFormInner({
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null)
   const [signupToggle, setSignupToggle] = useState(false)
   const [showSignupModal, setShowSignupModal] = useState(false)
-  const [modalView, setModalView] = useState<'signup' | 'login' | 'success'>('signup')
+  const [modalView, setModalView] = useState<ModalView>('signup')
+  const [welcomeFirstName, setWelcomeFirstName] = useState('')
+  const [welcomeLastName, setWelcomeLastName] = useState('')
+  const [welcomePhone, setWelcomePhone] = useState('')
+  const [welcomePhoneCode, setWelcomePhoneCode] = useState('+34')
+  const [welcomeCustomDialCode, setWelcomeCustomDialCode] = useState('')
+  const [welcomeBirthDay, setWelcomeBirthDay] = useState('')
+  const [welcomeBirthMonth, setWelcomeBirthMonth] = useState('')
+  const [welcomeBirthYear, setWelcomeBirthYear] = useState('')
+  const [welcomeChildFirstName, setWelcomeChildFirstName] = useState('')
+  const [welcomeChildLastName, setWelcomeChildLastName] = useState('')
+  const [welcomeChildBirthDay, setWelcomeChildBirthDay] = useState('')
+  const [welcomeChildBirthMonth, setWelcomeChildBirthMonth] = useState('')
+  const [welcomeChildBirthYear, setWelcomeChildBirthYear] = useState('')
+  const [welcomeProfileToast, setWelcomeProfileToast] = useState(false)
   const [submittedRsvpId, setSubmittedRsvpId] = useState<string | null>(null)
   const submittedRsvpIdRef = useRef<string | null>(null)
   const [inlineSignupEmail, setInlineSignupEmail] = useState('')
@@ -426,7 +486,11 @@ function RsvpFormInner({
       setIsLoggedIn(true)
       setLoggedInUserId(session.user.id)
       setShowSignupModal(true)
-      setModalView('success')
+      const storedChildName = stored.childLast
+        ? `${stored.childFirst} ${stored.childLast}`.trim()
+        : stored.childFirst
+      prefillWelcomeForm(stored.parentName, stored.parentPhone, storedChildName)
+      setModalView('welcome')
       sessionStorage.removeItem('miparty_oauth_pending')
       sessionStorage.removeItem(POST_RSVP_STORAGE_KEY)
     })
@@ -604,7 +668,8 @@ function RsvpFormInner({
     })
     setIsLoggedIn(true)
     setLoggedInUserId(uid)
-    setModalView('success')
+    prefillWelcomeForm(trimmedParentName, trimmedParentPhone)
+    setModalView('welcome')
   }
 
   const handleLoginAndLink = async () => {
@@ -632,7 +697,99 @@ function RsvpFormInner({
     await sb.from('rsvps').update({ user_id: data.user.id }).eq('id', submittedRsvpId)
     setIsLoggedIn(true)
     setLoggedInUserId(data.user.id)
-    setModalView('success')
+    const trimmedParentName = parentName.trim()
+    const trimmedParentPhoneNumber = parentPhoneNumber.trim()
+    const finalParentDial = resolveDialCode(parentCountryCode, parentCustomCode)
+    const trimmedParentPhone =
+      trimmedParentPhoneNumber.length > 0 ? `${finalParentDial}${trimmedParentPhoneNumber}` : ''
+    prefillWelcomeForm(trimmedParentName, trimmedParentPhone)
+    setModalView('welcome')
+  }
+
+  const prefillWelcomeForm = (
+    nameSource?: string,
+    phoneSource?: string,
+    childNameSource?: string
+  ) => {
+    const trimmedParentName = (nameSource ?? parentName).trim()
+    const parts = trimmedParentName.split(/\s+/).filter(Boolean)
+    setWelcomeFirstName(parts[0] ?? '')
+    setWelcomeLastName(parts.slice(1).join(' '))
+
+    let combinedChildName = childNameSource?.trim() ?? ''
+    if (!combinedChildName) {
+      const trimmedChildName = childName.trim()
+      const trimmedChildLastName = childLastName.trim()
+      combinedChildName =
+        trimmedChildLastName.length > 0
+          ? `${trimmedChildName} ${trimmedChildLastName}`
+          : trimmedChildName
+    }
+    const childParts = combinedChildName.split(/\s+/).filter(Boolean)
+    setWelcomeChildFirstName(childParts[0] ?? '')
+    setWelcomeChildLastName(childParts.slice(1).join(' '))
+    setWelcomeChildBirthDay('')
+    setWelcomeChildBirthMonth('')
+    setWelcomeChildBirthYear('')
+
+    let fullPhone = phoneSource?.trim() ?? ''
+    if (!fullPhone) {
+      const trimmedParentPhoneNumber = parentPhoneNumber.trim()
+      const finalParentDial = resolveDialCode(parentCountryCode, parentCustomCode)
+      fullPhone =
+        trimmedParentPhoneNumber.length > 0 ? `${finalParentDial}${trimmedParentPhoneNumber}` : ''
+    }
+    if (fullPhone) {
+      const phoneParts = splitDialPhone(fullPhone)
+      setWelcomePhoneCode(phoneParts.countryCode)
+      setWelcomeCustomDialCode(phoneParts.customCode)
+      setWelcomePhone(phoneParts.number)
+    } else {
+      setWelcomePhoneCode('+34')
+      setWelcomeCustomDialCode('')
+      setWelcomePhone('')
+    }
+    setWelcomeBirthDay('')
+    setWelcomeBirthMonth('')
+    setWelcomeBirthYear('')
+  }
+
+  const handleSaveWelcomeProfile = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return
+
+    const welcomeDial = resolveDialCode(welcomePhoneCode, welcomeCustomDialCode)
+    const welcomeFullPhone =
+      welcomePhone.trim().length > 0 ? `${welcomeDial}${welcomePhone.replace(/\s/g, '')}` : null
+    const welcomeBirthDate = composeBirthDateIso(welcomeBirthDay, welcomeBirthMonth, welcomeBirthYear)
+
+    await supabase.from('users').upsert({
+      id: user.id,
+      first_name: welcomeFirstName.trim(),
+      last_name: welcomeLastName.trim() || null,
+      phone: welcomeFullPhone,
+      birth_date: welcomeBirthDate,
+    })
+
+    const childBirthDate =
+      welcomeChildBirthYear && welcomeChildBirthMonth && welcomeChildBirthDay
+        ? `${welcomeChildBirthYear}-${welcomeChildBirthMonth.padStart(2, '0')}-${welcomeChildBirthDay.padStart(2, '0')}`
+        : null
+
+    if (childBirthDate) {
+      await supabase.from('children').insert({
+        user_id: user.id,
+        name: welcomeChildFirstName.trim(),
+        last_name: welcomeChildLastName.trim() || null,
+        birth_date: childBirthDate,
+      })
+    }
+
+    setShowSignupModal(false)
+    setWelcomeProfileToast(true)
+    window.setTimeout(() => setWelcomeProfileToast(false), 4000)
   }
 
   const handleInlineLogin = async () => {
@@ -1041,11 +1198,272 @@ END:VCALENDAR`
     }
   }
 
+  const welcomeBirthYears = Array.from({ length: 101 }, (_, index) =>
+    String(new Date().getFullYear() - index)
+  )
+
+  const renderWelcomeView = () => {
+    const displayFirstName =
+      welcomeFirstName.trim() ||
+      parentName.trim().split(/\s+/).filter(Boolean)[0] ||
+      'ahí'
+
+    const trimmedChildName = childName.trim()
+    const trimmedChildLastName = childLastName.trim()
+    const combinedChildName =
+      trimmedChildLastName.length > 0
+        ? `${trimmedChildName} ${trimmedChildLastName}`
+        : trimmedChildName ||
+          [welcomeChildFirstName.trim(), welcomeChildLastName.trim()].filter(Boolean).join(' ')
+
+    return (
+      <div className="pt-2">
+        <p className="text-center text-4xl" aria-hidden>
+          🎉
+        </p>
+        <h3 className="mt-2 text-center text-xl font-bold text-gray-900">
+          ¡Bienvenido/a a MiParty, {displayFirstName}!
+        </h3>
+        <p className="mt-2 text-center text-sm text-gray-500">
+          Con MiParty puedes organizar cumpleaños, gestionar confirmaciones y llevar el control de alergias
+          y comidas en un solo lugar.
+        </p>
+
+        <p className="mt-4 text-sm font-semibold text-gray-900">Completa tu perfil</p>
+
+        <div className="mt-3 space-y-3">
+          <div>
+            <label htmlFor="welcomeFirstName" className="mb-1.5 block text-sm font-medium text-gray-900">
+              Tu nombre
+            </label>
+            <input
+              id="welcomeFirstName"
+              type="text"
+              value={welcomeFirstName}
+              onChange={(e) => setWelcomeFirstName(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="welcomeLastName" className="mb-1.5 block text-sm font-medium text-gray-900">
+              Apellido(s)
+            </label>
+            <input
+              id="welcomeLastName"
+              type="text"
+              value={welcomeLastName}
+              onChange={(e) => setWelcomeLastName(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="welcomePhone" className="mb-1.5 block text-sm font-medium text-gray-900">
+              Teléfono
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={welcomePhoneCode}
+                onChange={(e) => setWelcomePhoneCode(e.target.value)}
+                className="rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                aria-label="Prefijo"
+              >
+                <option value="+34">🇪🇸 +34</option>
+                <option value="+57">🇨🇴 +57</option>
+                <option value="otro">✏️ Otro</option>
+              </select>
+              {welcomePhoneCode === 'otro' ? (
+                <input
+                  type="text"
+                  inputMode="tel"
+                  value={welcomeCustomDialCode}
+                  onChange={(e) => setWelcomeCustomDialCode(sanitizeDialPrefix(e.target.value))}
+                  maxLength={5}
+                  placeholder="+00"
+                  aria-label="Prefijo internacional"
+                  className="w-16 shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                />
+              ) : null}
+              <input
+                id="welcomePhone"
+                type="tel"
+                inputMode="tel"
+                value={welcomePhone}
+                onChange={(e) => setWelcomePhone(e.target.value)}
+                placeholder="Ej. 612345678"
+                className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-1.5 flex items-center gap-1.5">
+              <span className="text-sm font-medium text-gray-900">Tu fecha de nacimiento</span>
+              <span className="text-xs text-gray-400">(opcional)</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <select
+                value={welcomeBirthDay}
+                onChange={(e) => setWelcomeBirthDay(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                aria-label="Día"
+              >
+                <option value="">Día</option>
+                {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((day) => (
+                  <option key={day} value={day}>
+                    {day}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={welcomeBirthMonth}
+                onChange={(e) => setWelcomeBirthMonth(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                aria-label="Mes"
+              >
+                <option value="">Mes</option>
+                {SPANISH_MONTHS.map((monthName, index) => {
+                  const monthValue = String(index + 1).padStart(2, '0')
+                  return (
+                    <option key={monthValue} value={monthValue}>
+                      {monthName}
+                    </option>
+                  )
+                })}
+              </select>
+              <select
+                value={welcomeBirthYear}
+                onChange={(e) => setWelcomeBirthYear(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                aria-label="Año"
+              >
+                <option value="">Año</option>
+                {welcomeBirthYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-4 text-sm font-semibold text-gray-900">Perfil de {combinedChildName}</p>
+
+        <div className="mt-3 space-y-3">
+          <div>
+            <label
+              htmlFor="welcomeChildFirstName"
+              className="mb-1.5 block text-sm font-medium text-gray-900"
+            >
+              Nombre del niño/a
+            </label>
+            <input
+              id="welcomeChildFirstName"
+              type="text"
+              value={welcomeChildFirstName}
+              onChange={(e) => setWelcomeChildFirstName(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="welcomeChildLastName"
+              className="mb-1.5 block text-sm font-medium text-gray-900"
+            >
+              Apellido(s)
+            </label>
+            <input
+              id="welcomeChildLastName"
+              type="text"
+              value={welcomeChildLastName}
+              onChange={(e) => setWelcomeChildLastName(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-900">Fecha de nacimiento</label>
+            <div className="grid grid-cols-3 gap-2">
+              <select
+                value={welcomeChildBirthDay}
+                onChange={(e) => setWelcomeChildBirthDay(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                aria-label="Día"
+              >
+                <option value="">Día</option>
+                {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((day) => (
+                  <option key={`child-${day}`} value={day}>
+                    {day}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={welcomeChildBirthMonth}
+                onChange={(e) => setWelcomeChildBirthMonth(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                aria-label="Mes"
+              >
+                <option value="">Mes</option>
+                {SPANISH_MONTHS.map((monthName, index) => {
+                  const monthValue = String(index + 1).padStart(2, '0')
+                  return (
+                    <option key={`child-${monthValue}`} value={monthValue}>
+                      {monthName}
+                    </option>
+                  )
+                })}
+              </select>
+              <select
+                value={welcomeChildBirthYear}
+                onChange={(e) => setWelcomeChildBirthYear(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                aria-label="Año"
+              >
+                <option value="">Año</option>
+                {welcomeBirthYears.map((year) => (
+                  <option key={`child-${year}`} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="mt-1 text-xs text-gray-400">(importante para recordatorios)</p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void handleSaveWelcomeProfile()}
+          className={`mt-4 w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
+        >
+          Completar mi perfil y confirmar asistencia
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowSignupModal(false)}
+          className="mt-3 w-full text-center text-sm text-gray-400 underline hover:text-gray-600"
+        >
+          Ahora no, confirmar mi asistencia
+        </button>
+      </div>
+    )
+  }
+
+  const renderWelcomeProfileToast = () =>
+    welcomeProfileToast ? (
+      <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-center text-sm text-green-700">
+        ¡Perfil completado! 🎉
+      </p>
+    ) : null
+
   function renderPostSignupModal() {
     if (!showSignupModal || isPreview) return null
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
-        <div className="relative mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+        <div className="relative mx-4 max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
           <button
             type="button"
             className="absolute right-3 top-2 text-2xl leading-none text-gray-400 hover:text-gray-700"
@@ -1209,6 +1627,8 @@ END:VCALENDAR`
             </div>
           ) : null}
 
+          {modalView === 'welcome' ? renderWelcomeView() : null}
+
           {modalView === 'success' ? (
             <div className="pt-2 text-center">
               <p className="text-4xl" aria-hidden>
@@ -1221,7 +1641,7 @@ END:VCALENDAR`
             </div>
           ) : null}
 
-          {signupFlowError && modalView !== 'success' ? (
+          {signupFlowError && modalView !== 'success' && modalView !== 'welcome' ? (
             <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-center text-xs text-red-700">
               {signupFlowError}
             </p>
@@ -1234,6 +1654,7 @@ END:VCALENDAR`
   if (submittedStatus === 'confirmed') {
     return (
       <>
+      {renderWelcomeProfileToast()}
       <section className={`rounded-2xl border ${activeTheme.border} bg-white p-5 shadow-xl`}>
         <p
           className={`text-center text-sm font-medium ${
@@ -1303,6 +1724,7 @@ END:VCALENDAR`
   if (submittedStatus === 'declined') {
     return (
       <>
+      {renderWelcomeProfileToast()}
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
         <p className="whitespace-pre-line text-center text-sm font-medium text-gray-800">
           {'Gracias por avisar 🙌\n¡Esperamos veros en la próxima!'}
@@ -1334,6 +1756,7 @@ END:VCALENDAR`
   if (submittedStatus === 'maybe') {
     return (
       <>
+      {renderWelcomeProfileToast()}
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
         <p className="whitespace-pre-line text-center text-sm font-medium text-gray-800">
           {
@@ -1473,6 +1896,8 @@ END:VCALENDAR`
           ¡Bienvenido/a de vuelta! Hemos pre-rellenado tu información.
         </p>
       ) : null}
+
+      {renderWelcomeProfileToast()}
 
       <div className="flex h-10 items-center justify-center py-2 text-center text-gray-500">
         <p className={`whitespace-pre-line ${attendance === 'maybe' ? 'text-xs' : 'text-sm'}`}>{helperText}</p>
