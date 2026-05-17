@@ -6,7 +6,7 @@
 import AppNav from '@/components/AppNav'
 import { ChildrenSection, type DashboardChildRow } from '@/components/ChildrenSection'
 import { brand } from '@/lib/brand'
-import { CalendarDays, Map as MapIcon, X } from 'lucide-react'
+import { CalendarDays, Map as MapIcon, Pencil, X } from 'lucide-react'
 import Link from 'next/link'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
@@ -232,6 +232,238 @@ const profileInputClassName = `w-full rounded-lg border border-gray-300 bg-white
 
 const profileBirthDateSelectClassName =
   'w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2'
+
+const childFieldDisabledInputClassName =
+  'bg-gray-50 text-gray-500 cursor-not-allowed border-gray-200'
+
+const childFieldDisabledSelectClassName =
+  'bg-gray-50 text-gray-500 cursor-not-allowed border-gray-200 appearance-none'
+
+type ModalActionButtonsProps = {
+  saveLabel: string
+  cancelLabel?: string
+  onCancel: () => void
+  hasChanges: boolean
+  saving?: boolean
+  saveType?: 'button' | 'submit'
+  onSave?: () => void
+}
+
+function ModalActionButtons({
+  saveLabel,
+  cancelLabel = 'Cancelar',
+  onCancel,
+  hasChanges,
+  saving = false,
+  saveType = 'button',
+  onSave,
+}: ModalActionButtonsProps) {
+  const saveDisabled = !hasChanges || saving
+
+  return (
+    <div className="mt-4 flex gap-3">
+      <button
+        type={saveType}
+        onClick={saveType === 'button' ? onSave : undefined}
+        disabled={saveDisabled}
+        className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
+          hasChanges && !saving
+            ? brand.buttonPrimary
+            : 'cursor-not-allowed bg-gray-200 text-gray-400'
+        }`}
+      >
+        {saving ? 'Guardando…' : saveLabel}
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+      >
+        {cancelLabel}
+      </button>
+    </div>
+  )
+}
+
+type ChildFormDisabledField = 'nombre' | 'apellido' | 'shortName' | 'birth_date'
+
+const viewChildLockedFields: ChildFormDisabledField[] = ['nombre', 'apellido', 'birth_date']
+
+type ChildFormFieldsProps = {
+  idPrefix?: string
+  nombre: string
+  setNombre: (value: string) => void
+  apellido: string
+  setApellido: (value: string) => void
+  shortName: string
+  setShortName: (value: string) => void
+  birthDay: string
+  setBirthDay: (value: string) => void
+  birthMonth: string
+  setBirthMonth: (value: string) => void
+  birthYear: string
+  setBirthYear: (value: string) => void
+  allergies: string
+  setAllergies: (value: string) => void
+  birthYears: string[]
+  disabledFields?: ChildFormDisabledField[]
+  nombreRequired?: boolean
+}
+
+function isChildFieldDisabled(
+  disabledFields: ChildFormDisabledField[] | undefined,
+  field: ChildFormDisabledField
+) {
+  return disabledFields?.includes(field) ?? false
+}
+
+function ChildFormFields({
+  idPrefix = 'child',
+  nombre,
+  setNombre,
+  apellido,
+  setApellido,
+  shortName,
+  setShortName,
+  birthDay,
+  setBirthDay,
+  birthMonth,
+  setBirthMonth,
+  birthYear,
+  setBirthYear,
+  allergies,
+  setAllergies,
+  birthYears,
+  disabledFields,
+  nombreRequired = false,
+}: ChildFormFieldsProps) {
+  const nombreDisabled = isChildFieldDisabled(disabledFields, 'nombre')
+  const apellidoDisabled = isChildFieldDisabled(disabledFields, 'apellido')
+  const birthDisabled = isChildFieldDisabled(disabledFields, 'birth_date')
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor={`${idPrefix}Nombre`} className="text-sm font-medium text-gray-700">
+            Nombre
+          </label>
+          <input
+            id={`${idPrefix}Nombre`}
+            type="text"
+            autoComplete="given-name"
+            value={nombre}
+            onChange={(event) => setNombre(event.target.value)}
+            required={nombreRequired}
+            disabled={nombreDisabled}
+            className={`${profileInputClassName} ${nombreDisabled ? childFieldDisabledInputClassName : ''}`}
+            placeholder="Ej. Sofía"
+          />
+        </div>
+        <div>
+          <label htmlFor={`${idPrefix}Apellido`} className="text-sm font-medium text-gray-700">
+            Apellido(s)
+          </label>
+          <input
+            id={`${idPrefix}Apellido`}
+            type="text"
+            autoComplete="family-name"
+            value={apellido}
+            onChange={(event) => setApellido(event.target.value)}
+            disabled={apellidoDisabled}
+            className={`${profileInputClassName} ${apellidoDisabled ? childFieldDisabledInputClassName : ''}`}
+            placeholder="Ej. García"
+          />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between">
+          <label htmlFor={`${idPrefix}ShortName`} className="text-sm font-medium text-gray-700">
+            Nombre corto o apodo
+          </label>
+          <span className="text-xs text-gray-400">Opcional</span>
+        </div>
+        <input
+          id={`${idPrefix}ShortName`}
+          type="text"
+          value={shortName}
+          onChange={(event) => setShortName(event.target.value)}
+          className={profileInputClassName}
+          placeholder="Ej. Sofi"
+        />
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-sm font-medium text-gray-900">Fecha de nacimiento</p>
+        <div className="grid grid-cols-3 gap-2">
+          <select
+            value={birthDay}
+            onChange={(event) => setBirthDay(event.target.value)}
+            disabled={birthDisabled}
+            className={`${profileBirthDateSelectClassName} ${birthDisabled ? childFieldDisabledSelectClassName : ''}`}
+            aria-label="Día"
+          >
+            <option value="">Día</option>
+            {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((day) => (
+              <option key={day} value={day}>
+                {day}
+              </option>
+            ))}
+          </select>
+          <select
+            value={birthMonth}
+            onChange={(event) => setBirthMonth(event.target.value)}
+            disabled={birthDisabled}
+            className={`${profileBirthDateSelectClassName} ${birthDisabled ? childFieldDisabledSelectClassName : ''}`}
+            aria-label="Mes"
+          >
+            <option value="">Mes</option>
+            {SPANISH_MONTHS.map((monthName, index) => {
+              const monthValue = String(index + 1).padStart(2, '0')
+              return (
+                <option key={monthValue} value={monthValue}>
+                  {monthName}
+                </option>
+              )
+            })}
+          </select>
+          <select
+            value={birthYear}
+            onChange={(event) => setBirthYear(event.target.value)}
+            disabled={birthDisabled}
+            className={`${profileBirthDateSelectClassName} ${birthDisabled ? childFieldDisabledSelectClassName : ''}`}
+            aria-label="Año"
+          >
+            <option value="">Año</option>
+            {birthYears.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between">
+          <label htmlFor={`${idPrefix}Allergies`} className="text-sm font-medium text-gray-700">
+            Alergias e intolerancias
+          </label>
+          <span className="text-xs text-gray-400">Opcional</span>
+        </div>
+        <input
+          id={`${idPrefix}Allergies`}
+          type="text"
+          value={allergies}
+          onChange={(event) => setAllergies(event.target.value)}
+          className={profileInputClassName}
+          placeholder="Ej. Gluten, lactosa"
+        />
+      </div>
+    </>
+  )
+}
 
 function isGoogleUser(user: User): boolean {
   return (
@@ -474,7 +706,30 @@ export default function DashboardHomePage() {
   const [partnerSaving, setPartnerSaving] = useState(false)
   const [partnerModalError, setPartnerModalError] = useState<string | null>(null)
   const [partnerSaveSuccess, setPartnerSaveSuccess] = useState(false)
+  const [originalPartnerPhone, setOriginalPartnerPhone] = useState('')
   const partnerDialRef = useRef<HTMLDivElement>(null)
+  const [showAddChildModal, setShowAddChildModal] = useState(false)
+  const [childFirstName, setChildFirstName] = useState('')
+  const [childLastName, setChildLastName] = useState('')
+  const [childShortName, setChildShortName] = useState('')
+  const [childBirthDay, setChildBirthDay] = useState('')
+  const [childBirthMonth, setChildBirthMonth] = useState('')
+  const [childBirthYear, setChildBirthYear] = useState('')
+  const [childAllergies, setChildAllergies] = useState('')
+  const [childSaving, setChildSaving] = useState(false)
+  const [childModalError, setChildModalError] = useState<string | null>(null)
+  const [childAddSuccessToast, setChildAddSuccessToast] = useState(false)
+  const [viewingChild, setViewingChild] = useState<DashboardChildRow | null>(null)
+  const [viewChildFirstName, setViewChildFirstName] = useState('')
+  const [viewChildLastName, setViewChildLastName] = useState('')
+  const [viewChildShortName, setViewChildShortName] = useState('')
+  const [viewChildBirthDay, setViewChildBirthDay] = useState('')
+  const [viewChildBirthMonth, setViewChildBirthMonth] = useState('')
+  const [viewChildBirthYear, setViewChildBirthYear] = useState('')
+  const [viewChildAllergies, setViewChildAllergies] = useState('')
+  const [viewChildSaving, setViewChildSaving] = useState(false)
+  const [viewChildError, setViewChildError] = useState<string | null>(null)
+  const [childUpdateSuccessToast, setChildUpdateSuccessToast] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [authUser, setAuthUser] = useState<User | null>(null)
   const [userDbProfile, setUserDbProfile] = useState<{
@@ -524,6 +779,90 @@ export default function DashboardHomePage() {
     },
     [supabase]
   )
+
+  const loadChildren = useCallback(
+    async (uid: string) => {
+      const { data, error: childrenError } = await supabase
+        .from('children')
+        .select('id, name, last_name, birth_date, avatar_url, short_name, allergies')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: true })
+
+      if (!childrenError && data) {
+        setChildren(
+          (data as DashboardChildRow[]).map((row) => ({
+            ...row,
+            allergies: row.allergies ?? null,
+          }))
+        )
+      }
+    },
+    [supabase]
+  )
+
+  const childBirthYears = useMemo(
+    () => Array.from({ length: 101 }, (_, index) => String(new Date().getFullYear() - index)),
+    []
+  )
+
+  const viewChildDisabledFields = viewingChild ? viewChildLockedFields : []
+
+  const profileCurrentPhone = useMemo(
+    () => buildFullPhone(profileCountryCode, profileCustomCode, profilePhoneNumber),
+    [profileCountryCode, profileCustomCode, profilePhoneNumber]
+  )
+
+  const profileHasChanges = useMemo(() => {
+    const birthIso = composeBirthDateIso(profileBirthDay, profileBirthMonth, profileBirthYear)
+    const originalBirth = userDbProfile?.birth_date ?? null
+    return (
+      profileFirstName !== (userDbProfile?.first_name || '') ||
+      profileLastName !== (userDbProfile?.last_name || '') ||
+      profileCurrentPhone !== profileInitialPhone ||
+      (birthIso ?? null) !== (originalBirth ?? null)
+    )
+  }, [
+    profileFirstName,
+    profileLastName,
+    profileCurrentPhone,
+    profileInitialPhone,
+    profileBirthDay,
+    profileBirthMonth,
+    profileBirthYear,
+    userDbProfile,
+  ])
+
+  const partnerCurrentPhone = useMemo(
+    () => buildFullPhone(partnerCountryCode, partnerCustomDialCode, partnerPhoneNumber),
+    [partnerCountryCode, partnerCustomDialCode, partnerPhoneNumber]
+  )
+
+  const partnerHasChanges = useMemo(() => {
+    if (!partner) {
+      return partnerFirstName.trim() !== ''
+    }
+    return (
+      partnerFirstName !== (partner.full_name?.split(' ')[0] || '') ||
+      partnerLastName !== (partner.last_name || '') ||
+      partnerCurrentPhone !== originalPartnerPhone
+    )
+  }, [
+    partner,
+    partnerFirstName,
+    partnerLastName,
+    partnerCurrentPhone,
+    originalPartnerPhone,
+  ])
+
+  const childAddHasChanges = childFirstName.trim() !== ''
+
+  const childHasChanges = useMemo(() => {
+    if (!viewingChild) return false
+    return (
+      viewChildShortName !== (viewingChild.short_name || '') ||
+      viewChildAllergies !== (viewingChild.allergies || '')
+    )
+  }, [viewingChild, viewChildShortName, viewChildAllergies])
 
   const { upcomingCount, pastCount } = useMemo(() => {
     const upIds = new Set<string>()
@@ -652,7 +991,7 @@ export default function DashboardHomePage() {
           .eq('user_id', user.id),
         supabase
           .from('children')
-          .select('id, name, last_name, birth_date, avatar_url, short_name')
+          .select('id, name, last_name, birth_date, avatar_url, short_name, allergies')
           .eq('user_id', user.id)
           .order('created_at', { ascending: true }),
         supabase
@@ -667,7 +1006,10 @@ export default function DashboardHomePage() {
       const familyMembers = familyRes.data as FamilyMemberPartner[] | null
       setPartner(familyMembers?.[0] ?? null)
 
-      const loadedChildren = (childrenRes.data ?? []) as DashboardChildRow[]
+      const loadedChildren = (childrenRes.data ?? []).map((row) => ({
+        ...(row as DashboardChildRow),
+        allergies: (row as DashboardChildRow).allergies ?? null,
+      }))
       if (childrenRes.error) {
         setChildren([])
       } else {
@@ -810,12 +1152,14 @@ export default function DashboardHomePage() {
       setPartnerCountryCode(phoneParts.countryCode)
       setPartnerCustomDialCode(phoneParts.customCode)
       setPartnerPhoneNumber(phoneParts.number)
+      setOriginalPartnerPhone(partner.phone ?? '')
     } else {
       setPartnerFirstName('')
       setPartnerLastName('')
       setPartnerCountryCode('+34')
       setPartnerCustomDialCode('')
       setPartnerPhoneNumber('')
+      setOriginalPartnerPhone('')
     }
   }, [showAddPartnerModal, partner])
 
@@ -882,6 +1226,135 @@ export default function DashboardHomePage() {
     setPartnerSaving(false)
     setPartnerSaveSuccess(true)
     window.setTimeout(() => setPartnerSaveSuccess(false), 2000)
+  }
+
+  useEffect(() => {
+    if (!showAddChildModal) return
+    setChildModalError(null)
+    setChildFirstName('')
+    setChildLastName('')
+    setChildShortName('')
+    setChildBirthDay('')
+    setChildBirthMonth('')
+    setChildBirthYear('')
+    setChildAllergies('')
+  }, [showAddChildModal])
+
+  const handleChildSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setChildModalError(null)
+    setChildSaving(true)
+
+    const trimmedName = childFirstName.trim()
+    const trimmedLastName = childLastName.trim()
+    const trimmedShortName = childShortName.trim()
+    const trimmedAllergies = childAllergies.trim()
+
+    if (!trimmedName) {
+      setChildModalError('El nombre es obligatorio.')
+      setChildSaving(false)
+      return
+    }
+
+    if (!userId) {
+      setChildModalError('No se pudo obtener tu sesión.')
+      setChildSaving(false)
+      return
+    }
+
+    const childBirthDate =
+      childBirthDay && childBirthMonth && childBirthYear
+        ? `${childBirthYear}-${childBirthMonth.padStart(2, '0')}-${childBirthDay.padStart(2, '0')}`
+        : null
+
+    const { error: insertError } = await supabase.from('children').insert({
+      user_id: userId,
+      name: trimmedName,
+      last_name: trimmedLastName || null,
+      short_name: trimmedShortName || null,
+      birth_date: childBirthDate || null,
+      allergies: trimmedAllergies || null,
+    })
+
+    if (insertError) {
+      setChildModalError(insertError.message)
+      setChildSaving(false)
+      return
+    }
+
+    await loadChildren(userId)
+    setShowAddChildModal(false)
+    setChildSaving(false)
+    setChildAddSuccessToast(true)
+    window.setTimeout(() => setChildAddSuccessToast(false), 2000)
+  }
+
+  useEffect(() => {
+    if (!viewingChild) return
+    setViewChildError(null)
+    setViewChildFirstName(viewingChild.name ?? '')
+    setViewChildLastName(viewingChild.last_name ?? '')
+    setViewChildShortName(viewingChild.short_name ?? '')
+    const birth = isoToBirthParts(viewingChild.birth_date)
+    setViewChildBirthDay(birth.day)
+    setViewChildBirthMonth(birth.month)
+    setViewChildBirthYear(birth.year)
+    setViewChildAllergies(viewingChild.allergies ?? '')
+  }, [viewingChild])
+
+  const handleViewChildSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!viewingChild) return
+
+    setViewChildError(null)
+    setViewChildSaving(true)
+
+    const trimmedName = viewChildFirstName.trim()
+    const trimmedLastName = viewChildLastName.trim()
+    const trimmedShortName = viewChildShortName.trim()
+    const trimmedAllergies = viewChildAllergies.trim()
+
+    if (!userId) {
+      setViewChildError('No se pudo obtener tu sesión.')
+      setViewChildSaving(false)
+      return
+    }
+
+    const childBirthDate =
+      viewChildBirthDay && viewChildBirthMonth && viewChildBirthYear
+        ? `${viewChildBirthYear}-${viewChildBirthMonth.padStart(2, '0')}-${viewChildBirthDay.padStart(2, '0')}`
+        : null
+
+    const updates: {
+      allergies: string | null
+      name?: string
+      last_name?: string | null
+      short_name?: string | null
+      birth_date?: string | null
+    } = {
+      allergies: trimmedAllergies || null,
+    }
+    if (!viewingChild.name) updates.name = trimmedName
+    if (!viewingChild.last_name) updates.last_name = trimmedLastName || null
+    if (!viewingChild.short_name) updates.short_name = trimmedShortName || null
+    if (!viewingChild.birth_date) updates.birth_date = childBirthDate || null
+
+    const { error: updateError } = await supabase
+      .from('children')
+      .update(updates)
+      .eq('id', viewingChild.id)
+
+    if (updateError) {
+      setViewChildError(updateError.message)
+      setViewChildSaving(false)
+      return
+    }
+
+    await loadChildren(userId)
+    setViewingChild(null)
+    setViewChildSaving(false)
+    setChildUpdateSuccessToast(true)
+    window.setTimeout(() => setChildUpdateSuccessToast(false), 2000)
   }
 
   const profileBirthYears = Array.from({ length: 101 }, (_, index) =>
@@ -1132,7 +1605,15 @@ export default function DashboardHomePage() {
 
         {parentProfile ? (
           <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8">
-            <div className="flex min-h-[5.625rem] flex-row items-center gap-3 rounded-2xl bg-white p-3 shadow-sm sm:gap-4">
+            <div className="relative flex min-h-[5.625rem] flex-row items-center gap-3 rounded-2xl bg-white p-3 shadow-sm sm:gap-4">
+              <button
+                type="button"
+                onClick={openProfileModal}
+                className="absolute top-2 right-2 rounded-full p-1 text-gray-300 transition hover:bg-gray-100 hover:text-gray-500"
+                aria-label="Editar perfil"
+              >
+                <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
+              </button>
               {showParentAvatar ? (
                 <img
                   src={avatarUrl}
@@ -1149,7 +1630,7 @@ export default function DashboardHomePage() {
                   {profileInitials.slice(0, 1)}
                 </div>
               )}
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 pr-6">
                 <p className="truncate text-base font-semibold text-gray-900">
                   {parentProfile.fullName ?? 'Tu cuenta'}
                 </p>
@@ -1157,13 +1638,6 @@ export default function DashboardHomePage() {
                   <p className="truncate text-sm text-gray-500">{parentProfile.phone}</p>
                 ) : null}
                 <p className="truncate text-sm text-gray-400">{parentProfile.email}</p>
-                <button
-                  type="button"
-                  onClick={openProfileModal}
-                  className={`mt-1 inline-block text-xs font-medium underline ${brand.accentText} ${brand.textBrandHover}`}
-                >
-                  Editar perfil
-                </button>
               </div>
             </div>
             <div
@@ -1176,10 +1650,23 @@ export default function DashboardHomePage() {
                   setShowAddPartnerModal(true)
                 }
               }}
-              className={`flex min-h-[5.625rem] cursor-pointer flex-row items-center gap-3 rounded-2xl bg-white p-3 shadow-sm sm:gap-4 ${
+              className={`relative flex min-h-[5.625rem] cursor-pointer flex-row items-center gap-3 rounded-2xl bg-white p-3 shadow-sm sm:gap-4 ${
                 partner ? 'border border-gray-100' : 'border border-dashed border-gray-200'
               }`}
             >
+              {partner ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setShowAddPartnerModal(true)
+                  }}
+                  className="absolute top-2 right-2 rounded-full p-1 text-gray-300 transition hover:bg-gray-100 hover:text-gray-500"
+                  aria-label="Editar pareja"
+                >
+                  <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
+                </button>
+              ) : null}
               <div
                 className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-semibold ${
                   partner ? partnerAvatarColors[0] : 'border-2 bg-gray-50 text-gray-400'
@@ -1188,7 +1675,7 @@ export default function DashboardHomePage() {
               >
                 {partner ? getPartnerInitials(partner.full_name, partner.last_name) : '+'}
               </div>
-              <div className="min-w-0 flex-1 text-left">
+              <div className={`min-w-0 flex-1 text-left ${partner ? 'pr-6' : ''}`}>
                 {partner ? (
                   <>
                     <p className="truncate text-base font-semibold text-gray-900">
@@ -1197,16 +1684,6 @@ export default function DashboardHomePage() {
                     {partner.phone ? (
                       <p className="truncate text-sm text-gray-500">{partner.phone}</p>
                     ) : null}
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        setShowAddPartnerModal(true)
-                      }}
-                      className={`mt-1 inline-block text-xs font-medium underline ${brand.accentText} ${brand.textBrandHover}`}
-                    >
-                      Editar
-                    </button>
                   </>
                 ) : (
                   <p className="text-xs font-medium text-gray-400">Añadir pareja</p>
@@ -1217,7 +1694,13 @@ export default function DashboardHomePage() {
         ) : null}
 
         {userId ? (
-          <ChildrenSection userId={userId} initialChildren={children} isLoading={loading} />
+          <ChildrenSection
+            userId={userId}
+            initialChildren={children}
+            isLoading={loading}
+            onAddChild={() => setShowAddChildModal(true)}
+            onViewChild={(child) => setViewingChild(child)}
+          />
         ) : null}
 
         <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-xl sm:p-6">
@@ -1391,6 +1874,24 @@ export default function DashboardHomePage() {
         </p>
       ) : null}
 
+      {childAddSuccessToast ? (
+        <div
+          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
+          role="status"
+        >
+          🎉 Perfil añadido
+        </div>
+      ) : null}
+
+      {childUpdateSuccessToast ? (
+        <p
+          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
+          role="status"
+        >
+          ✓ Perfil actualizado
+        </p>
+      ) : null}
+
       {profileSuccessToast ? (
         <div className="fixed bottom-6 left-1/2 z-[60] flex max-w-sm -translate-x-1/2 flex-col items-center gap-2 px-2">
           <div className="rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-lg">
@@ -1428,30 +1929,31 @@ export default function DashboardHomePage() {
               </div>
 
               <div className="space-y-4">
-                <div>
-                  <label htmlFor="profileFirstName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                    Nombre
-                  </label>
-                  <input
-                    id="profileFirstName"
-                    type="text"
-                    value={profileFirstName}
-                    onChange={(e) => setProfileFirstName(e.target.value)}
-                    className={profileInputClassName}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="profileLastName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                    Apellido(s)
-                  </label>
-                  <input
-                    id="profileLastName"
-                    type="text"
-                    value={profileLastName}
-                    onChange={(e) => setProfileLastName(e.target.value)}
-                    className={profileInputClassName}
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="profileFirstName" className="text-sm font-medium text-gray-700">
+                      Nombre
+                    </label>
+                    <input
+                      id="profileFirstName"
+                      type="text"
+                      value={profileFirstName}
+                      onChange={(e) => setProfileFirstName(e.target.value)}
+                      className={profileInputClassName}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="profileLastName" className="text-sm font-medium text-gray-700">
+                      Apellido(s)
+                    </label>
+                    <input
+                      id="profileLastName"
+                      type="text"
+                      value={profileLastName}
+                      onChange={(e) => setProfileLastName(e.target.value)}
+                      className={profileInputClassName}
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -1719,21 +2221,13 @@ export default function DashboardHomePage() {
                   </p>
                 ) : null}
 
-                <button
-                  type="button"
-                  disabled={profileSaving}
-                  onClick={() => void handleProfileSave()}
-                  className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary} disabled:cursor-not-allowed disabled:opacity-60`}
-                >
-                  {profileSaving ? 'Guardando…' : 'Guardar cambios'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowProfileModal(false)}
-                  className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonOutline}`}
-                >
-                  Cancelar
-                </button>
+                <ModalActionButtons
+                  saveLabel="Guardar cambios"
+                  onCancel={() => setShowProfileModal(false)}
+                  hasChanges={profileHasChanges}
+                  saving={profileSaving}
+                  onSave={() => void handleProfileSave()}
+                />
               </div>
             </div>
           </div>
@@ -1760,34 +2254,36 @@ export default function DashboardHomePage() {
               {partner ? 'Editar pareja' : 'Añadir pareja'}
             </h2>
             <form onSubmit={handlePartnerSave} className="mt-4 space-y-4">
-              <div>
-                <label htmlFor="partnerFirstName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                  Nombre
-                </label>
-                <input
-                  id="partnerFirstName"
-                  type="text"
-                  autoComplete="given-name"
-                  value={partnerFirstName}
-                  onChange={(event) => setPartnerFirstName(event.target.value)}
-                  required
-                  className={partnerInputClassName}
-                  placeholder="Ej. Carlos"
-                />
-              </div>
-              <div>
-                <label htmlFor="partnerLastName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                  Apellido(s)
-                </label>
-                <input
-                  id="partnerLastName"
-                  type="text"
-                  autoComplete="family-name"
-                  value={partnerLastName}
-                  onChange={(event) => setPartnerLastName(event.target.value)}
-                  className={partnerInputClassName}
-                  placeholder="Ej. López"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="partnerFirstName" className="text-sm font-medium text-gray-700">
+                    Nombre
+                  </label>
+                  <input
+                    id="partnerFirstName"
+                    type="text"
+                    autoComplete="given-name"
+                    value={partnerFirstName}
+                    onChange={(event) => setPartnerFirstName(event.target.value)}
+                    required
+                    className={partnerInputClassName}
+                    placeholder="Ej. Carlos"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="partnerLastName" className="text-sm font-medium text-gray-700">
+                    Apellido(s)
+                  </label>
+                  <input
+                    id="partnerLastName"
+                    type="text"
+                    autoComplete="family-name"
+                    value={partnerLastName}
+                    onChange={(event) => setPartnerLastName(event.target.value)}
+                    className={partnerInputClassName}
+                    placeholder="Ej. López"
+                  />
+                </div>
               </div>
               <div>
                 <label htmlFor="partnerPhoneNumber" className="mb-1.5 block text-sm font-medium text-gray-900">
@@ -1900,20 +2396,133 @@ export default function DashboardHomePage() {
                 </p>
               ) : null}
 
-              <button
-                type="submit"
-                disabled={partnerSaving}
-                className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-60 ${brand.buttonPrimary}`}
-              >
-                {partnerSaving ? 'Guardando…' : 'Guardar'}
-              </button>
+              <ModalActionButtons
+                saveLabel="Guardar"
+                onCancel={() => setShowAddPartnerModal(false)}
+                hasChanges={partnerHasChanges}
+                saving={partnerSaving}
+                saveType="submit"
+              />
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {showAddChildModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div
+            className="relative mx-4 flex max-h-[85vh] w-full max-w-sm flex-col overflow-y-auto rounded-2xl bg-white shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-child-modal-title"
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-6 py-4">
+              <h2 id="add-child-modal-title" className="text-lg font-semibold text-gray-900">
+                Añadir hijo/a
+              </h2>
               <button
                 type="button"
-                onClick={() => setShowAddPartnerModal(false)}
-                className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonOutline}`}
+                onClick={() => setShowAddChildModal(false)}
+                className="shrink-0 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                aria-label="Cerrar"
               >
-                Cancelar
+                <X className="h-5 w-5" strokeWidth={2} aria-hidden />
               </button>
+            </div>
+            <form onSubmit={handleChildSave} className="space-y-4 px-6 py-4">
+              <ChildFormFields
+                idPrefix="child"
+                nombre={childFirstName}
+                setNombre={setChildFirstName}
+                apellido={childLastName}
+                setApellido={setChildLastName}
+                shortName={childShortName}
+                setShortName={setChildShortName}
+                birthDay={childBirthDay}
+                setBirthDay={setChildBirthDay}
+                birthMonth={childBirthMonth}
+                setBirthMonth={setChildBirthMonth}
+                birthYear={childBirthYear}
+                setBirthYear={setChildBirthYear}
+                allergies={childAllergies}
+                setAllergies={setChildAllergies}
+                birthYears={childBirthYears}
+                nombreRequired
+              />
+
+              {childModalError ? (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {childModalError}
+                </p>
+              ) : null}
+
+              <ModalActionButtons
+                saveLabel="Guardar hijo/a"
+                onCancel={() => setShowAddChildModal(false)}
+                hasChanges={childAddHasChanges}
+                saving={childSaving}
+                saveType="submit"
+              />
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {viewingChild ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div
+            className="relative mx-4 flex max-h-[85vh] w-full max-w-sm flex-col overflow-y-auto rounded-2xl bg-white shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="view-child-modal-title"
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-6 py-4">
+              <h2 id="view-child-modal-title" className="text-lg font-semibold text-gray-900">
+                Perfil de {viewingChild.name}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setViewingChild(null)}
+                className="shrink-0 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                aria-label="Cerrar"
+              >
+                <X className="h-5 w-5" strokeWidth={2} aria-hidden />
+              </button>
+            </div>
+            <form onSubmit={handleViewChildSave} className="space-y-4 px-6 py-4">
+              <ChildFormFields
+                idPrefix="viewChild"
+                nombre={viewChildFirstName}
+                setNombre={setViewChildFirstName}
+                apellido={viewChildLastName}
+                setApellido={setViewChildLastName}
+                shortName={viewChildShortName}
+                setShortName={setViewChildShortName}
+                birthDay={viewChildBirthDay}
+                setBirthDay={setViewChildBirthDay}
+                birthMonth={viewChildBirthMonth}
+                setBirthMonth={setViewChildBirthMonth}
+                birthYear={viewChildBirthYear}
+                setBirthYear={setViewChildBirthYear}
+                allergies={viewChildAllergies}
+                setAllergies={setViewChildAllergies}
+                birthYears={childBirthYears}
+                disabledFields={viewChildDisabledFields}
+              />
+
+              {viewChildError ? (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {viewChildError}
+                </p>
+              ) : null}
+
+              <ModalActionButtons
+                saveLabel="Guardar cambios"
+                onCancel={() => setViewingChild(null)}
+                hasChanges={childHasChanges}
+                saving={viewChildSaving}
+                saveType="submit"
+              />
             </form>
           </div>
         </div>

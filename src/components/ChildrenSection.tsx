@@ -1,8 +1,7 @@
 'use client'
 
 import { brand } from '@/lib/brand'
-import { Camera, Plus, X } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { Camera, Pencil, Plus, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -13,6 +12,7 @@ export type DashboardChildRow = {
   birth_date: string | null
   avatar_url: string | null
   short_name: string | null
+  allergies: string | null
 }
 
 function formatBirthDdMmYyyy(isoDate: string) {
@@ -35,15 +35,6 @@ function computeAgeYears(birthIso: string, today: Date): number {
   return age
 }
 
-function childDisplayName(child: DashboardChildRow) {
-  const main = (child.short_name ?? '').trim() || child.name.trim()
-  const last = (child.last_name ?? '').trim()
-  if (!last) {
-    return main
-  }
-  return `${main} ${last}`.trim()
-}
-
 const avatarColors = [
   'bg-yellow-100 text-yellow-700',
   'bg-pink-100 text-pink-700',
@@ -62,10 +53,17 @@ type ChildrenSectionProps = {
   userId: string
   initialChildren: DashboardChildRow[]
   isLoading: boolean
+  onAddChild: () => void
+  onViewChild: (child: DashboardChildRow) => void
 }
 
-export function ChildrenSection({ userId, initialChildren, isLoading }: ChildrenSectionProps) {
-  const router = useRouter()
+export function ChildrenSection({
+  userId,
+  initialChildren,
+  isLoading,
+  onAddChild,
+  onViewChild,
+}: ChildrenSectionProps) {
   const supabase = createClient()
   const [children, setChildren] = useState<DashboardChildRow[]>(initialChildren)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
@@ -145,7 +143,7 @@ export function ChildrenSection({ userId, initialChildren, isLoading }: Children
             if (children.length >= 6) {
               setShowLimitModal(true)
             } else {
-              router.push('/dashboard/hijos/nuevo')
+              onAddChild()
             }
           }}
           className="flex items-center gap-1 rounded-lg bg-yellow-400 px-2 py-1 text-xs font-medium text-gray-900 hover:bg-yellow-500"
@@ -167,7 +165,7 @@ export function ChildrenSection({ userId, initialChildren, isLoading }: Children
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {displayed.map((child, index) => {
-            const display = childDisplayName(child)
+            const fullName = `${child.name} ${child.last_name || ''}`.trim()
             const birth = child.birth_date?.trim()
             const age = birth ? computeAgeYears(birth, todayDate()) : null
             const birthFmt = birth ? formatBirthDdMmYyyy(birth) : ''
@@ -175,19 +173,22 @@ export function ChildrenSection({ userId, initialChildren, isLoading }: Children
             const hasPhoto = Boolean(child.avatar_url?.trim())
             const initials = getInitials(child.name, child.last_name ?? '')
             const avatarColorClass = avatarColors[index % avatarColors.length]
-            let line2 = ''
-            if (age != null && birthFmt) {
-              line2 = `${age} años · ${birthFmt}`
-            } else if (age != null) {
-              line2 = `${age} años`
-            } else if (birthFmt) {
-              line2 = birthFmt
-            }
             return (
               <div
                 key={child.id}
-                className="relative flex min-h-[5rem] flex-row items-center gap-3 rounded-xl bg-white p-2 shadow-sm"
+                className="relative flex min-h-[5rem] flex-row items-start gap-3 rounded-xl bg-white p-2 shadow-sm"
               >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onViewChild(child)
+                  }}
+                  className="absolute top-1 right-1 rounded-full p-1 text-gray-300 transition hover:bg-gray-100 hover:text-gray-500"
+                  aria-label="Ver perfil"
+                >
+                  <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
+                </button>
                 <button
                   type="button"
                   onClick={() => openPicker(child.id)}
@@ -220,11 +221,20 @@ export function ChildrenSection({ userId, initialChildren, isLoading }: Children
                     )}
                   </div>
                 </button>
-                <div className="min-w-0 flex-1 pr-1 text-left">
-                  <p className="truncate text-sm font-medium text-gray-900" title={display}>
-                    {display}
+                <div className="flex min-w-0 flex-1 flex-col items-start justify-start gap-0.5 pr-6">
+                  <p className="truncate text-sm font-medium text-gray-700" title={fullName}>
+                    {fullName}
                   </p>
-                  {line2 ? <p className="mt-0.5 truncate text-xs text-gray-400">{line2}</p> : null}
+                  {birth ? (
+                    <p className="truncate text-xs text-gray-400">
+                      {age != null ? `${age} años · ${birthFmt}` : birthFmt}
+                    </p>
+                  ) : (
+                    <p className="text-xs italic text-gray-300">Fecha de nacimiento no añadida</p>
+                  )}
+                  {child.allergies ? (
+                    <p className="truncate text-xs text-gray-400">Alergias: {child.allergies}</p>
+                  ) : null}
                 </div>
               </div>
             )
