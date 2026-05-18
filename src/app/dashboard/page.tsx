@@ -6,6 +6,7 @@
 import AppNav from '@/components/AppNav'
 import { ChildrenSection, type DashboardChildRow } from '@/components/ChildrenSection'
 import { brand } from '@/lib/brand'
+import { formatEventDayMonthShort } from '@/lib/dates'
 import { CalendarDays, Map as MapIcon, Pencil, X } from 'lucide-react'
 import Link from 'next/link'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -26,6 +27,14 @@ const themeRingMap: Record<string, string> = {
   blue: 'hover:ring-blue-200',
   green: 'hover:ring-green-200',
   purple: 'hover:ring-purple-200',
+}
+
+const themeEventThumbBg: Record<string, string> = {
+  yellow: 'bg-yellow-100 border-yellow-200/80',
+  pink: 'bg-pink-100 border-pink-200/80',
+  blue: 'bg-blue-100 border-blue-200/80',
+  green: 'bg-green-100 border-green-200/80',
+  purple: 'bg-purple-100 border-purple-200/80',
 }
 
 type EventListItem = {
@@ -70,6 +79,7 @@ type FamilyMemberPartner = {
   full_name: string
   last_name: string | null
   phone: string | null
+  birth_date: string | null
 }
 
 const partnerAvatarColors = [
@@ -80,7 +90,7 @@ const partnerAvatarColors = [
   'bg-purple-100 text-purple-700',
 ]
 
-const partnerInputClassName = `w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${brand.inputFocus}`
+const partnerInputClassName = `input-base focus:ring-2 ${brand.inputFocus}`
 
 function getPartnerInitials(name: string, lastName: string | null) {
   const first = name.trim()[0]?.toUpperCase() || ''
@@ -228,16 +238,41 @@ const SPANISH_MONTHS = [
   'Diciembre',
 ]
 
-const profileInputClassName = `w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${brand.inputFocus}`
+function formatBirthDateDisplaySpain(day: string, month: string, year: string): string {
+  const dayNum = parseInt(day, 10)
+  const monthNum = parseInt(month, 10)
+  if (!dayNum || !monthNum || !year.trim()) return ''
+  const monthName = SPANISH_MONTHS[monthNum - 1]
+  if (!monthName) return ''
+  return `${dayNum} de ${monthName.toLowerCase()} de ${year}`
+}
+
+function computeAgeYearsFromIso(birthIso: string, today: Date): number {
+  const [y, mo, d] = birthIso.split('-').map((value) => Number.parseInt(value, 10))
+  const birth = new Date(y, mo - 1, d)
+  let age = today.getFullYear() - birth.getFullYear()
+  const monthDiff = today.getMonth() - birth.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age -= 1
+  }
+  return age
+}
+
+function formatPartnerBirthSummary(iso: string | null): string | null {
+  if (!iso?.trim()) return null
+  const parts = isoToBirthParts(iso)
+  const display = formatBirthDateDisplaySpain(parts.day, parts.month, parts.year)
+  if (!display) return null
+  return `${computeAgeYearsFromIso(iso, new Date())} años · ${display}`
+}
+
+const profileInputClassName = `input-base focus:ring-2 ${brand.inputFocus}`
 
 const profileBirthDateSelectClassName =
-  'w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2'
+  'select-base px-2 ring-yellow-400 transition focus:border-yellow-400 focus:ring-2'
 
-const childFieldDisabledInputClassName =
-  'bg-gray-50 text-gray-500 cursor-not-allowed border-gray-200'
-
-const childFieldDisabledSelectClassName =
-  'bg-gray-50 text-gray-500 cursor-not-allowed border-gray-200 appearance-none'
+const childFieldReadOnlyClassName =
+  'input-disabled cursor-default border-gray-200 bg-gray-100 text-gray-500'
 
 type ModalActionButtonsProps = {
   saveLabel: string
@@ -269,7 +304,7 @@ function ModalActionButtons({
         className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
           hasChanges && !saving
             ? brand.buttonPrimary
-            : 'cursor-not-allowed bg-gray-200 text-gray-400'
+            : `${brand.buttonPrimary} cursor-not-allowed opacity-40`
         }`}
       >
         {saving ? 'Guardando…' : saveLabel}
@@ -286,8 +321,6 @@ function ModalActionButtons({
 }
 
 type ChildFormDisabledField = 'nombre' | 'apellido' | 'shortName' | 'birth_date'
-
-const viewChildLockedFields: ChildFormDisabledField[] = ['nombre', 'apellido', 'birth_date']
 
 type ChildFormFieldsProps = {
   idPrefix?: string
@@ -348,32 +381,38 @@ function ChildFormFields({
           <label htmlFor={`${idPrefix}Nombre`} className="text-sm font-medium text-gray-700">
             Nombre
           </label>
-          <input
-            id={`${idPrefix}Nombre`}
-            type="text"
-            autoComplete="given-name"
-            value={nombre}
-            onChange={(event) => setNombre(event.target.value)}
-            required={nombreRequired}
-            disabled={nombreDisabled}
-            className={`${profileInputClassName} ${nombreDisabled ? childFieldDisabledInputClassName : ''}`}
-            placeholder="Ej. Sofía"
-          />
+          {nombreDisabled ? (
+            <div className={childFieldReadOnlyClassName}>{nombre}</div>
+          ) : (
+            <input
+              id={`${idPrefix}Nombre`}
+              type="text"
+              autoComplete="given-name"
+              value={nombre}
+              onChange={(event) => setNombre(event.target.value)}
+              required={nombreRequired}
+              className={profileInputClassName}
+              placeholder="Ej. Sofía"
+            />
+          )}
         </div>
         <div>
           <label htmlFor={`${idPrefix}Apellido`} className="text-sm font-medium text-gray-700">
             Apellido(s)
           </label>
-          <input
-            id={`${idPrefix}Apellido`}
-            type="text"
-            autoComplete="family-name"
-            value={apellido}
-            onChange={(event) => setApellido(event.target.value)}
-            disabled={apellidoDisabled}
-            className={`${profileInputClassName} ${apellidoDisabled ? childFieldDisabledInputClassName : ''}`}
-            placeholder="Ej. García"
-          />
+          {apellidoDisabled ? (
+            <div className={childFieldReadOnlyClassName}>{apellido || '—'}</div>
+          ) : (
+            <input
+              id={`${idPrefix}Apellido`}
+              type="text"
+              autoComplete="family-name"
+              value={apellido}
+              onChange={(event) => setApellido(event.target.value)}
+              className={profileInputClassName}
+              placeholder="Ej. García"
+            />
+          )}
         </div>
       </div>
 
@@ -396,53 +435,56 @@ function ChildFormFields({
 
       <div>
         <p className="mb-1.5 text-sm font-medium text-gray-900">Fecha de nacimiento</p>
-        <div className="grid grid-cols-3 gap-2">
-          <select
-            value={birthDay}
-            onChange={(event) => setBirthDay(event.target.value)}
-            disabled={birthDisabled}
-            className={`${profileBirthDateSelectClassName} ${birthDisabled ? childFieldDisabledSelectClassName : ''}`}
-            aria-label="Día"
-          >
-            <option value="">Día</option>
-            {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((day) => (
-              <option key={day} value={day}>
-                {day}
-              </option>
-            ))}
-          </select>
-          <select
-            value={birthMonth}
-            onChange={(event) => setBirthMonth(event.target.value)}
-            disabled={birthDisabled}
-            className={`${profileBirthDateSelectClassName} ${birthDisabled ? childFieldDisabledSelectClassName : ''}`}
-            aria-label="Mes"
-          >
-            <option value="">Mes</option>
-            {SPANISH_MONTHS.map((monthName, index) => {
-              const monthValue = String(index + 1).padStart(2, '0')
-              return (
-                <option key={monthValue} value={monthValue}>
-                  {monthName}
+        {birthDisabled ? (
+          <div className={childFieldReadOnlyClassName}>
+            {formatBirthDateDisplaySpain(birthDay, birthMonth, birthYear) || '—'}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            <select
+              value={birthDay}
+              onChange={(event) => setBirthDay(event.target.value)}
+              className={profileBirthDateSelectClassName}
+              aria-label="Día"
+            >
+              <option value="">Día</option>
+              {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((day) => (
+                <option key={day} value={day}>
+                  {day}
                 </option>
-              )
-            })}
-          </select>
-          <select
-            value={birthYear}
-            onChange={(event) => setBirthYear(event.target.value)}
-            disabled={birthDisabled}
-            className={`${profileBirthDateSelectClassName} ${birthDisabled ? childFieldDisabledSelectClassName : ''}`}
-            aria-label="Año"
-          >
-            <option value="">Año</option>
-            {birthYears.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-        </div>
+              ))}
+            </select>
+            <select
+              value={birthMonth}
+              onChange={(event) => setBirthMonth(event.target.value)}
+              className={profileBirthDateSelectClassName}
+              aria-label="Mes"
+            >
+              <option value="">Mes</option>
+              {SPANISH_MONTHS.map((monthName, index) => {
+                const monthValue = String(index + 1).padStart(2, '0')
+                return (
+                  <option key={monthValue} value={monthValue}>
+                    {monthName}
+                  </option>
+                )
+              })}
+            </select>
+            <select
+              value={birthYear}
+              onChange={(event) => setBirthYear(event.target.value)}
+              className={profileBirthDateSelectClassName}
+              aria-label="Año"
+            >
+              <option value="">Año</option>
+              {birthYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div>
@@ -535,17 +577,6 @@ function googleMapsSearchUrl(locationName: string, locationAddress: string | nul
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
 }
 
-/** e.g. "10 may 2026" — day + short month + year in Spanish */
-function formatEventDayMonthShort(isoDate: string) {
-  const [year, month, day] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
-  const d = new Date(year, month - 1, day)
-  return d
-    .toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
-    .replace(/\./g, '')
-    .trim()
-    .toLowerCase()
-}
-
 function eventStatusLabel(eventDate: string, todayStr: string): 'Próximo' | 'Hoy' | 'Pasado' {
   if (eventDate > todayStr) return 'Próximo'
   if (eventDate === todayStr) return 'Hoy'
@@ -576,6 +607,7 @@ function EventRow({
   const loc = event.location_name?.trim()
   const to = `/dashboard/eventos/${event.public_slug}`
   const img = event.invitation_image_url?.trim()
+  const thumbBgClass = themeEventThumbBg[themeKey] ?? themeEventThumbBg.yellow
   const isPastEvent = event.event_date < todayStr
   const attendeeLabel =
     rsvpCounts.confirmed === 1
@@ -600,7 +632,7 @@ function EventRow({
           />
         ) : (
           <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-lg leading-none"
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border text-lg leading-none ${thumbBgClass}`}
             aria-hidden
           >
             🎉
@@ -707,6 +739,10 @@ export default function DashboardHomePage() {
   const [partnerModalError, setPartnerModalError] = useState<string | null>(null)
   const [partnerSaveSuccess, setPartnerSaveSuccess] = useState(false)
   const [originalPartnerPhone, setOriginalPartnerPhone] = useState('')
+  const [partnerBirthDay, setPartnerBirthDay] = useState('')
+  const [partnerBirthMonth, setPartnerBirthMonth] = useState('')
+  const [partnerBirthYear, setPartnerBirthYear] = useState('')
+  const [originalPartnerBirth, setOriginalPartnerBirth] = useState<string | null>(null)
   const partnerDialRef = useRef<HTMLDivElement>(null)
   const [showAddChildModal, setShowAddChildModal] = useState(false)
   const [childFirstName, setChildFirstName] = useState('')
@@ -720,6 +756,8 @@ export default function DashboardHomePage() {
   const [childModalError, setChildModalError] = useState<string | null>(null)
   const [childAddSuccessToast, setChildAddSuccessToast] = useState(false)
   const [viewingChild, setViewingChild] = useState<DashboardChildRow | null>(null)
+  /** Set on child card tap; drives future contextual menu (cumpleaños / evento / perfil). */
+  const [childCardMenuTarget, setChildCardMenuTarget] = useState<DashboardChildRow | null>(null)
   const [viewChildFirstName, setViewChildFirstName] = useState('')
   const [viewChildLastName, setViewChildLastName] = useState('')
   const [viewChildShortName, setViewChildShortName] = useState('')
@@ -769,7 +807,7 @@ export default function DashboardHomePage() {
     async (uid: string) => {
       const { data: familyMembers } = await supabase
         .from('family_members')
-        .select('id, full_name, last_name, phone')
+        .select('id, full_name, last_name, phone, birth_date')
         .eq('user_id', uid)
         .order('created_at', { ascending: true })
 
@@ -805,7 +843,14 @@ export default function DashboardHomePage() {
     []
   )
 
-  const viewChildDisabledFields = viewingChild ? viewChildLockedFields : []
+  const viewChildDisabledFields = useMemo((): ChildFormDisabledField[] => {
+    if (!viewingChild) return []
+    const locked: ChildFormDisabledField[] = []
+    if (viewingChild.name?.trim()) locked.push('nombre')
+    if (viewingChild.last_name?.trim()) locked.push('apellido')
+    if (viewingChild.birth_date?.trim()) locked.push('birth_date')
+    return locked
+  }, [viewingChild])
 
   const profileCurrentPhone = useMemo(
     () => buildFullPhone(profileCountryCode, profileCustomCode, profilePhoneNumber),
@@ -837,6 +882,11 @@ export default function DashboardHomePage() {
     [partnerCountryCode, partnerCustomDialCode, partnerPhoneNumber]
   )
 
+  const partnerBirthIso = useMemo(
+    () => composeBirthDateIso(partnerBirthDay, partnerBirthMonth, partnerBirthYear),
+    [partnerBirthDay, partnerBirthMonth, partnerBirthYear]
+  )
+
   const partnerHasChanges = useMemo(() => {
     if (!partner) {
       return partnerFirstName.trim() !== ''
@@ -844,7 +894,8 @@ export default function DashboardHomePage() {
     return (
       partnerFirstName !== (partner.full_name?.split(' ')[0] || '') ||
       partnerLastName !== (partner.last_name || '') ||
-      partnerCurrentPhone !== originalPartnerPhone
+      partnerCurrentPhone !== originalPartnerPhone ||
+      (partnerBirthIso ?? null) !== (originalPartnerBirth ?? null)
     )
   }, [
     partner,
@@ -852,6 +903,8 @@ export default function DashboardHomePage() {
     partnerLastName,
     partnerCurrentPhone,
     originalPartnerPhone,
+    partnerBirthIso,
+    originalPartnerBirth,
   ])
 
   const childAddHasChanges = childFirstName.trim() !== ''
@@ -996,7 +1049,7 @@ export default function DashboardHomePage() {
           .order('created_at', { ascending: true }),
         supabase
           .from('family_members')
-          .select('id, full_name, last_name, phone')
+          .select('id, full_name, last_name, phone, birth_date')
           .eq('user_id', user.id)
           .order('created_at', { ascending: true }),
       ])
@@ -1153,6 +1206,11 @@ export default function DashboardHomePage() {
       setPartnerCustomDialCode(phoneParts.customCode)
       setPartnerPhoneNumber(phoneParts.number)
       setOriginalPartnerPhone(partner.phone ?? '')
+      const birth = isoToBirthParts(partner.birth_date)
+      setPartnerBirthDay(birth.day)
+      setPartnerBirthMonth(birth.month)
+      setPartnerBirthYear(birth.year)
+      setOriginalPartnerBirth(partner.birth_date ?? null)
     } else {
       setPartnerFirstName('')
       setPartnerLastName('')
@@ -1160,6 +1218,10 @@ export default function DashboardHomePage() {
       setPartnerCustomDialCode('')
       setPartnerPhoneNumber('')
       setOriginalPartnerPhone('')
+      setPartnerBirthDay('')
+      setPartnerBirthMonth('')
+      setPartnerBirthYear('')
+      setOriginalPartnerBirth(null)
     }
   }, [showAddPartnerModal, partner])
 
@@ -1190,6 +1252,7 @@ export default function DashboardHomePage() {
     }
 
     const fullPhone = buildFullPhone(partnerCountryCode, partnerCustomDialCode, partnerPhoneNumber)
+    const birthDate = composeBirthDateIso(partnerBirthDay, partnerBirthMonth, partnerBirthYear)
 
     if (partner) {
       const { error: updateError } = await supabase
@@ -1198,6 +1261,7 @@ export default function DashboardHomePage() {
           full_name: trimmedName,
           last_name: trimmedLastName || null,
           phone: fullPhone || null,
+          birth_date: birthDate || null,
         })
         .eq('id', partner.id)
 
@@ -1212,6 +1276,7 @@ export default function DashboardHomePage() {
         full_name: trimmedName,
         last_name: trimmedLastName || null,
         phone: fullPhone || null,
+        birth_date: birthDate || null,
       })
 
       if (insertError) {
@@ -1360,6 +1425,11 @@ export default function DashboardHomePage() {
   const profileBirthYears = Array.from({ length: 101 }, (_, index) =>
     String(new Date().getFullYear() - index)
   )
+
+  const handleChildCardPress = useCallback((child: DashboardChildRow) => {
+    // Future: open contextual modal (Crear cumpleaños · Crear evento · Editar perfil)
+    setChildCardMenuTarget((prev) => (prev?.id === child.id ? null : child))
+  }, [])
 
   const openProfileModal = () => {
     let first = userDbProfile?.first_name?.trim() ?? ''
@@ -1605,7 +1675,7 @@ export default function DashboardHomePage() {
 
         {parentProfile ? (
           <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8">
-            <div className="relative flex min-h-[5.625rem] flex-row items-center gap-3 rounded-2xl bg-white p-3 shadow-sm sm:gap-4">
+            <div className="card-soft relative flex min-h-[5.625rem] flex-row items-center gap-3 p-3 sm:gap-4">
               <button
                 type="button"
                 onClick={openProfileModal}
@@ -1650,7 +1720,7 @@ export default function DashboardHomePage() {
                   setShowAddPartnerModal(true)
                 }
               }}
-              className={`relative flex min-h-[5.625rem] cursor-pointer flex-row items-center gap-3 rounded-2xl bg-white p-3 shadow-sm sm:gap-4 ${
+              className={`card-soft relative flex min-h-[5.625rem] cursor-pointer flex-row items-center gap-3 p-3 sm:gap-4 ${
                 partner ? 'border border-gray-100' : 'border border-dashed border-gray-200'
               }`}
             >
@@ -1684,6 +1754,12 @@ export default function DashboardHomePage() {
                     {partner.phone ? (
                       <p className="truncate text-sm text-gray-500">{partner.phone}</p>
                     ) : null}
+                    {(() => {
+                      const birthLine = formatPartnerBirthSummary(partner.birth_date)
+                      return birthLine ? (
+                        <p className="truncate text-xs text-gray-400">{birthLine}</p>
+                      ) : null
+                    })()}
                   </>
                 ) : (
                   <p className="text-xs font-medium text-gray-400">Añadir pareja</p>
@@ -1699,11 +1775,16 @@ export default function DashboardHomePage() {
             initialChildren={children}
             isLoading={loading}
             onAddChild={() => setShowAddChildModal(true)}
-            onViewChild={(child) => setViewingChild(child)}
+            onViewChild={(child) => {
+              setChildCardMenuTarget(null)
+              setViewingChild(child)
+            }}
+            onChildCardPress={handleChildCardPress}
+            childCardMenuTargetId={childCardMenuTarget?.id ?? null}
           />
         ) : null}
 
-        <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-xl sm:p-6">
+        <section className="card-soft p-4 sm:p-6">
           {loading ? <p className="text-sm text-gray-500">Cargando eventos...</p> : null}
 
           {error ? (
@@ -1719,7 +1800,7 @@ export default function DashboardHomePage() {
                 </h2>
                 <Link
                   href="/dashboard/eventos/nuevo"
-                  className={`inline-flex shrink-0 items-center justify-center rounded-lg px-3 py-1.5 text-sm font-medium ${brand.buttonPrimary}`}
+                  className={brand.dashboardPrimaryPill}
                 >
                   Crear evento
                 </Link>
@@ -1733,7 +1814,7 @@ export default function DashboardHomePage() {
                     <button
                       type="button"
                       onClick={() => setShowProximos((v) => !v)}
-                      className={`flex w-full cursor-pointer items-center justify-between rounded-xl border py-2 px-4 text-left transition ${
+                      className={`pill-soft flex w-full cursor-pointer items-center justify-between border py-2 px-4 text-left transition ${
                         showProximos
                           ? `bg-white ${brand.borderBrand} shadow-sm`
                           : 'border-gray-200 bg-white opacity-50 text-gray-400'
@@ -1755,7 +1836,7 @@ export default function DashboardHomePage() {
                     <button
                       type="button"
                       onClick={() => setShowPasados((v) => !v)}
-                      className={`flex w-full cursor-pointer items-center justify-between rounded-xl border py-2 px-4 text-left transition ${
+                      className={`pill-soft flex w-full cursor-pointer items-center justify-between border py-2 px-4 text-left transition ${
                         showPasados
                           ? `bg-white ${brand.borderBrand} shadow-sm`
                           : 'border-gray-200 bg-white opacity-50 text-gray-400'
@@ -1821,7 +1902,7 @@ export default function DashboardHomePage() {
           ) : null}
         </section>
 
-        <section className="mt-8 rounded-2xl border border-gray-100 bg-white p-4 shadow-xl sm:p-6">
+        <section className="card-soft mt-8 p-4 sm:p-6">
           <div className="px-4 sm:px-6">
             <h2 className="mb-4 mt-2 text-lg font-semibold text-gray-900">
               📍 Lugares
@@ -1840,7 +1921,7 @@ export default function DashboardHomePage() {
                     href={googleMapsSearchUrl(name, address)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex w-full flex-row items-center gap-3 rounded-xl border border-gray-100 bg-white p-3 shadow-sm transition hover:border-yellow-200 hover:bg-yellow-50/50"
+                    className="card-soft flex w-full flex-row items-center gap-3 p-3 transition hover:border-yellow-200 hover:bg-yellow-50/50"
                   >
                     <div
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100"
@@ -2128,7 +2209,7 @@ export default function DashboardHomePage() {
                         maxLength={5}
                         placeholder="+00"
                         aria-label="Prefijo internacional"
-                        className="w-16 shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                        className="input-base w-16 shrink-0 px-2 ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
                       />
                     ) : null}
                     <input
@@ -2139,7 +2220,7 @@ export default function DashboardHomePage() {
                       value={profilePhoneNumber}
                       onChange={(e) => setProfilePhoneNumber(e.target.value)}
                       placeholder="Ej. 612345678"
-                      className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                      className="input-base min-w-0 flex-1 ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
                     />
                   </div>
                 </div>
@@ -2222,7 +2303,7 @@ export default function DashboardHomePage() {
                 ) : null}
 
                 <ModalActionButtons
-                  saveLabel="Guardar cambios"
+                  saveLabel="Guardar"
                   onCancel={() => setShowProfileModal(false)}
                   hasChanges={profileHasChanges}
                   saving={profileSaving}
@@ -2283,6 +2364,56 @@ export default function DashboardHomePage() {
                     className={partnerInputClassName}
                     placeholder="Ej. López"
                   />
+                </div>
+              </div>
+              <div>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <p className="text-sm font-medium text-gray-900">Fecha de nacimiento</p>
+                  <span className="text-xs text-gray-400">Opcional</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <select
+                    value={partnerBirthDay}
+                    onChange={(event) => setPartnerBirthDay(event.target.value)}
+                    className={profileBirthDateSelectClassName}
+                    aria-label="Día"
+                  >
+                    <option value="">Día</option>
+                    {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((day) => (
+                      <option key={day} value={day}>
+                        {day}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={partnerBirthMonth}
+                    onChange={(event) => setPartnerBirthMonth(event.target.value)}
+                    className={profileBirthDateSelectClassName}
+                    aria-label="Mes"
+                  >
+                    <option value="">Mes</option>
+                    {SPANISH_MONTHS.map((monthName, index) => {
+                      const monthValue = String(index + 1).padStart(2, '0')
+                      return (
+                        <option key={monthValue} value={monthValue}>
+                          {monthName}
+                        </option>
+                      )
+                    })}
+                  </select>
+                  <select
+                    value={partnerBirthYear}
+                    onChange={(event) => setPartnerBirthYear(event.target.value)}
+                    className={profileBirthDateSelectClassName}
+                    aria-label="Año"
+                  >
+                    <option value="">Año</option>
+                    {childBirthYears.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div>
@@ -2374,7 +2505,7 @@ export default function DashboardHomePage() {
                       maxLength={5}
                       placeholder="+00"
                       aria-label="Prefijo internacional"
-                      className="w-16 shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                      className="input-base w-16 shrink-0 px-2 ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
                     />
                   ) : null}
                   <input
@@ -2385,7 +2516,7 @@ export default function DashboardHomePage() {
                     value={partnerPhoneNumber}
                     onChange={(event) => setPartnerPhoneNumber(event.target.value)}
                     placeholder="Ej. 612345678"
-                    className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                    className="input-base min-w-0 flex-1 ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
                   />
                 </div>
               </div>
@@ -2457,7 +2588,7 @@ export default function DashboardHomePage() {
               ) : null}
 
               <ModalActionButtons
-                saveLabel="Guardar hijo/a"
+                saveLabel="Guardar"
                 onCancel={() => setShowAddChildModal(false)}
                 hasChanges={childAddHasChanges}
                 saving={childSaving}
@@ -2517,7 +2648,7 @@ export default function DashboardHomePage() {
               ) : null}
 
               <ModalActionButtons
-                saveLabel="Guardar cambios"
+                saveLabel="Guardar"
                 onCancel={() => setViewingChild(null)}
                 hasChanges={childHasChanges}
                 saving={viewChildSaving}

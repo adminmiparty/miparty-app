@@ -3,6 +3,33 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Radius */
+  --radius-card: 1.25rem; /* 20px - main cards */
+  --radius-card-lg: 1.5rem; /* 24px - large cards */
+  --radius-pill: 999px; /* pills and badges */
+  --radius-input: 0.5rem; /* 8px - inputs */
+  --radius-button: 0.625rem; /* 10px - buttons */
+  --radius-avatar: 9999px; /* circular avatars */
+
+  /* Shadows */
+  --shadow-card: 0 2px 12px rgba(15, 23, 42, 0.06);
+  --shadow-card-hover: 0 4px 20px rgba(15, 23, 42, 0.1);
+  --shadow-modal: 0 8px 40px rgba(15, 23, 42, 0.14);
+
+  /* Borders */
+  --border-soft: rgba(15, 23, 42, 0.08);
+  --border-muted: rgba(15, 23, 42, 0.05);
+
+  /* Colors */
+  --color-brand-yellow: #fbbf24;
+  --color-brand-yellow-light: #fef9e7;
+  --color-text-muted: #9ca3af;
+  --color-text-soft: #6b7280;
+  --color-bg-page: #fefce8;
+  --color-bg-card: #ffffff;
+  --color-bg-input: #ffffff;
+  --color-bg-disabled: #f9fafb;
 }
 
 @theme inline {
@@ -22,5 +49,38 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer components {
+  .card-soft {
+    @apply rounded-[var(--radius-card)] border border-[var(--border-soft)] bg-white shadow-[var(--shadow-card)];
+  }
+
+  .card-large {
+    @apply rounded-[var(--radius-card-lg)] border border-[var(--border-soft)] bg-white shadow-[var(--shadow-card)];
+  }
+
+  .pill-soft {
+    @apply rounded-[var(--radius-pill)] px-3 py-1 text-sm;
+  }
+
+  .avatar-soft {
+    @apply overflow-hidden rounded-[var(--radius-avatar)] object-cover;
+  }
+
+  .input-base {
+    @apply w-full rounded-[var(--radius-input)] border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-400 focus:ring-1 focus:ring-gray-400;
+  }
+
+  .input-disabled {
+    @apply w-full cursor-not-allowed rounded-[var(--radius-input)] border border-gray-200 bg-[var(--color-bg-disabled)] px-3 py-2.5 text-sm text-gray-400 outline-none transition;
+  }
+
+  .select-base {
+    @apply w-full cursor-pointer appearance-none rounded-[var(--radius-input)] border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-400 focus:ring-1 focus:ring-gray-400;
+  }
+
+  .select-disabled {
+    @apply w-full cursor-not-allowed appearance-none rounded-[var(--radius-input)] border border-gray-200 bg-[var(--color-bg-disabled)] px-3 py-2.5 text-sm text-gray-400 outline-none transition;
+  }
 }

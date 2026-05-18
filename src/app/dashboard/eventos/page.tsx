@@ -5,6 +5,7 @@
 
 import AppNav from '@/components/AppNav'
 import { brand } from '@/lib/brand'
+import { formatSpanishDateMedium } from '@/lib/dates'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -50,17 +51,6 @@ function todayLocalIso() {
   return `${y}-${m}-${day}`
 }
 
-function formatSpanishDateMedium(isoDate: string) {
-  const [year, month, day] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
-  const date = new Date(year, month - 1, day)
-  const raw = date.toLocaleDateString('es-ES', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-  return raw.charAt(0).toUpperCase() + raw.slice(1)
-}
-
 function eventStatusLabel(eventDate: string, todayStr: string): 'Próximo' | 'Hoy' | 'Pasado' {
   if (eventDate > todayStr) return 'Próximo'
   if (eventDate === todayStr) return 'Hoy'
@@ -92,7 +82,7 @@ function EventListCard({
     <li className="w-full">
       <Link
         href={`/dashboard/eventos/${event.public_slug}`}
-        className={`flex w-full flex-col gap-1.5 rounded-xl border border-gray-100 border-l-4 ${leftBorderClass} bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:ring-2 ${hoverRingClass}`}
+        className={`card-soft flex w-full flex-col gap-1.5 border-l-4 ${leftBorderClass} p-3 transition-shadow hover:shadow-[var(--shadow-card-hover)] hover:ring-2 ${hoverRingClass}`}
       >
         <div className="flex w-full min-w-0 items-center gap-2">
           <span
@@ -315,7 +305,7 @@ export default function EventosListPage() {
           </Link>
         </header>
 
-        <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-xl sm:p-6">
+        <section className="card-soft p-4 sm:p-6">
           {loading ? <p className="text-sm text-gray-500">Cargando eventos...</p> : null}
           {error ? (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
@@ -446,7 +436,7 @@ export default function EventosListPage() {
         </section>
 
         {!loading && !error ? (
-          <section className="mt-8 rounded-2xl border border-gray-100 bg-white p-4 shadow-xl sm:p-6">
+          <section className="card-soft mt-8 p-4 sm:p-6">
             <h2 className="mb-4 px-4 text-lg font-semibold text-gray-800 sm:px-6">
               Eventos a los que mis hijos fueron invitados
             </h2>

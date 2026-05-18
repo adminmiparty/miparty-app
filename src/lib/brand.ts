@@ -13,6 +13,9 @@ export const brand = {
 
   // Buttons
   buttonPrimary: 'bg-yellow-400 hover:bg-yellow-500 text-gray-900',
+  /** Dashboard header actions: Añadir hijo/a, Crear evento */
+  dashboardPrimaryPill:
+    'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-4 text-sm font-semibold bg-yellow-400 text-gray-900 shadow-sm transition hover:bg-yellow-500',
   buttonSecondary: 'bg-white border border-gray-200 hover:bg-gray-50 text-gray-800',
   buttonOutline: 'border border-yellow-400 text-yellow-600 hover:bg-yellow-50',
 

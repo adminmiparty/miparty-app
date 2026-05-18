@@ -11,6 +11,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { subDays } from 'date-fns'
 import { brand } from '@/lib/brand'
+import { formatSpanishFullDate, formatSpanishWeekdayDayMonthYear, parseIsoDateParts } from '@/lib/dates'
 import { createClient } from '@/lib/supabase/client'
 import ShareButton from '@/components/ShareButton'
 
@@ -49,32 +50,17 @@ type RsvpItem = {
   extra_notes: string | null
 }
 
-function formatSpanishFullDate(isoDate: string) {
-  const [year, month, day] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
-  const date = new Date(year, month - 1, day)
-  const raw = date.toLocaleDateString('es-ES', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-  return raw.charAt(0).toUpperCase() + raw.slice(1)
-}
-
 function formatTimeValue(time: string) {
   return time.slice(0, 5)
 }
 
 function formatRsvpConfirmacionesDate(isoDate: string, daysBefore: number) {
-  const [y, m, d] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
-  const eventDay = new Date(y, m - 1, d)
+  const parts = parseIsoDateParts(isoDate)
+  if (!parts) return ''
+  const eventDay = new Date(parts.year, parts.month - 1, parts.day)
   const deadline = subDays(eventDay, daysBefore)
-  const raw = deadline.toLocaleDateString('es-ES', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-  return raw.charAt(0).toUpperCase() + raw.slice(1)
+  const iso = `${deadline.getFullYear()}-${String(deadline.getMonth() + 1).padStart(2, '0')}-${String(deadline.getDate()).padStart(2, '0')}`
+  return formatSpanishWeekdayDayMonthYear(iso)
 }
 
 function formatDashboardGiftLine(event: {

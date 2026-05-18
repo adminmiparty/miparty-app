@@ -2,8 +2,12 @@ import AppNav from '@/components/AppNav'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { subDays } from 'date-fns'
-import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
+import {
+  formatSpanishFullDate,
+  formatSpanishWeekdayDayMonth,
+  formatSpanishWeekdayDayMonthYear,
+  parseIsoDateParts,
+} from '@/lib/dates'
 import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/server'
 import { getTheme, type ThemeKey } from '@/lib/themes'
@@ -68,35 +72,27 @@ type MetadataEventDetails = {
   invitation_image_url: string | null
 }
 
-function capitalizeFirst(str: string) {
-  return str.charAt(0).toUpperCase() + str.slice(1)
-}
-
-function formatSpanishFullDate(isoDate: string) {
-  const [year, month, day] = isoDate.split('-').map((value) => Number.parseInt(value, 10))
-  const date = new Date(year, month - 1, day)
-  return capitalizeFirst(
-    date.toLocaleDateString('es-ES', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    })
-  )
+function isoFromDate(date: Date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 function formatRsvpDeadlineLabel(eventDate: string, daysBefore: number) {
-  const [yearPart, monthPart, dayPart] = eventDate.split('-').map((value) => Number.parseInt(value, 10))
-  const eventDay = new Date(yearPart, monthPart - 1, dayPart)
+  const parts = parseIsoDateParts(eventDate)
+  if (!parts) return ''
+  const eventDay = new Date(parts.year, parts.month - 1, parts.day)
   const deadline = subDays(eventDay, daysBefore)
-  return capitalizeFirst(format(deadline, "EEEE, d 'de' MMMM", { locale: es }))
+  return formatSpanishWeekdayDayMonth(isoFromDate(deadline))
 }
 
 function formatRsvpConfirmacionesLineFull(eventDate: string, daysBefore: number) {
-  const [yearPart, monthPart, dayPart] = eventDate.split('-').map((value) => Number.parseInt(value, 10))
-  const eventDay = new Date(yearPart, monthPart - 1, dayPart)
+  const parts = parseIsoDateParts(eventDate)
+  if (!parts) return ''
+  const eventDay = new Date(parts.year, parts.month - 1, parts.day)
   const deadline = subDays(eventDay, daysBefore)
-  return capitalizeFirst(format(deadline, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es }))
+  return formatSpanishWeekdayDayMonthYear(isoFromDate(deadline))
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {

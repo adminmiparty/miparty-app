@@ -54,7 +54,12 @@ type ChildrenSectionProps = {
   initialChildren: DashboardChildRow[]
   isLoading: boolean
   onAddChild: () => void
+  /** Pencil — opens edit profile (not the card tap) */
   onViewChild: (child: DashboardChildRow) => void
+  /** Whole card tap — future contextual menu (cumpleaños / evento / perfil) */
+  onChildCardPress: (child: DashboardChildRow) => void
+  /** Highlights card after press until menu is implemented */
+  childCardMenuTargetId?: string | null
 }
 
 export function ChildrenSection({
@@ -63,6 +68,8 @@ export function ChildrenSection({
   isLoading,
   onAddChild,
   onViewChild,
+  onChildCardPress,
+  childCardMenuTargetId = null,
 }: ChildrenSectionProps) {
   const supabase = createClient()
   const [children, setChildren] = useState<DashboardChildRow[]>(initialChildren)
@@ -146,9 +153,9 @@ export function ChildrenSection({
               onAddChild()
             }
           }}
-          className="flex items-center gap-1 rounded-lg bg-yellow-400 px-2 py-1 text-xs font-medium text-gray-900 hover:bg-yellow-500"
+          className={brand.dashboardPrimaryPill}
         >
-          <Plus className="h-3 w-3" strokeWidth={2} aria-hidden />
+          <Plus className="h-4 w-4 shrink-0" strokeWidth={2.5} aria-hidden />
           Añadir hijo/a
         </button>
       </div>
@@ -173,10 +180,25 @@ export function ChildrenSection({
             const hasPhoto = Boolean(child.avatar_url?.trim())
             const initials = getInitials(child.name, child.last_name ?? '')
             const avatarColorClass = avatarColors[index % avatarColors.length]
+            const isCardActive = childCardMenuTargetId === child.id
             return (
               <div
                 key={child.id}
-                className="relative flex min-h-[5rem] flex-row items-start gap-3 rounded-xl bg-white p-2 shadow-sm"
+                role="button"
+                tabIndex={0}
+                onClick={() => onChildCardPress(child)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onChildCardPress(child)
+                  }
+                }}
+                aria-label={`Opciones de ${fullName}`}
+                aria-haspopup="menu"
+                aria-expanded={isCardActive}
+                className={`card-soft group relative flex min-h-[5rem] w-full cursor-pointer flex-row items-center gap-3 p-2 text-left transition hover:shadow-[var(--shadow-card-hover)] hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400/60 ${
+                  isCardActive ? 'shadow-[var(--shadow-card-hover)] ring-2 ring-yellow-300/80' : ''
+                }`}
               >
                 <button
                   type="button"
@@ -185,33 +207,36 @@ export function ChildrenSection({
                     onViewChild(child)
                   }}
                   className="absolute top-1 right-1 rounded-full p-1 text-gray-300 transition hover:bg-gray-100 hover:text-gray-500"
-                  aria-label="Ver perfil"
+                  aria-label="Editar perfil"
                 >
                   <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
                 </button>
                 <button
                   type="button"
-                  onClick={() => openPicker(child.id)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openPicker(child.id)
+                  }}
                   disabled={uploading}
-                  className="group relative h-16 w-16 shrink-0 cursor-pointer border-0 bg-transparent p-0 disabled:opacity-50"
+                  className="group/avatar relative h-16 w-16 shrink-0 cursor-pointer border-0 bg-transparent p-0 disabled:opacity-50"
                   aria-label={hasPhoto ? 'Cambiar foto' : 'Añadir foto'}
                 >
                   {hasPhoto ? (
                     <img
                       src={child.avatar_url!}
                       alt=""
-                      className="h-16 w-16 rounded-full border border-dashed border-gray-300 object-cover"
+                      className="avatar-soft h-16 w-16 rounded-full border border-dashed border-gray-300"
                     />
                   ) : (
                     <div
-                      className={`flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-semibold ${avatarColorClass}`}
+                      className={`avatar-soft flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-semibold ${avatarColorClass}`}
                     >
                       {initials || '?'}
                     </div>
                   )}
                   <div
                     className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/30 transition-opacity ${
-                      uploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                      uploading ? 'opacity-100' : 'opacity-0 group-hover/avatar:opacity-100'
                     }`}
                   >
                     {uploading ? (
