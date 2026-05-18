@@ -8,6 +8,14 @@ import { DayPicker, type Matcher } from 'react-day-picker'
 import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { brand } from '@/lib/brand'
+import {
+  eventFormBrandUi,
+  eventFormPageMainClass,
+  eventFormSubmitButtonClass,
+  resolveThemeOrBrand,
+  themeForPersistence,
+  type SelectedInvitationTheme,
+} from '@/lib/eventFormTheme'
 import { X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { themes, type ThemeKey } from '@/lib/themes'
@@ -569,7 +577,7 @@ function NewEventPageContent() {
   const [showImage, setShowImage] = useState(false)
   const [notes, setNotes] = useState('')
   const [showNotes, setShowNotes] = useState(false)
-  const [invitationTheme, setInvitationTheme] = useState<ThemeKey>('yellow')
+  const [invitationTheme, setInvitationTheme] = useState<SelectedInvitationTheme>(null)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -654,10 +662,20 @@ function NewEventPageContent() {
       selection: 'text-purple-500 focus:ring-purple-400',
     },
   }
-  const activePreviewTheme = previewThemeClasses[invitationTheme]
-  const pageBg = pageBgMap[invitationTheme] ?? pageBgMap.yellow
-  const submitButtonClass = buttonMap[invitationTheme] ?? buttonMap.yellow
-  const progressAccentClass = progressAccentMap[invitationTheme] ?? progressAccentMap.yellow
+  const activePreviewTheme = invitationTheme
+    ? previewThemeClasses[invitationTheme]
+    : {
+        card: eventFormBrandUi.previewCard,
+        button: eventFormBrandUi.previewButton,
+        selection: eventFormBrandUi.previewSelection,
+      }
+  const pageMainClass = eventFormPageMainClass(invitationTheme, pageBgMap)
+  const submitButtonClass = eventFormSubmitButtonClass(invitationTheme, buttonMap)
+  const progressAccentClass = resolveThemeOrBrand(
+    progressAccentMap,
+    invitationTheme,
+    eventFormBrandUi.progressAccent
+  )
   const themeCalendarClasses: Record<ThemeKey, string> = {
     yellow: 'bg-yellow-400 text-gray-900',
     pink: 'bg-pink-400 text-white',
@@ -665,6 +683,11 @@ function NewEventPageContent() {
     green: 'bg-green-400 text-white',
     purple: 'bg-purple-400 text-white',
   }
+  const calendarSelectedClass = resolveThemeOrBrand(
+    themeCalendarClasses,
+    invitationTheme,
+    eventFormBrandUi.calendarSelected
+  )
 
   const inputFocusMap: Record<ThemeKey, string> = {
     yellow: 'ring-yellow-400 focus:border-yellow-400',
@@ -673,7 +696,9 @@ function NewEventPageContent() {
     green: 'ring-green-400 focus:border-green-400',
     purple: 'ring-purple-400 focus:border-purple-400',
   }
-  const inputFocusClass = inputFocusMap[invitationTheme] ?? inputFocusMap.yellow
+  const inputFocusClass = invitationTheme
+    ? (inputFocusMap[invitationTheme] ?? inputFocusMap.yellow)
+    : eventFormBrandUi.inputFocus
 
   useEffect(() => {
     if (!organizerDialOpen && !bizumDialOpen) return
@@ -695,7 +720,7 @@ function NewEventPageContent() {
     green: 'border-green-200 hover:border-green-300 hover:bg-green-50',
     purple: 'border-purple-200 hover:border-purple-300 hover:bg-purple-50',
   }
-  const sectionCardClass = sectionCardMap[invitationTheme] ?? sectionCardMap.yellow
+  const sectionCardClass = resolveThemeOrBrand(sectionCardMap, invitationTheme, eventFormBrandUi.sectionCard)
 
   const accentTextMap: Record<ThemeKey, string> = {
     yellow: 'text-yellow-600',
@@ -704,7 +729,7 @@ function NewEventPageContent() {
     green: 'text-green-600',
     purple: 'text-purple-600',
   }
-  const accentTextClass = accentTextMap[invitationTheme] ?? accentTextMap.yellow
+  const accentTextClass = resolveThemeOrBrand(accentTextMap, invitationTheme, eventFormBrandUi.accentText)
 
   const openSectionMap: Record<ThemeKey, string> = {
     yellow: 'border-yellow-200',
@@ -713,7 +738,7 @@ function NewEventPageContent() {
     green: 'border-green-200',
     purple: 'border-purple-200',
   }
-  const openSectionClass = openSectionMap[invitationTheme] ?? openSectionMap.yellow
+  const openSectionClass = resolveThemeOrBrand(openSectionMap, invitationTheme, eventFormBrandUi.openSection)
 
   const calendarHoverMap: Record<ThemeKey, string> = {
     yellow: 'hover:bg-yellow-100',
@@ -722,7 +747,11 @@ function NewEventPageContent() {
     green: 'hover:bg-green-100',
     purple: 'hover:bg-purple-100',
   }
-  const calendarHoverClass = calendarHoverMap[invitationTheme] ?? calendarHoverMap.yellow
+  const calendarHoverClass = resolveThemeOrBrand(
+    calendarHoverMap,
+    invitationTheme,
+    eventFormBrandUi.calendarHover
+  )
 
   const mipartyTextMap: Record<ThemeKey, string> = {
     yellow: 'text-yellow-500',
@@ -731,7 +760,7 @@ function NewEventPageContent() {
     green: 'text-green-500',
     purple: 'text-purple-500',
   }
-  const mipartyTextClass = mipartyTextMap[invitationTheme] ?? mipartyTextMap.yellow
+  const mipartyTextClass = resolveThemeOrBrand(mipartyTextMap, invitationTheme, eventFormBrandUi.mipartyText)
 
   const addOptionButtonMap: Record<ThemeKey, string> = {
     yellow: 'border-yellow-400 text-yellow-600 hover:bg-yellow-50',
@@ -740,7 +769,11 @@ function NewEventPageContent() {
     green: 'border-green-400 text-green-600 hover:bg-green-50',
     purple: 'border-purple-400 text-purple-600 hover:bg-purple-50',
   }
-  const addOptionButtonClass = addOptionButtonMap[invitationTheme] ?? addOptionButtonMap.yellow
+  const addOptionButtonClass = resolveThemeOrBrand(
+    addOptionButtonMap,
+    invitationTheme,
+    eventFormBrandUi.addOptionButton
+  )
 
   const progressTrackMap: Record<ThemeKey, string> = {
     yellow: 'bg-yellow-100',
@@ -749,7 +782,11 @@ function NewEventPageContent() {
     green: 'bg-green-100',
     purple: 'bg-purple-100',
   }
-  const progressTrackClass = progressTrackMap[invitationTheme] ?? progressTrackMap.yellow
+  const progressTrackClass = resolveThemeOrBrand(
+    progressTrackMap,
+    invitationTheme,
+    eventFormBrandUi.progressTrack
+  )
 
   const hasChildren = children.length > 0
   const childrenCount = children?.length ?? 0
@@ -893,7 +930,6 @@ function NewEventPageContent() {
     }
 
     if (modeParam === 'birthday') {
-      setInvitationTheme('yellow')
       setShowGift(true)
     }
   }, [childrenLoading, children, childIdParam, modeParam, titleParam])
@@ -1254,7 +1290,7 @@ function NewEventPageContent() {
         organizer_phone: fullOrganizerPhone,
         enable_food_options: isFoodActive ? foodEnabled : false,
         organizer_notes: showNotes ? notes.trim() || null : null,
-        invitation_theme: invitationTheme ?? 'yellow',
+        invitation_theme: themeForPersistence(invitationTheme),
         invitation_image_url: showImage ? (invitationImageUrl ?? null) : null,
         invitation_image_fit: showImage ? imageFit : null,
         invitation_image_position: showImage ? `${imagePosX}% ${imagePosY}%` : null,
@@ -1300,15 +1336,18 @@ function NewEventPageContent() {
       }
     }
 
-    localStorage.setItem('lastEventTheme', invitationTheme)
-    router.push(`/dashboard/eventos/${insertedEvent.public_slug}/compartir?theme=${invitationTheme ?? 'yellow'}`)
+    if (invitationTheme) {
+      localStorage.setItem('lastEventTheme', invitationTheme)
+    }
+    const shareThemeQuery = invitationTheme ? `?theme=${invitationTheme}` : ''
+    router.push(`/dashboard/eventos/${insertedEvent.public_slug}/compartir${shareThemeQuery}`)
   }
 
   return (
-    <main className={`min-h-screen bg-gradient-to-b ${pageBg}`}>
+    <main className={pageMainClass}>
       <AppNav backHref="/dashboard" backLabel="⬅️ Mi espacio" />
       <div className="mx-auto w-full max-w-sm px-4 py-6 pb-8">
-        <div className="mb-4 rounded-xl border border-yellow-100 bg-white/80 p-3">
+        <div className={`mb-4 rounded-xl border ${eventFormBrandUi.progressCardBorder} bg-white/80 p-3`}>
           <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
             <span>Paso 1 de 2 — Crear evento</span>
             <span>2: Compartir invitación</span>
@@ -1602,7 +1641,7 @@ function NewEventPageContent() {
                         day_button: `rounded-full w-full h-full transition-colors ${calendarHoverClass}`,
                       }}
                       modifiersClassNames={{
-                        selected: `${themeCalendarClasses[invitationTheme] ?? themeCalendarClasses.yellow} rounded-full font-semibold`,
+                        selected: `${calendarSelectedClass} rounded-full font-semibold`,
                         today: 'font-bold text-gray-900',
                       }}
                     />
@@ -2141,7 +2180,7 @@ function NewEventPageContent() {
                   </button>
                 </div>
                 {!invitationImageUrl ? (
-                  <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl py-6 px-4 cursor-pointer hover:border-yellow-400 hover:bg-yellow-50 transition">
+                  <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl py-6 px-4 cursor-pointer transition hover:border-[var(--brand-primary)] hover:bg-[var(--brand-primary-light)]">
                     <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
@@ -2231,7 +2270,11 @@ function NewEventPageContent() {
                         <span className="text-xs font-medium text-gray-500">Zoom</span>
                         {(() => {
                           const zoomProgress = ((imageZoom - 1) / 1.5) * 100
-                          const zoomTheme = zoomSliderThemeMap[invitationTheme] ?? zoomSliderThemeMap.yellow
+                          const zoomTheme = resolveThemeOrBrand(
+                            zoomSliderThemeMap,
+                            invitationTheme,
+                            eventFormBrandUi.zoomSlider
+                          )
                           return (
                         <input
                           type="range"
@@ -2384,7 +2427,7 @@ export default function NewEventPage() {
   return (
     <Suspense
       fallback={
-        <main className={`min-h-screen bg-gradient-to-b ${'from-yellow-50 to-white'}`}>
+        <main className={`min-h-screen ${brand.pageBg}`}>
           <AppNav />
           <div className="mx-auto max-w-2xl px-4 py-8">
             <p className="text-sm text-gray-500">Cargando…</p>

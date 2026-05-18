@@ -105,7 +105,7 @@ export default function LoginPage() {
                 onInput={(e) => {
                   (e.target as HTMLInputElement).setCustomValidity('')
                 }}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                className={brand.formInput}
                 placeholder="tu@email.com"
               />
             </div>
@@ -127,7 +127,7 @@ export default function LoginPage() {
                 onInput={(e) => {
                   (e.target as HTMLInputElement).setCustomValidity('')
                 }}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                className={brand.formInput}
                 placeholder="••••••••"
               />
             </div>
@@ -141,7 +141,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loadingEmail || loadingGoogle}
-              className="w-full rounded-lg bg-yellow-400 px-4 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-yellow-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className={brand.formSubmit}
             >
               {loadingEmail ? 'Iniciando sesion...' : 'Entrar con correo'}
             </button>
@@ -149,7 +149,7 @@ export default function LoginPage() {
 
           <p className="mt-6 text-center text-sm text-gray-500">
             No tienes cuenta?{' '}
-            <Link href="/registro" className="font-semibold text-yellow-400 hover:text-yellow-300">
+            <Link href="/registro" className={brand.linkBrand}>
               Crear cuenta
             </Link>
           </p>

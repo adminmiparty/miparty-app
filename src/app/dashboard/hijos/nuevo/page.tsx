@@ -50,8 +50,7 @@ function composeBirthDateIso(day: string, month: string, year: string): string {
   return `${year}-${month}-${day}`
 }
 
-const birthDateSelectClassName =
-  'w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2'
+const birthDateSelectClassName = `select-base px-2 focus:ring-2 ${brand.inputFocus}`
 
 export default function NewChildPage() {
   const router = useRouter()
@@ -142,7 +141,7 @@ export default function NewChildPage() {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   required
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  className={brand.formInput}
                   placeholder="Ej. Sofía"
                 />
               </div>
@@ -156,7 +155,7 @@ export default function NewChildPage() {
                   autoComplete="family-name"
                   value={lastName}
                   onChange={(event) => setLastName(event.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                  className={brand.formInput}
                   placeholder="Ej. García"
                 />
               </div>
@@ -174,7 +173,7 @@ export default function NewChildPage() {
                 type="text"
                 value={shortName}
                 onChange={(event) => setShortName(event.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                className={brand.formInput}
                 placeholder="Ej. Sofi"
               />
             </div>
@@ -242,7 +241,7 @@ export default function NewChildPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-yellow-400 px-4 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-yellow-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className={brand.formSubmit}
             >
               {loading ? 'Guardando...' : 'Guardar hijo/a'}
             </button>

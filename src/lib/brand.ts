@@ -1,61 +1,86 @@
-// MiParty brand design tokens
-// Import this file on all app-level pages (not event-themed pages)
-// To retheme the entire app, update values here only
-// Event-level themes are in src/lib/themes.ts
+// MiParty app chrome — Tailwind classes backed by CSS variables in src/app/globals.css
+// To retheme the app, update :root in globals.css only.
+// Per-event invitation themes: src/lib/themes.ts (separate palette per event)
 
 export const brand = {
-  // Primary brand color
-  primary: 'yellow' as const,
+  primary: 'coral' as const,
 
-  // Backgrounds
-  pageBg: 'bg-gradient-to-b from-yellow-50 to-white',
-  cardBg: 'bg-white',
+  pageBg: 'bg-gradient-to-b from-[var(--brand-surface-top)] to-[var(--brand-surface-bottom)]',
+  cardBg: 'bg-[var(--brand-card)]',
 
-  // Buttons
-  buttonPrimary: 'bg-yellow-400 hover:bg-yellow-500 text-gray-900',
-  /** Dashboard header actions: Añadir hijo/a, Crear evento */
+  buttonPrimary:
+    'bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] text-[var(--brand-on-primary)]',
   dashboardPrimaryPill:
-    'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-4 text-sm font-semibold bg-yellow-400 text-gray-900 shadow-sm transition hover:bg-yellow-500',
-  buttonSecondary: 'bg-white border border-gray-200 hover:bg-gray-50 text-gray-800',
-  buttonOutline: 'border border-yellow-400 text-yellow-600 hover:bg-yellow-50',
+    'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-4 text-sm font-semibold bg-[var(--brand-primary)] text-[var(--brand-on-primary)] shadow-sm transition hover:bg-[var(--brand-primary-hover)]',
+  buttonSecondary:
+    'bg-white border border-[var(--brand-border)] hover:bg-[var(--brand-primary-light)] text-[var(--brand-text)]',
+  buttonOutline:
+    'border border-[var(--brand-border-accent)] text-[var(--brand-accent-dark)] hover:bg-[var(--brand-primary-light)]',
 
-  // Text
-  textBrand: 'text-yellow-500',
-  textBrandDark: 'text-yellow-600',
-  textBrandHover: 'hover:text-yellow-700',
+  textBrand: 'text-[var(--brand-accent)]',
+  textBrandDark: 'text-[var(--brand-accent-dark)]',
+  textBrandHover: 'hover:text-[var(--brand-accent-dark)]',
 
-  // Borders
-  borderBrand: 'border-yellow-400',
-  borderLight: 'border-yellow-100',
-  borderMedium: 'border-yellow-200',
+  borderBrand: 'border-[var(--brand-border-accent)]',
+  borderLight: 'border-[var(--brand-border-light)]',
+  borderMedium: 'border-[var(--brand-border-medium)]',
 
-  // Navigation bar (top sticky bar)
   navBg: 'bg-white',
-  navBorder: 'border-b border-gray-200',
-  navText: 'text-gray-600',
-  navTextHover: 'hover:text-gray-900',
-  navBrand: 'text-yellow-500 font-bold',
+  /** Sticky app header (dashboard, landing) */
+  navSticky:
+    'sticky top-0 z-50 w-full border-b border-[var(--brand-border)] bg-[var(--brand-surface-nav)] shadow-sm backdrop-blur-sm',
+  navBorder: 'border-b border-[var(--brand-border)]',
+  navText: 'text-[var(--brand-text-muted)]',
+  navTextHover: 'hover:text-[var(--brand-text)]',
+  navBrand: 'text-[var(--brand-accent)] font-bold',
 
-  // Tabs
-  tabActive: 'border-b-2 border-yellow-400 text-yellow-700 font-medium',
-  tabInactive: 'text-gray-500 hover:text-gray-700',
+  tabActive:
+    'border-b-2 border-[var(--brand-border-accent)] text-[var(--brand-accent-dark)] font-medium',
+  tabInactive: 'text-[var(--brand-text-muted)] hover:text-[var(--brand-text-secondary)]',
 
-  // Progress bar
-  progressFill: 'bg-yellow-400',
-  progressTrack: 'bg-yellow-100',
+  progressFill: 'bg-[var(--brand-primary)]',
+  progressTrack: 'bg-[var(--brand-primary-muted)]',
 
-  // Badges
   badgeProximo: 'bg-green-100 text-green-700',
   badgePasado: 'bg-gray-100 text-gray-500',
-  badgeDraft: 'bg-yellow-100 text-yellow-700',
+  badgeDraft: 'bg-[var(--brand-primary-muted)] text-[var(--brand-accent-dark)]',
 
-  // Focus rings (for inputs on brand pages)
-  inputFocus: 'ring-yellow-400 focus:border-yellow-400',
+  inputFocus: 'ring-[var(--brand-focus)] focus:border-[var(--brand-focus)]',
 
-  // Accents
-  accentText: 'text-yellow-600',
-  accentBg: 'bg-yellow-50',
-  accentBorder: 'border-yellow-200',
+  /** Standard text/email inputs (auth, profile, modals) */
+  formInput:
+    'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ring-[var(--brand-focus)] focus:border-[var(--brand-focus)]',
+
+  /** Primary submit on forms (rounded-lg, not pill) */
+  formSubmit:
+    'w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] text-[var(--brand-on-primary)]',
+
+  linkBrand: 'font-semibold text-[var(--brand-accent)] hover:text-[var(--brand-accent-dark)]',
+
+  togglePillActive: 'bg-[var(--brand-primary)] text-[var(--brand-on-primary)]',
+
+  avatarBrand: 'bg-[var(--brand-primary-muted)] text-[var(--brand-accent-dark)]',
+
+  cardFocusRing: 'focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]/50',
+  cardActiveRing: 'ring-2 ring-[var(--brand-primary)]/40',
+
+  modalActionPrimary:
+    'flex w-full items-center gap-3 rounded-xl bg-[var(--brand-primary-light)] px-4 py-3 transition hover:bg-[var(--brand-primary-muted)]',
+  modalActionPrimaryIcon:
+    'flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brand-primary-muted)] text-lg',
+
+  accentText: 'text-[var(--brand-accent-dark)]',
+  accentBg: 'bg-[var(--brand-primary-light)]',
+  accentBorder: 'border-[var(--brand-border-medium)]',
+
+  landingPrimaryPill:
+    'inline-flex shrink-0 items-center justify-center rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-[var(--brand-on-primary)] shadow-sm transition hover:bg-[var(--brand-primary-hover)]',
+
+  landingCtaPrimary:
+    'inline-flex items-center justify-center rounded-full bg-[var(--brand-primary)] px-7 py-3 text-sm font-semibold text-[var(--brand-on-primary)] shadow-sm transition hover:bg-[var(--brand-primary-hover)]',
+
+  landingCtaSecondary:
+    'inline-flex items-center justify-center rounded-full border border-[var(--brand-border)] bg-white px-7 py-3 text-sm font-medium text-[var(--brand-text)] transition hover:bg-[var(--brand-primary-light)]',
 } as const
 
 export type BrandKey = keyof typeof brand

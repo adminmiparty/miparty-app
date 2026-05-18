@@ -8,8 +8,18 @@ import { DayPicker, type Matcher } from 'react-day-picker'
 import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { brand } from '@/lib/brand'
+import {
+  eventFormBrandUi,
+  eventFormPageMainClass,
+  eventFormSubmitButtonClass,
+  isInvitationThemeKey,
+  parseInvitationThemeParam,
+  resolveThemeOrBrand,
+  themeForPersistence,
+  type SelectedInvitationTheme,
+} from '@/lib/eventFormTheme'
 import { createClient } from '@/lib/supabase/client'
-import { getTheme, themes, type ThemeKey } from '@/lib/themes'
+import { themes, type ThemeKey } from '@/lib/themes'
 import 'react-day-picker/style.css'
 
 type Child = {
@@ -528,7 +538,7 @@ export default function EditEventPage() {
   const slug = typeof slugParam === 'string' ? slugParam : Array.isArray(slugParam) ? slugParam[0] : ''
   const supabase = createClient()
   const searchParams = useSearchParams()
-  const themeParam = searchParams.get('theme') as ThemeKey | null
+  const themeParam = searchParams.get('theme')
   const fromShare = searchParams.get('from') === 'share'
 
   const [children, setChildren] = useState<Child[]>([])
@@ -588,11 +598,20 @@ export default function EditEventPage() {
   const [showImage, setShowImage] = useState(false)
   const [notes, setNotes] = useState('')
   const [showNotes, setShowNotes] = useState(false)
-  const [invitationTheme, setInvitationTheme] = useState<ThemeKey>(() => (themeParam ?? 'yellow') as ThemeKey)
+  const [invitationTheme, setInvitationTheme] = useState<SelectedInvitationTheme>(() =>
+    parseInvitationThemeParam(themeParam)
+  )
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [eventId, setEventId] = useState<string | null>(null)
+  const pageBgMap: Record<string, string> = {
+    yellow: 'from-yellow-50 to-white',
+    pink: 'from-pink-50 to-white',
+    blue: 'from-blue-50 to-white',
+    green: 'from-green-50 to-white',
+    purple: 'from-purple-50 to-white',
+  }
   const buttonMap: Record<string, string> = {
     yellow: 'bg-yellow-400 hover:bg-yellow-500 text-gray-900',
     pink: 'bg-pink-400 hover:bg-pink-500 text-white',
@@ -655,10 +674,15 @@ export default function EditEventPage() {
       selection: 'text-purple-500 focus:ring-purple-400',
     },
   }
-  const activePreviewTheme = previewThemeClasses[invitationTheme]
-  const pageBg = getTheme(invitationTheme).pageBg
-  const submitButtonClass = buttonMap[invitationTheme] ?? buttonMap.yellow
-  const themeDef = themes[invitationTheme] ?? themes.yellow
+  const activePreviewTheme = invitationTheme
+    ? previewThemeClasses[invitationTheme]
+    : {
+        card: eventFormBrandUi.previewCard,
+        button: eventFormBrandUi.previewButton,
+        selection: eventFormBrandUi.previewSelection,
+      }
+  const pageMainClass = eventFormPageMainClass(invitationTheme, pageBgMap)
+  const submitButtonClass = eventFormSubmitButtonClass(invitationTheme, buttonMap)
   const brandMap: Record<ThemeKey, string> = {
     yellow: 'text-yellow-500',
     pink: 'text-pink-500',
@@ -666,7 +690,7 @@ export default function EditEventPage() {
     green: 'text-green-500',
     purple: 'text-purple-500',
   }
-  const brandClass = brandMap[invitationTheme] ?? brandMap.yellow
+  const brandClass = resolveThemeOrBrand(brandMap, invitationTheme, brand.textBrand)
 
   const addOptionButtonMap: Record<ThemeKey, string> = {
     yellow: 'border-yellow-400 text-yellow-600 hover:bg-yellow-50',
@@ -675,7 +699,11 @@ export default function EditEventPage() {
     green: 'border-green-400 text-green-600 hover:bg-green-50',
     purple: 'border-purple-400 text-purple-600 hover:bg-purple-50',
   }
-  const addOptionButtonClass = addOptionButtonMap[invitationTheme] ?? addOptionButtonMap.yellow
+  const addOptionButtonClass = resolveThemeOrBrand(
+    addOptionButtonMap,
+    invitationTheme,
+    eventFormBrandUi.addOptionButton
+  )
 
   const sectionCardMap: Record<ThemeKey, string> = {
     yellow: 'border-yellow-200 hover:border-yellow-300 hover:bg-yellow-50',
@@ -684,7 +712,7 @@ export default function EditEventPage() {
     green: 'border-green-200 hover:border-green-300 hover:bg-green-50',
     purple: 'border-purple-200 hover:border-purple-300 hover:bg-purple-50',
   }
-  const sectionCardClass = sectionCardMap[invitationTheme] ?? sectionCardMap.yellow
+  const sectionCardClass = resolveThemeOrBrand(sectionCardMap, invitationTheme, eventFormBrandUi.sectionCard)
 
   const openSectionMap: Record<ThemeKey, string> = {
     yellow: 'border-yellow-200',
@@ -693,7 +721,7 @@ export default function EditEventPage() {
     green: 'border-green-200',
     purple: 'border-purple-200',
   }
-  const openSectionClass = openSectionMap[invitationTheme] ?? openSectionMap.yellow
+  const openSectionClass = resolveThemeOrBrand(openSectionMap, invitationTheme, eventFormBrandUi.openSection)
 
   const inputFocusMap: Record<ThemeKey, string> = {
     yellow: 'ring-yellow-400 focus:border-yellow-400',
@@ -702,7 +730,9 @@ export default function EditEventPage() {
     green: 'ring-green-400 focus:border-green-400',
     purple: 'ring-purple-400 focus:border-purple-400',
   }
-  const inputFocusClass = inputFocusMap[invitationTheme] ?? inputFocusMap.yellow
+  const inputFocusClass = invitationTheme
+    ? (inputFocusMap[invitationTheme] ?? inputFocusMap.yellow)
+    : eventFormBrandUi.inputFocus
 
   useEffect(() => {
     if (!organizerDialOpen && !bizumDialOpen) return
@@ -724,7 +754,7 @@ export default function EditEventPage() {
     green: 'text-green-600',
     purple: 'text-purple-600',
   }
-  const accentTextClass = accentTextMap[invitationTheme] ?? accentTextMap.yellow
+  const accentTextClass = resolveThemeOrBrand(accentTextMap, invitationTheme, eventFormBrandUi.accentText)
 
   const calendarHoverMap: Record<ThemeKey, string> = {
     yellow: 'hover:bg-yellow-100',
@@ -733,15 +763,24 @@ export default function EditEventPage() {
     green: 'hover:bg-green-100',
     purple: 'hover:bg-purple-100',
   }
-  const calendarHoverClass = calendarHoverMap[invitationTheme] ?? calendarHoverMap.yellow
+  const calendarHoverClass = resolveThemeOrBrand(
+    calendarHoverMap,
+    invitationTheme,
+    eventFormBrandUi.calendarHover
+  )
 
-  const themeCalendarClasses: Record<string, string> = {
+  const themeCalendarClasses: Record<ThemeKey, string> = {
     yellow: 'bg-yellow-400 text-gray-900',
     pink: 'bg-pink-400 text-white',
     blue: 'bg-blue-400 text-white',
     green: 'bg-green-400 text-white',
     purple: 'bg-purple-400 text-white',
   }
+  const calendarSelectedClass = resolveThemeOrBrand(
+    themeCalendarClasses,
+    invitationTheme,
+    eventFormBrandUi.calendarSelected
+  )
 
   const hasChildren = children.length > 0
 
@@ -1013,11 +1052,10 @@ export default function EditEventPage() {
         setInvitationImageUrl(null)
       }
 
-      const themeKey = eventRow.invitation_theme
-      if (themeKey === 'yellow' || themeKey === 'pink' || themeKey === 'blue' || themeKey === 'green' || themeKey === 'purple') {
-        setInvitationTheme(themeKey)
+      if (isInvitationThemeKey(eventRow.invitation_theme)) {
+        setInvitationTheme(eventRow.invitation_theme)
       } else {
-        setInvitationTheme('yellow')
+        setInvitationTheme(null)
       }
 
       setChildrenLoading(false)
@@ -1366,7 +1404,7 @@ export default function EditEventPage() {
         organizer_phone: fullOrganizerPhone,
         enable_food_options: isFoodActive ? foodEnabled : false,
         organizer_notes: showNotes ? notes.trim() || null : null,
-        invitation_theme: invitationTheme ?? 'yellow',
+        invitation_theme: themeForPersistence(invitationTheme),
         invitation_image_url: showImage ? (invitationImageUrl ?? null) : null,
         invitation_image_fit: showImage ? imageFit : null,
         invitation_image_position: showImage ? `${imagePosX}% ${imagePosY}%` : null,
@@ -1418,16 +1456,19 @@ export default function EditEventPage() {
       }
     }
 
-    localStorage.setItem('lastEventTheme', invitationTheme)
+    if (invitationTheme) {
+      localStorage.setItem('lastEventTheme', invitationTheme)
+    }
     if (fromShare) {
-      router.push(`/dashboard/eventos/${slug}/compartir?theme=${invitationTheme ?? 'yellow'}`)
+      const shareThemeQuery = invitationTheme ? `?theme=${invitationTheme}` : ''
+      router.push(`/dashboard/eventos/${slug}/compartir${shareThemeQuery}`)
     } else {
       router.push(`/dashboard/eventos/${slug}`)
     }
   }
 
   return (
-    <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-8`}>
+    <main className={`${pageMainClass} px-4 py-8`}>
       <AppNav
         backHref={`/dashboard/eventos/${slug}`}
         backLabel="⬅️ Volver"
@@ -1756,7 +1797,7 @@ export default function EditEventPage() {
                         day_button: `rounded-full w-full h-full transition-colors ${calendarHoverClass}`,
                       }}
                       modifiersClassNames={{
-                        selected: `${themeCalendarClasses[invitationTheme] ?? themeCalendarClasses.yellow} rounded-full font-semibold`,
+                        selected: `${calendarSelectedClass} rounded-full font-semibold`,
                         today: 'font-bold text-gray-900',
                       }}
                     />
@@ -2295,7 +2336,7 @@ export default function EditEventPage() {
                   </button>
                 </div>
                 {!invitationImageUrl ? (
-                  <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl py-6 px-4 cursor-pointer hover:border-yellow-400 hover:bg-yellow-50 transition">
+                  <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-xl py-6 px-4 cursor-pointer transition hover:border-[var(--brand-primary)] hover:bg-[var(--brand-primary-light)]">
                     <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
@@ -2385,7 +2426,11 @@ export default function EditEventPage() {
                         <span className="text-xs font-medium text-gray-500">Zoom</span>
                         {(() => {
                           const zoomProgress = ((imageZoom - 1) / 1.5) * 100
-                          const zoomTheme = zoomSliderThemeMap[invitationTheme] ?? zoomSliderThemeMap.yellow
+                          const zoomTheme = resolveThemeOrBrand(
+                            zoomSliderThemeMap,
+                            invitationTheme,
+                            eventFormBrandUi.zoomSlider
+                          )
                           return (
                         <input
                           type="range"

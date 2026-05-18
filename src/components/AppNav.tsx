@@ -77,7 +77,7 @@ export default function AppNav({ backHref, backLabel = DEFAULT_BACK_LABEL }: App
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-yellow-50/95 shadow-sm backdrop-blur-sm">
+    <header className={brand.navSticky}>
       <div className="mx-auto flex w-full max-w-md items-center justify-between px-4 py-3 md:max-w-6xl">
         <div className="min-w-0 shrink-0">
           {backHref ? (

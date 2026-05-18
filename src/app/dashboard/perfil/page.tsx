@@ -5,8 +5,7 @@ import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 
-const inputClassName =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2'
+const inputClassName = brand.formInput
 
 const emailPillClassName =
   'flex w-full items-center gap-2 rounded-lg border border-gray-200 bg-gray-100 px-3 py-2.5 text-sm text-gray-500 cursor-default'
@@ -359,7 +358,7 @@ export default function ProfilePage() {
                       aria-expanded={dialOpen}
                       aria-haspopup="listbox"
                       onClick={() => setDialOpen((open) => !open)}
-                      className={`flex h-10 w-full items-center justify-between gap-0.5 rounded-lg border border-gray-300 bg-white px-1.5 py-2 text-left text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2`}
+                      className={`flex h-10 w-full items-center justify-between gap-0.5 rounded-lg border border-gray-300 bg-white px-1.5 py-2 text-left text-sm text-gray-900 outline-none ring-[var(--brand-focus)] transition focus:border-[var(--brand-focus)] focus:ring-2`}
                     >
                       <span className="min-w-0 flex-1 truncate">{dialCodeShortLabel(countryCode)}</span>
                       <span className="shrink-0 text-[10px] leading-none text-gray-500" aria-hidden>
@@ -426,7 +425,7 @@ export default function ProfilePage() {
                       maxLength={5}
                       placeholder="+00"
                       aria-label="Prefijo internacional"
-                      className="w-16 shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                      className="w-16 shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none ring-[var(--brand-focus)] transition focus:border-[var(--brand-focus)] focus:ring-2"
                     />
                   ) : null}
                   <input
@@ -437,7 +436,7 @@ export default function ProfilePage() {
                     value={phoneNumber}
                     onChange={(event) => setPhoneNumber(event.target.value)}
                     placeholder="Ej. 612345678"
-                    className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                    className={`min-w-0 flex-1 ${brand.formInput}`}
                   />
                 </div>
                 {phoneChanged ? (
@@ -463,7 +462,7 @@ export default function ProfilePage() {
               <button
                 type="submit"
                 disabled={saving || pageLoading}
-                className="w-full rounded-lg bg-yellow-400 px-4 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-yellow-500 disabled:cursor-not-allowed disabled:opacity-60"
+                className={brand.formSubmit}
               >
                 {saving ? 'Guardando…' : 'Guardar cambios'}
               </button>

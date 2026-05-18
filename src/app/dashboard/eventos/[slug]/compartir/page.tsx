@@ -6,8 +6,15 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { format, parseISO, subDays } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { brand } from '@/lib/brand'
+import {
+  eventFormBrandUi,
+  eventFormPageMainClass,
+  resolveThemeOrBrand,
+  sharePageThemeFromUrl,
+} from '@/lib/eventFormTheme'
 import { createClient } from '@/lib/supabase/client'
-import { getTheme, themes, type ThemeKey } from '@/lib/themes'
+import { themes, type ThemeKey } from '@/lib/themes'
 
 type EventShareRow = {
   id: string
@@ -33,13 +40,6 @@ type EventShareRow = {
   enable_food_options: boolean | null
   organizer_phone: string | null
   invitation_theme: string | null
-}
-
-function parseThemeParam(raw: string | null): ThemeKey {
-  if (raw === 'yellow' || raw === 'pink' || raw === 'blue' || raw === 'green' || raw === 'purple') {
-    return raw
-  }
-  return 'yellow'
 }
 
 function parseInvitationPosition(position: string | null) {
@@ -188,18 +188,48 @@ export default function EventSharePage() {
   const slug =
     typeof slugParam === 'string' ? slugParam : Array.isArray(slugParam) ? slugParam[0] ?? '' : ''
 
-  const themeKey = useMemo(() => parseThemeParam(searchParams.get('theme')), [searchParams])
+  const urlTheme = useMemo(() => sharePageThemeFromUrl(searchParams.get('theme')), [searchParams])
 
-  const themeDef = themes[themeKey] ?? themes.yellow
-  const pageBg = getTheme(themeKey).pageBg
-  const primaryButtonClass = `${themeDef.button} ${themeDef.buttonHover} ${primaryButtonTextMap[themeKey] ?? primaryButtonTextMap.yellow}`
-  const progressAccentClass = progressAccentMap[themeKey] ?? progressAccentMap.yellow
-  const progressTrackClass = progressTrackMap[themeKey] ?? progressTrackMap.yellow
-  const progressCardBorderClass = progressCardBorderMap[themeKey] ?? progressCardBorderMap.yellow
-  const cardClass = previewThemeClasses[themeKey]?.card ?? previewThemeClasses.yellow.card
-  const linkAccent = linkAccentMap[themeKey] ?? linkAccentMap.yellow
-  const brandClass = brandMap[themeKey] ?? brandMap.yellow
-  const focusRingClass = focusRingMap[themeKey] ?? focusRingMap.yellow
+  const pageBgMap: Record<string, string> = {
+    yellow: 'from-yellow-50 to-white',
+    pink: 'from-pink-50 to-white',
+    blue: 'from-blue-50 to-white',
+    green: 'from-green-50 to-white',
+    purple: 'from-purple-50 to-white',
+  }
+  const pageMainClass = `${eventFormPageMainClass(urlTheme, pageBgMap)} px-4 py-8`
+  const themeDef = urlTheme ? (themes[urlTheme] ?? themes.yellow) : null
+  const primaryButtonClass = themeDef
+    ? `${themeDef.button} ${themeDef.buttonHover} ${primaryButtonTextMap[urlTheme!] ?? primaryButtonTextMap.yellow}`
+    : brand.buttonPrimary
+  const progressAccentClass = resolveThemeOrBrand(
+    progressAccentMap,
+    urlTheme,
+    eventFormBrandUi.progressAccent
+  )
+  const progressTrackClass = resolveThemeOrBrand(
+    progressTrackMap,
+    urlTheme,
+    eventFormBrandUi.progressTrack
+  )
+  const progressCardBorderClass = resolveThemeOrBrand(
+    progressCardBorderMap,
+    urlTheme,
+    eventFormBrandUi.progressCardBorder
+  )
+  const cardClass = urlTheme
+    ? (previewThemeClasses[urlTheme]?.card ?? previewThemeClasses.yellow.card)
+    : eventFormBrandUi.previewCard
+  const linkAccent = resolveThemeOrBrand(
+    linkAccentMap,
+    urlTheme,
+    `${brand.textBrandDark} ${brand.textBrandHover}`
+  )
+  const brandClass = resolveThemeOrBrand(brandMap, urlTheme, brand.textBrand)
+  const focusRingClass = urlTheme
+    ? (focusRingMap[urlTheme] ?? focusRingMap.yellow)
+    : `focus:ring-[var(--brand-focus)]`
+  const editShareQuery = urlTheme ? `?theme=${urlTheme}&from=share` : '?from=share'
 
   const [event, setEvent] = useState<EventShareRow | null>(null)
   const [foodLabels, setFoodLabels] = useState<string[]>([])
@@ -353,12 +383,12 @@ export default function EventSharePage() {
       (event.location_address != null && String(event.location_address).trim() !== ''))
 
   return (
-    <main className={`min-h-screen bg-gradient-to-b ${pageBg} px-4 py-8`}>
+    <main className={pageMainClass}>
       <AppNav
-        backHref={`/dashboard/eventos/${slug}/editar?theme=${themeKey}&from=share`}
+        backHref={`/dashboard/eventos/${slug}/editar${editShareQuery}`}
         backLabel="⬅️ Volver al Paso 1"
       />
-      <div className="mx-auto w-full max-w-md border-b border-gray-200 bg-yellow-50/95 px-4 shadow-sm backdrop-blur-sm md:max-w-6xl">
+      <div className="mx-auto w-full max-w-md border-b border-gray-200 bg-[var(--brand-surface-nav)]/95 px-4 shadow-sm backdrop-blur-sm md:max-w-6xl">
         <div className="border-t border-gray-200/60 pb-3 pt-2">
           <div className={`rounded-xl border ${progressCardBorderClass} bg-white/80 p-3`}>
             <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
@@ -511,10 +541,10 @@ export default function EventSharePage() {
               </div>
 
               <div className="flex flex-col gap-3">
-                <Link href={`/dashboard/eventos/${slug}/editar?theme=${themeKey}&from=share`} className={secondaryOutlineClass}>
+                <Link href={`/dashboard/eventos/${slug}/editar${editShareQuery}`} className={secondaryOutlineClass}>
                   Editar evento
                 </Link>
-                <a href={`/e/${event.public_slug}?preview=true&theme=${themeKey ?? 'yellow'}&from=share`} className={secondaryOutlineClass}>
+                <a href={`/e/${event.public_slug}?preview=true&from=share`} className={secondaryOutlineClass}>
                   Ver cómo la verán tus invitados
                 </a>
               </div>

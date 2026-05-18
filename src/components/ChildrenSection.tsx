@@ -36,7 +36,7 @@ function computeAgeYears(birthIso: string, today: Date): number {
 }
 
 const avatarColors = [
-  'bg-yellow-100 text-yellow-700',
+  brand.avatarBrand,
   'bg-pink-100 text-pink-700',
   'bg-blue-100 text-blue-700',
   'bg-green-100 text-green-700',
@@ -163,7 +163,24 @@ export function ChildrenSection({
         onChange={(e) => void handleFileChange(e)}
       />
       {isLoading ? (
-        <p className="text-sm text-gray-500">Cargando hijos…</p>
+        <div
+          className="grid grid-cols-2 gap-3 sm:grid-cols-3"
+          aria-busy="true"
+          aria-label="Cargando hijos"
+        >
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="card-soft flex min-h-[5rem] animate-pulse flex-row items-center gap-3 p-2"
+            >
+              <div className="h-16 w-16 shrink-0 rounded-full bg-gray-200" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="h-3.5 w-20 rounded bg-gray-200" />
+                <div className="h-3 w-28 rounded bg-gray-100" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {displayed.map((child, index) => {
@@ -191,8 +208,8 @@ export function ChildrenSection({
                 aria-label={`Opciones de ${fullName}`}
                 aria-haspopup="menu"
                 aria-expanded={isCardActive}
-                className={`card-soft group relative flex min-h-[5rem] w-full cursor-pointer flex-row items-center gap-3 p-2 text-left transition hover:shadow-[var(--shadow-card-hover)] hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400/60 ${
-                  isCardActive ? 'shadow-[var(--shadow-card-hover)] ring-2 ring-yellow-300/80' : ''
+                className={`card-soft group relative flex min-h-[5rem] w-full cursor-pointer flex-row items-center gap-3 p-2 text-left transition hover:shadow-[var(--shadow-card-hover)] hover:-translate-y-px focus-visible:outline-none ${brand.cardFocusRing} ${
+                  isCardActive ? `shadow-[var(--shadow-card-hover)] ${brand.cardActiveRing}` : ''
                 }`}
               >
                 <button

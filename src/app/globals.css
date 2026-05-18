@@ -1,36 +1,65 @@
 @import "tailwindcss";
 
+/*
+ * MiParty design tokens — single source of truth for app chrome.
+ * App pages: import brand from @/lib/brand (maps to these variables).
+ * Per-event invitation colors: src/lib/themes.ts (unchanged).
+ */
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
 
+  /* Brand palette — warm ivory + coral (standard app chrome) */
+  --brand-primary: #ef6b63;
+  --brand-primary-hover: #e85c54;
+  --brand-primary-light: #fff5f0; /* soft peach wash */
+  --brand-primary-muted: #fce8e4; /* soft pink tint */
+  --brand-accent: #ef6b63;
+  --brand-accent-dark: #b94a42;
+  --brand-on-primary: #ffffff; /* text on coral buttons */
+  --brand-focus: var(--brand-primary);
+
+  /* Surfaces */
+  --brand-surface-top: #fffdf8;
+  --brand-surface-bottom: #f8f2ec;
+  --brand-surface-card: #ffffff;
+  --brand-card: #ffffff;
+  --brand-surface-nav: rgba(255, 253, 248, 0.94);
+
+  /* Text */
+  --brand-text: #101827;
+  --brand-text-secondary: #566276;
+  --brand-text-muted: #98a1b2;
+
+  /* Borders */
+  --brand-border: rgba(16, 24, 39, 0.08);
+  --brand-border-accent: #ef6b63;
+  --brand-border-light: #f9e8e6;
+  --brand-border-medium: #f5d4d0;
+
+  /* Status (RSVP, landing hints) */
+  --color-confirm-green: #22c55e;
+  --color-pending-amber: #f59e0b;
+
   /* Radius */
-  --radius-card: 1.25rem; /* 20px - main cards */
-  --radius-card-lg: 1.5rem; /* 24px - large cards */
-  --radius-pill: 999px; /* pills and badges */
-  --radius-input: 0.5rem; /* 8px - inputs */
-  --radius-button: 0.625rem; /* 10px - buttons */
-  --radius-avatar: 9999px; /* circular avatars */
+  --radius-card: 1.25rem;
+  --radius-card-lg: 1.5rem;
+  --radius-pill: 999px;
+  --radius-input: 0.5rem;
+  --radius-button: 0.625rem;
+  --radius-avatar: 9999px;
 
   /* Shadows */
   --shadow-card: 0 2px 12px rgba(15, 23, 42, 0.06);
   --shadow-card-hover: 0 4px 20px rgba(15, 23, 42, 0.1);
   --shadow-modal: 0 8px 40px rgba(15, 23, 42, 0.14);
 
-  /* Borders */
+  /* Borders (structural) */
   --border-soft: rgba(15, 23, 42, 0.08);
-  --border-muted: rgba(15, 23, 42, 0.05);
+  --border-muted: rgba(15, 24, 39, 0.05);
 
-  /* Colors */
-  --color-brand-yellow: #fbbf24;
-  --color-brand-yellow-light: #fef9e7;
-  --color-text-muted: #9ca3af;
-  --color-text-soft: #6b7280;
-  --color-bg-page: #fefce8;
-  --color-bg-cream: #fdf8f3;
-  --color-coral-soft: #f4a89a;
-  --color-bg-card: #ffffff;
-  --color-bg-input: #ffffff;
+  /* Misc surfaces */
   --color-bg-disabled: #f9fafb;
 }
 
@@ -39,6 +68,10 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-primary-hover: var(--brand-primary-hover);
+  --color-brand-surface-top: var(--brand-surface-top);
+  --color-brand-accent: var(--brand-accent);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -71,7 +104,7 @@ body {
   }
 
   .input-base {
-    @apply w-full rounded-[var(--radius-input)] border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-400 focus:ring-1 focus:ring-gray-400;
+    @apply w-full rounded-[var(--radius-input)] border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 focus:ring-[var(--brand-focus)] focus:border-[var(--brand-focus)];
   }
 
   .input-disabled {
@@ -79,7 +112,7 @@ body {
   }
 
   .select-base {
-    @apply w-full cursor-pointer appearance-none rounded-[var(--radius-input)] border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-400 focus:ring-1 focus:ring-gray-400;
+    @apply w-full cursor-pointer appearance-none rounded-[var(--radius-input)] border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 focus:ring-[var(--brand-focus)] focus:border-[var(--brand-focus)];
   }
 
   .select-disabled {
@@ -88,9 +121,5 @@ body {
 
   .font-display {
     font-family: var(--font-display), Georgia, "Times New Roman", serif;
-  }
-
-  .landing-cream {
-    background-color: var(--color-bg-cream);
   }
 }

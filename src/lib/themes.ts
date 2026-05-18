@@ -1,3 +1,4 @@
+/** Invitation / RSVP page color sets. `yellow` matches app tokens in globals.css (`--brand-*`). */
 export type ThemeKey = 'yellow' | 'pink' | 'blue' | 'green' | 'purple'
 
 export const themes: Record<

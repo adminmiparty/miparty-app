@@ -85,7 +85,7 @@ type FamilyMemberPartner = {
 }
 
 const partnerAvatarColors = [
-  'bg-yellow-100 text-yellow-700',
+  brand.avatarBrand,
   'bg-pink-100 text-pink-700',
   'bg-blue-100 text-blue-700',
   'bg-green-100 text-green-700',
@@ -288,8 +288,7 @@ function formatPartnerBirthSummary(iso: string | null): string | null {
 
 const profileInputClassName = `input-base focus:ring-2 ${brand.inputFocus}`
 
-const profileBirthDateSelectClassName =
-  'select-base px-2 ring-yellow-400 transition focus:border-yellow-400 focus:ring-2'
+const profileBirthDateSelectClassName = `select-base px-2 focus:ring-2 ${brand.inputFocus}`
 
 const childFieldReadOnlyClassName =
   'input-disabled cursor-default border-gray-200 bg-gray-100 text-gray-500'
@@ -1705,6 +1704,28 @@ export default function DashboardHomePage() {
           </div>
         </header>
 
+        {loading && !parentProfile ? (
+          <div
+            className="mb-6 grid grid-cols-2 gap-3 sm:mb-8"
+            aria-busy="true"
+            aria-label="Cargando perfil"
+          >
+            {[0, 1].map((i) => (
+              <div
+                key={i}
+                className="card-soft flex min-h-[5.625rem] animate-pulse flex-row items-center gap-3 p-3 sm:gap-4"
+              >
+                <div className="h-16 w-16 shrink-0 rounded-full bg-gray-200" />
+                <div className="min-w-0 flex-1 space-y-2 pr-6">
+                  <div className="h-4 w-28 rounded bg-gray-200" />
+                  <div className="h-3 w-24 rounded bg-gray-100" />
+                  <div className="h-3 w-32 rounded bg-gray-100" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         {parentProfile ? (
           <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8">
             <div
@@ -1815,11 +1836,11 @@ export default function DashboardHomePage() {
           </div>
         ) : null}
 
-        {userId ? (
+        {userId || loading ? (
           <ChildrenSection
             userId={userId}
             initialChildren={children}
-            isLoading={loading}
+            isLoading={loading || !userId}
             onAddChild={() => setShowAddChildModal(true)}
             onChildCardPress={(child) => setChildActionTarget(child)}
             childActionTargetId={childActionTarget?.id ?? null}
@@ -1827,13 +1848,11 @@ export default function DashboardHomePage() {
         ) : null}
 
         <section className="card-soft p-4 sm:p-6">
-          {loading ? <p className="text-sm text-gray-500">Cargando eventos...</p> : null}
-
           {error ? (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
           ) : null}
 
-          {!loading && !error ? (
+          {!error ? (
             <div className="px-4 sm:px-6">
               <div className="mb-4 mt-2 flex items-center justify-between gap-2">
                 <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
@@ -1848,7 +1867,15 @@ export default function DashboardHomePage() {
                 </Link>
               </div>
 
-              {!hasAnyEvents ? (
+              {loading ? (
+                <div className="space-y-4" aria-busy="true" aria-label="Cargando eventos">
+                  <div className="grid w-full grid-cols-2 gap-3">
+                    <div className="pill-soft h-10 animate-pulse border border-gray-200 bg-gray-100" />
+                    <div className="pill-soft h-10 animate-pulse border border-gray-200 bg-gray-100" />
+                  </div>
+                  <div className="h-[4.5rem] animate-pulse rounded-xl border border-gray-100 bg-gray-100" />
+                </div>
+              ) : !hasAnyEvents ? (
                 <p className="py-6 text-center text-sm text-gray-500">🎉 Todos tus eventos aparecerán aquí.</p>
               ) : (
                 <>
@@ -1869,7 +1896,7 @@ export default function DashboardHomePage() {
                       </span>
                       <span
                         className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                          showProximos ? 'bg-yellow-400 text-white' : 'bg-gray-200 text-gray-500'
+                          showProximos ? brand.togglePillActive : 'bg-gray-200 text-gray-500'
                         }`}
                       >
                         {upcomingCount}
@@ -1891,7 +1918,7 @@ export default function DashboardHomePage() {
                       </span>
                       <span
                         className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                          showPasados ? 'bg-yellow-400 text-white' : 'bg-gray-200 text-gray-500'
+                          showPasados ? brand.togglePillActive : 'bg-gray-200 text-gray-500'
                         }`}
                       >
                         {pastCount}
@@ -1950,7 +1977,24 @@ export default function DashboardHomePage() {
               📍 Lugares
             </h2>
             {loading ? (
-              <p className="text-sm text-gray-500">Cargando…</p>
+              <div
+                className="grid grid-cols-2 gap-3 sm:grid-cols-3"
+                aria-busy="true"
+                aria-label="Cargando lugares"
+              >
+                {[0, 1].map((i) => (
+                  <div
+                    key={i}
+                    className="card-soft flex h-16 animate-pulse flex-row items-center gap-3 p-3"
+                  >
+                    <div className="h-10 w-10 shrink-0 rounded-lg bg-gray-200" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="h-3.5 w-20 rounded bg-gray-200" />
+                      <div className="h-3 w-24 rounded bg-gray-100" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : events.length === 0 || distinctLocations.length === 0 ? (
               <p className="text-center text-sm text-gray-400 py-4">
                 📍 Los lugares de tus eventos aparecerán aquí automáticamente.
@@ -2192,7 +2236,7 @@ export default function DashboardHomePage() {
                         aria-expanded={profileDialOpen}
                         aria-haspopup="listbox"
                         onClick={() => setProfileDialOpen((open) => !open)}
-                        className="flex h-10 w-full items-center justify-between gap-0.5 rounded-lg border border-gray-300 bg-white px-1.5 py-2 text-left text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                        className="flex h-10 w-full items-center justify-between gap-0.5 rounded-lg border border-gray-300 bg-white px-1.5 py-2 text-left text-sm text-gray-900 outline-none ring-[var(--brand-focus)] transition focus:border-[var(--brand-focus)] focus:ring-2"
                       >
                         <span className="min-w-0 flex-1 truncate">
                           {dialCodeShortLabel(profileCountryCode)}
@@ -2261,7 +2305,7 @@ export default function DashboardHomePage() {
                         maxLength={5}
                         placeholder="+00"
                         aria-label="Prefijo internacional"
-                        className="input-base w-16 shrink-0 px-2 ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                        className="input-base w-16 shrink-0 px-2 ring-[var(--brand-focus)] transition focus:border-[var(--brand-focus)] focus:ring-2"
                       />
                     ) : null}
                     <input
@@ -2272,7 +2316,7 @@ export default function DashboardHomePage() {
                       value={profilePhoneNumber}
                       onChange={(e) => setProfilePhoneNumber(e.target.value)}
                       placeholder="Ej. 612345678"
-                      className="input-base min-w-0 flex-1 ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                      className="input-base min-w-0 flex-1 placeholder:text-gray-400"
                     />
                   </div>
                 </div>
@@ -2486,7 +2530,7 @@ export default function DashboardHomePage() {
                       aria-expanded={partnerDialOpen}
                       aria-haspopup="listbox"
                       onClick={() => setPartnerDialOpen((open) => !open)}
-                      className="flex h-10 w-full items-center justify-between gap-0.5 rounded-lg border border-gray-300 bg-white px-1.5 py-2 text-left text-sm text-gray-900 outline-none ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                      className="flex h-10 w-full items-center justify-between gap-0.5 rounded-lg border border-gray-300 bg-white px-1.5 py-2 text-left text-sm text-gray-900 outline-none ring-[var(--brand-focus)] transition focus:border-[var(--brand-focus)] focus:ring-2"
                     >
                       <span className="min-w-0 flex-1 truncate">
                         {dialCodeShortLabel(partnerCountryCode)}
@@ -2557,7 +2601,7 @@ export default function DashboardHomePage() {
                       maxLength={5}
                       placeholder="+00"
                       aria-label="Prefijo internacional"
-                      className="input-base w-16 shrink-0 px-2 ring-yellow-400 transition focus:border-yellow-400 focus:ring-2"
+                      className="input-base w-16 shrink-0 px-2 ring-[var(--brand-focus)] transition focus:border-[var(--brand-focus)] focus:ring-2"
                     />
                   ) : null}
                   <input
@@ -2568,7 +2612,7 @@ export default function DashboardHomePage() {
                     value={partnerPhoneNumber}
                     onChange={(event) => setPartnerPhoneNumber(event.target.value)}
                     placeholder="Ej. 612345678"
-                    className="input-base min-w-0 flex-1 ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
+                    className="input-base min-w-0 flex-1 placeholder:text-gray-400"
                   />
                 </div>
               </div>
@@ -2750,12 +2794,9 @@ export default function DashboardHomePage() {
                     `/dashboard/eventos/nuevo?childId=${childActionTarget.id}&mode=birthday&title=${encodeURIComponent(title)}`
                   )
                 }}
-                className="flex w-full items-center gap-3 rounded-xl bg-yellow-50 px-4 py-3 transition hover:bg-yellow-100"
+                className={brand.modalActionPrimary}
               >
-                <span
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow-100 text-lg"
-                  aria-hidden
-                >
+                <span className={brand.modalActionPrimaryIcon} aria-hidden>
                   🎉
                 </span>
                 <span className="text-sm font-medium text-gray-700">Crear evento</span>
@@ -2818,12 +2859,9 @@ export default function DashboardHomePage() {
                   )
                   setLocationActionTarget(null)
                 }}
-                className="flex w-full items-center gap-3 rounded-xl bg-yellow-50 px-4 py-3 text-left transition hover:bg-yellow-100"
+                className={`${brand.modalActionPrimary} text-left`}
               >
-                <span
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow-100 text-lg"
-                  aria-hidden
-                >
+                <span className={brand.modalActionPrimaryIcon} aria-hidden>
                   🎉
                 </span>
                 <span className="text-sm font-medium text-gray-700">Crear evento en este lugar</span>
