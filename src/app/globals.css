@@ -27,6 +27,8 @@
   --color-text-muted: #9ca3af;
   --color-text-soft: #6b7280;
   --color-bg-page: #fefce8;
+  --color-bg-cream: #fdf8f3;
+  --color-coral-soft: #f4a89a;
   --color-bg-card: #ffffff;
   --color-bg-input: #ffffff;
   --color-bg-disabled: #f9fafb;
@@ -82,5 +84,13 @@ body {
 
   .select-disabled {
     @apply w-full cursor-not-allowed appearance-none rounded-[var(--radius-input)] border border-gray-200 bg-[var(--color-bg-disabled)] px-3 py-2.5 text-sm text-gray-400 outline-none transition;
+  }
+
+  .font-display {
+    font-family: var(--font-display), Georgia, "Times New Roman", serif;
+  }
+
+  .landing-cream {
+    background-color: var(--color-bg-cream);
   }
 }
