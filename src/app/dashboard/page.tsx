@@ -9,6 +9,7 @@ import { brand } from '@/lib/brand'
 import { formatEventDayMonthShort } from '@/lib/dates'
 import { CalendarDays, Map as MapIcon, Pencil, X } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
@@ -46,6 +47,7 @@ type EventListItem = {
   start_time: string | null
   location_name: string | null
   location_address: string | null
+  google_maps_url: string | null
   invitation_theme: string | null
   invitation_image_url: string | null
 }
@@ -253,6 +255,24 @@ function computeAgeYearsFromIso(birthIso: string, today: Date): number {
   let age = today.getFullYear() - birth.getFullYear()
   const monthDiff = today.getMonth() - birth.getMonth()
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age -= 1
+  }
+  return age
+}
+
+function calculateAge(birthIso: string | null): number | null {
+  if (!birthIso?.trim()) return null
+  const match = birthIso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+  const y = Number.parseInt(match[1], 10)
+  const mo = Number.parseInt(match[2], 10)
+  const d = Number.parseInt(match[3], 10)
+  const birth = new Date(y, mo - 1, d)
+  const today = new Date()
+  const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  let age = todayDate.getFullYear() - birth.getFullYear()
+  const monthDiff = todayDate.getMonth() - birth.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && todayDate.getDate() < birth.getDate())) {
     age -= 1
   }
   return age
@@ -570,13 +590,6 @@ function formatTimeShort(time: string | null) {
   return String(time).slice(0, 5)
 }
 
-function googleMapsSearchUrl(locationName: string, locationAddress: string | null): string {
-  const name = locationName.trim()
-  const addr = locationAddress?.trim()
-  const query = addr && addr.length > 0 ? addr : name
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
-}
-
 function eventStatusLabel(eventDate: string, todayStr: string): 'Próximo' | 'Hoy' | 'Pasado' {
   if (eventDate > todayStr) return 'Próximo'
   if (eventDate === todayStr) return 'Hoy'
@@ -708,12 +721,14 @@ function invitedItemToEventListItem(item: InvitedListItem): EventListItem {
     start_time: null,
     location_name: null,
     location_address: null,
+    google_maps_url: null,
     invitation_theme: item.invitation_theme,
     invitation_image_url: item.invitation_image_url ?? null,
   }
 }
 
 export default function DashboardHomePage() {
+  const router = useRouter()
   const supabase = createClient()
   const [events, setEvents] = useState<EventListItem[]>([])
   const [rsvpCountsByEventId, setRsvpCountsByEventId] = useState<Record<string, RsvpCounts>>({})
@@ -756,8 +771,12 @@ export default function DashboardHomePage() {
   const [childModalError, setChildModalError] = useState<string | null>(null)
   const [childAddSuccessToast, setChildAddSuccessToast] = useState(false)
   const [viewingChild, setViewingChild] = useState<DashboardChildRow | null>(null)
-  /** Set on child card tap; drives future contextual menu (cumpleaños / evento / perfil). */
-  const [childCardMenuTarget, setChildCardMenuTarget] = useState<DashboardChildRow | null>(null)
+  const [childActionTarget, setChildActionTarget] = useState<DashboardChildRow | null>(null)
+  const [locationActionTarget, setLocationActionTarget] = useState<{
+    location_name: string
+    location_address: string | null
+    google_maps_url: string | null
+  } | null>(null)
   const [viewChildFirstName, setViewChildFirstName] = useState('')
   const [viewChildLastName, setViewChildLastName] = useState('')
   const [viewChildShortName, setViewChildShortName] = useState('')
@@ -961,13 +980,31 @@ export default function DashboardHomePage() {
   const hasAnyEvents = events.length > 0 || invitedItems.length > 0
 
   const distinctLocations = useMemo(() => {
-    const m = new Map<string, string | null>()
+    const m = new Map<string, { location_address: string | null; google_maps_url: string | null }>()
     for (const e of events) {
       const n = e.location_name?.trim()
       if (!n) continue
-      if (!m.has(n)) m.set(n, e.location_address?.trim() ?? null)
+      const address = e.location_address?.trim() ?? null
+      const mapsUrl = e.google_maps_url?.trim() || null
+      const existing = m.get(n)
+      if (!existing) {
+        m.set(n, { location_address: address, google_maps_url: mapsUrl })
+        continue
+      }
+      if (!existing.location_address && address) {
+        existing.location_address = address
+      }
+      if (!existing.google_maps_url && mapsUrl) {
+        existing.google_maps_url = mapsUrl
+      }
     }
-    return [...m.entries()].map(([name, address]) => ({ name, address })).slice(0, 3)
+    return [...m.entries()]
+      .map(([location_name, data]) => ({
+        location_name,
+        location_address: data.location_address,
+        google_maps_url: data.google_maps_url,
+      }))
+      .slice(0, 3)
   }, [events])
 
   useEffect(() => {
@@ -1039,7 +1076,7 @@ export default function DashboardHomePage() {
         supabase
           .from('events')
           .select(
-            'id, public_slug, title, child_name, event_date, start_time, location_name, location_address, invitation_theme, invitation_image_url'
+            'id, public_slug, title, child_name, event_date, start_time, location_name, location_address, google_maps_url, invitation_theme, invitation_image_url'
           )
           .eq('user_id', user.id),
         supabase
@@ -1426,11 +1463,6 @@ export default function DashboardHomePage() {
     String(new Date().getFullYear() - index)
   )
 
-  const handleChildCardPress = useCallback((child: DashboardChildRow) => {
-    // Future: open contextual modal (Crear cumpleaños · Crear evento · Editar perfil)
-    setChildCardMenuTarget((prev) => (prev?.id === child.id ? null : child))
-  }, [])
-
   const openProfileModal = () => {
     let first = userDbProfile?.first_name?.trim() ?? ''
     let last = userDbProfile?.last_name?.trim() ?? ''
@@ -1675,10 +1707,24 @@ export default function DashboardHomePage() {
 
         {parentProfile ? (
           <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8">
-            <div className="card-soft relative flex min-h-[5.625rem] flex-row items-center gap-3 p-3 sm:gap-4">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={openProfileModal}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  openProfileModal()
+                }
+              }}
+              className="card-soft relative flex min-h-[5.625rem] cursor-pointer flex-row items-center gap-3 p-3 sm:gap-4"
+            >
               <button
                 type="button"
-                onClick={openProfileModal}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  openProfileModal()
+                }}
                 className="absolute top-2 right-2 rounded-full p-1 text-gray-300 transition hover:bg-gray-100 hover:text-gray-500"
                 aria-label="Editar perfil"
               >
@@ -1775,12 +1821,8 @@ export default function DashboardHomePage() {
             initialChildren={children}
             isLoading={loading}
             onAddChild={() => setShowAddChildModal(true)}
-            onViewChild={(child) => {
-              setChildCardMenuTarget(null)
-              setViewingChild(child)
-            }}
-            onChildCardPress={handleChildCardPress}
-            childCardMenuTargetId={childCardMenuTarget?.id ?? null}
+            onChildCardPress={(child) => setChildActionTarget(child)}
+            childActionTargetId={childActionTarget?.id ?? null}
           />
         ) : null}
 
@@ -1915,13 +1957,19 @@ export default function DashboardHomePage() {
               </p>
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {distinctLocations.map(({ name, address }) => (
-                  <a
-                    key={name}
-                    href={googleMapsSearchUrl(name, address)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="card-soft flex w-full flex-row items-center gap-3 p-3 transition hover:border-yellow-200 hover:bg-yellow-50/50"
+                {distinctLocations.map((location) => (
+                  <div
+                    key={location.location_name}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setLocationActionTarget(location)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        setLocationActionTarget(location)
+                      }
+                    }}
+                    className="card-soft flex w-full cursor-pointer flex-row items-center gap-3 p-3 transition hover:shadow-md"
                   >
                     <div
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100"
@@ -1930,15 +1978,19 @@ export default function DashboardHomePage() {
                       <MapIcon className="h-4 w-4 text-gray-400" strokeWidth={2} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-700">{name}</p>
-                      {address ? (
-                        <p className="mt-0.5 truncate text-xs text-gray-400" title={address}>
-                          {address}
+                      <p className="truncate text-sm font-medium text-gray-700">
+                        {location.location_name}
+                      </p>
+                      {location.location_address ? (
+                        <p
+                          className="mt-0.5 truncate text-xs text-gray-400"
+                          title={location.location_address}
+                        >
+                          {location.location_address}
                         </p>
                       ) : null}
                     </div>
-                    <span className="sr-only">Abrir en Google Maps</span>
-                  </a>
+                  </div>
                 ))}
               </div>
             )}
@@ -2655,6 +2707,149 @@ export default function DashboardHomePage() {
                 saveType="submit"
               />
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {childActionTarget ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setChildActionTarget(null)}
+          role="presentation"
+        >
+          <div
+            className="relative mx-4 w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="child-action-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setChildActionTarget(null)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </button>
+            <h2 id="child-action-modal-title" className="pr-8 text-lg font-semibold text-gray-900">
+              {`${childActionTarget.name} ${childActionTarget.last_name || ''}`.trim()}
+            </h2>
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const displayName =
+                    (childActionTarget.short_name ?? '').trim() || childActionTarget.name
+                  const age = calculateAge(childActionTarget.birth_date)
+                  const title = age
+                    ? `Cumple ${age + 1} de ${displayName}`
+                    : `Cumple de ${displayName}`
+                  setChildActionTarget(null)
+                  router.push(
+                    `/dashboard/eventos/nuevo?childId=${childActionTarget.id}&mode=birthday&title=${encodeURIComponent(title)}`
+                  )
+                }}
+                className="flex w-full items-center gap-3 rounded-xl bg-yellow-50 px-4 py-3 transition hover:bg-yellow-100"
+              >
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow-100 text-lg"
+                  aria-hidden
+                >
+                  🎉
+                </span>
+                <span className="text-sm font-medium text-gray-700">Crear evento</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const child = childActionTarget
+                  setChildActionTarget(null)
+                  setViewingChild(child)
+                }}
+                className="flex w-full items-center gap-3 rounded-xl bg-gray-50 px-4 py-3 transition hover:bg-gray-100"
+              >
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg"
+                  aria-hidden
+                >
+                  ✏️
+                </span>
+                <span className="text-sm font-medium text-gray-700">Ver perfil</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {locationActionTarget ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setLocationActionTarget(null)}
+          role="presentation"
+        >
+          <div
+            className="relative mx-4 w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="location-action-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setLocationActionTarget(null)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </button>
+            <h2 id="location-action-modal-title" className="pr-8 text-lg font-semibold text-gray-900">
+              {locationActionTarget.location_name}
+            </h2>
+            {locationActionTarget.location_address ? (
+              <p className="mt-0.5 text-sm text-gray-400">{locationActionTarget.location_address}</p>
+            ) : null}
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  router.push(
+                    `/dashboard/eventos/nuevo?locationName=${encodeURIComponent(locationActionTarget.location_name)}&locationAddress=${encodeURIComponent(locationActionTarget.location_address || '')}${locationActionTarget.google_maps_url ? `&googleMapsUrl=${encodeURIComponent(locationActionTarget.google_maps_url)}` : ''}`
+                  )
+                  setLocationActionTarget(null)
+                }}
+                className="flex w-full items-center gap-3 rounded-xl bg-yellow-50 px-4 py-3 text-left transition hover:bg-yellow-100"
+              >
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow-100 text-lg"
+                  aria-hidden
+                >
+                  🎉
+                </span>
+                <span className="text-sm font-medium text-gray-700">Crear evento en este lugar</span>
+              </button>
+              {locationActionTarget.google_maps_url ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = locationActionTarget.google_maps_url
+                    setLocationActionTarget(null)
+                    if (url) {
+                      window.open(url, '_blank')
+                    }
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl bg-gray-50 px-4 py-3 text-left transition hover:bg-gray-100"
+                >
+                  <span
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg"
+                    aria-hidden
+                  >
+                    🗺️
+                  </span>
+                  <span className="text-sm font-medium text-gray-700">Ver en Google Maps</span>
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}

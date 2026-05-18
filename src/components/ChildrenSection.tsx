@@ -1,7 +1,7 @@
 'use client'
 
 import { brand } from '@/lib/brand'
-import { Camera, Pencil, Plus, X } from 'lucide-react'
+import { Camera, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -54,12 +54,9 @@ type ChildrenSectionProps = {
   initialChildren: DashboardChildRow[]
   isLoading: boolean
   onAddChild: () => void
-  /** Pencil — opens edit profile (not the card tap) */
-  onViewChild: (child: DashboardChildRow) => void
-  /** Whole card tap — future contextual menu (cumpleaños / evento / perfil) */
+  /** Card click — opens child action modal */
   onChildCardPress: (child: DashboardChildRow) => void
-  /** Highlights card after press until menu is implemented */
-  childCardMenuTargetId?: string | null
+  childActionTargetId?: string | null
 }
 
 export function ChildrenSection({
@@ -67,9 +64,8 @@ export function ChildrenSection({
   initialChildren,
   isLoading,
   onAddChild,
-  onViewChild,
   onChildCardPress,
-  childCardMenuTargetId = null,
+  childActionTargetId = null,
 }: ChildrenSectionProps) {
   const supabase = createClient()
   const [children, setChildren] = useState<DashboardChildRow[]>(initialChildren)
@@ -155,7 +151,6 @@ export function ChildrenSection({
           }}
           className={brand.dashboardPrimaryPill}
         >
-          <Plus className="h-4 w-4 shrink-0" strokeWidth={2.5} aria-hidden />
           Añadir hijo/a
         </button>
       </div>
@@ -180,7 +175,7 @@ export function ChildrenSection({
             const hasPhoto = Boolean(child.avatar_url?.trim())
             const initials = getInitials(child.name, child.last_name ?? '')
             const avatarColorClass = avatarColors[index % avatarColors.length]
-            const isCardActive = childCardMenuTargetId === child.id
+            const isCardActive = childActionTargetId === child.id
             return (
               <div
                 key={child.id}
@@ -200,17 +195,6 @@ export function ChildrenSection({
                   isCardActive ? 'shadow-[var(--shadow-card-hover)] ring-2 ring-yellow-300/80' : ''
                 }`}
               >
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onViewChild(child)
-                  }}
-                  className="absolute top-1 right-1 rounded-full p-1 text-gray-300 transition hover:bg-gray-100 hover:text-gray-500"
-                  aria-label="Editar perfil"
-                >
-                  <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
-                </button>
                 <button
                   type="button"
                   onClick={(e) => {
@@ -246,7 +230,7 @@ export function ChildrenSection({
                     )}
                   </div>
                 </button>
-                <div className="flex min-w-0 flex-1 flex-col items-start justify-start gap-0.5 pr-6">
+                <div className="flex min-w-0 flex-1 flex-col items-start justify-start gap-0.5">
                   <p className="truncate text-sm font-medium text-gray-700" title={fullName}>
                     {fullName}
                   </p>

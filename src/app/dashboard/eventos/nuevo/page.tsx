@@ -2,11 +2,13 @@
 
 import { useRouter } from 'next/navigation'
 import AppNav from '@/components/AppNav'
-import { type ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, type ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { DayPicker, type Matcher } from 'react-day-picker'
 import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { brand } from '@/lib/brand'
+import { X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { themes, type ThemeKey } from '@/lib/themes'
 import 'react-day-picker/style.css'
@@ -441,11 +443,11 @@ function InlineTimePicker({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid max-w-[9.5rem] grid-cols-2 gap-1.5 sm:max-w-none">
       <select
         value={selectedHour}
         onChange={(event) => handleHourChange(event.target.value)}
-        className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
+        className={`min-w-0 w-full rounded-md border border-gray-300 bg-white px-1.5 py-1.5 text-xs text-gray-900 outline-none transition focus:ring-2 sm:rounded-lg sm:px-2 sm:py-2 sm:text-sm ${inputFocusClass}`}
       >
         {optional ? <option value="">--</option> : null}
         {Array.from({ length: 23 }, (_, index) => index + 1)
@@ -460,7 +462,7 @@ function InlineTimePicker({
       <select
         value={selectedMinutes}
         onChange={(event) => handleMinutesChange(event.target.value)}
-        className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
+        className={`min-w-0 w-full rounded-md border border-gray-300 bg-white px-1.5 py-1.5 text-xs text-gray-900 outline-none transition focus:ring-2 sm:rounded-lg sm:px-2 sm:py-2 sm:text-sm ${inputFocusClass}`}
       >
         {optional ? <option value="">--</option> : null}
         {['00', '15', '30', '45'].map((minute) => (
@@ -471,6 +473,20 @@ function InlineTimePicker({
       </select>
     </div>
   )
+}
+
+function parseStoredLocationAddress(address: string) {
+  const segments = address.split(',').map((part) => part.trim())
+  if (segments.length >= 2) {
+    const street = segments[0] ?? ''
+    const tail = segments.slice(1).join(', ').trim()
+    const tailMatch = tail.match(/^(\S+)\s+(.+)$/)
+    if (tailMatch) {
+      return { street, postal: tailMatch[1], city: tailMatch[2] }
+    }
+    return { street, postal: '', city: tail }
+  }
+  return { street: address.trim(), postal: '', city: '' }
 }
 
 function generatePublicSlug(title: string) {
@@ -487,8 +503,17 @@ function generatePublicSlug(title: string) {
   return `${base || 'evento'}-${randomSuffix}`
 }
 
-export default function NewEventPage() {
+function NewEventPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const childIdParam = searchParams.get('childId')
+  const modeParam = searchParams.get('mode')
+  const titleParam = searchParams.get('title')
+  const locationNameParam = searchParams.get('locationName')
+  const locationAddressParam = searchParams.get('locationAddress')
+  const googleMapsUrlParam = searchParams.get('googleMapsUrl')
+  const queryPrefsAppliedRef = useRef(false)
+  const locationPrefsAppliedRef = useRef(false)
   const supabase = createClient()
 
   const [children, setChildren] = useState<Child[]>([])
@@ -548,6 +573,7 @@ export default function NewEventPage() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showChildLimitModal, setShowChildLimitModal] = useState(false)
   const [organizerDialOpen, setOrganizerDialOpen] = useState(false)
   const [bizumDialOpen, setBizumDialOpen] = useState(false)
   const organizerDialRef = useRef<HTMLDivElement>(null)
@@ -726,6 +752,7 @@ export default function NewEventPage() {
   const progressTrackClass = progressTrackMap[invitationTheme] ?? progressTrackMap.yellow
 
   const hasChildren = children.length > 0
+  const childrenCount = children?.length ?? 0
 
   const selectedChild = useMemo(
     () => children.find((child) => child.id === selectedChildId) ?? null,
@@ -843,6 +870,55 @@ export default function NewEventPage() {
       isMounted = false
     }
   }, [supabase])
+
+  useEffect(() => {
+    if (childrenLoading || queryPrefsAppliedRef.current) return
+    if (!childIdParam || children.length === 0) return
+
+    const child = children.find((item) => item.id === childIdParam)
+    if (!child) return
+
+    queryPrefsAppliedRef.current = true
+    setSelectedChildId(childIdParam)
+    setChildName(getChildDropdownDisplayName(child))
+    syncChildBirthDateFromDisplayValue(
+      child.birth_date ? formatIsoToDisplayDate(child.birth_date) : ''
+    )
+
+    if (titleParam) {
+      setEventTitle(decodeURIComponent(titleParam))
+      setEventTitleManuallyEdited(true)
+    } else if (modeParam === 'birthday') {
+      setEventTitleManuallyEdited(false)
+    }
+
+    if (modeParam === 'birthday') {
+      setInvitationTheme('yellow')
+      setShowGift(true)
+    }
+  }, [childrenLoading, children, childIdParam, modeParam, titleParam])
+
+  useEffect(() => {
+    if (locationPrefsAppliedRef.current) return
+    if (!locationNameParam) return
+
+    locationPrefsAppliedRef.current = true
+    setLocationName(decodeURIComponent(locationNameParam))
+
+    if (locationAddressParam?.trim()) {
+      const addr = decodeURIComponent(locationAddressParam)
+      if (addr.trim()) {
+        const loc = parseStoredLocationAddress(addr)
+        setLocationStreet(loc.street)
+        setLocationPostal(loc.postal)
+        setLocationCity(loc.city)
+      }
+    }
+
+    if (googleMapsUrlParam?.trim()) {
+      setGoogleMapsUrl(decodeURIComponent(googleMapsUrlParam))
+    }
+  }, [locationNameParam, locationAddressParam, googleMapsUrlParam])
 
   useEffect(() => {
     setBirthdayNumberUserEdited(false)
@@ -1288,7 +1364,13 @@ export default function NewEventPage() {
                   </select>
                   <button
                     type="button"
-                    onClick={() => handleChildSelect(NEW_CHILD_VALUE)}
+                    onClick={() => {
+                      if (childrenCount >= 6) {
+                        setShowChildLimitModal(true)
+                        return
+                      }
+                      handleChildSelect(NEW_CHILD_VALUE)
+                    }}
                     className={`mt-1 text-sm hover:underline ${accentTextClass}`}
                   >
                     + Añadir nuevo perfil
@@ -1298,7 +1380,7 @@ export default function NewEventPage() {
 
               {showChildDetailFields ? (
                 <>
-                  {isNewChildSelection ? (
+                  {isNewChildSelection && childrenCount < 6 ? (
                     <>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -1342,7 +1424,7 @@ export default function NewEventPage() {
                             required
                             className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
                           >
-                            <option value="">--</option>
+                            <option value="">Día</option>
                             {Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, '0')).map((day) => (
                               <option key={day} value={day}>
                                 {day}
@@ -1356,7 +1438,7 @@ export default function NewEventPage() {
                             required
                             className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
                           >
-                            <option value="">--</option>
+                            <option value="">Mes</option>
                             {SPANISH_MONTHS.map((monthName, index) => {
                               const monthValue = String(index + 1).padStart(2, '0')
                               return (
@@ -1373,7 +1455,7 @@ export default function NewEventPage() {
                             required
                             className={`w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
                           >
-                            <option value="">--</option>
+                            <option value="">Año</option>
                             {Array.from(
                               { length: new Date().getFullYear() - 1926 + 1 },
                               (_, index) => String(new Date().getFullYear() - index)
@@ -1528,11 +1610,9 @@ export default function NewEventPage() {
                 </div>
               </div>
 
-              <div className="mt-6 mb-1">
-                <div className="flex items-center gap-2 flex-nowrap">
-                  <label htmlFor="rsvpDeadlineDays" className="whitespace-nowrap text-sm font-medium text-gray-700">
-                    Aceptar respuestas hasta
-                  </label>
+              <div className="mt-6">
+                <p className="text-[11px] font-medium leading-snug text-gray-700 sm:text-xs sm:leading-tight">
+                  <label htmlFor="rsvpDeadlineDays">Aceptar respuestas hasta </label>
                   <input
                     id="rsvpDeadlineDays"
                     type="number"
@@ -1540,44 +1620,45 @@ export default function NewEventPage() {
                     inputMode="numeric"
                     value={rsvpDeadlineDays}
                     onChange={(event) => setRsvpDeadlineDays(event.target.value)}
-                    className={`w-12 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
+                    className={`mx-0.5 inline-block w-10 min-w-[2.5rem] align-middle appearance-auto rounded border border-gray-300 bg-white py-px pl-1 pr-0.5 text-[11px] font-medium text-gray-700 outline-none transition focus:ring-2 sm:w-11 sm:text-xs [&::-webkit-inner-spin-button]:opacity-100 [&::-webkit-outer-spin-button]:opacity-100 ${inputFocusClass}`}
                   />
-                  <span className="whitespace-nowrap text-sm text-gray-700">
+                  <span>
                     {rsvpDeadlineDaysParsed === 1 ? 'día antes del evento,' : 'días antes del evento,'}
+                    {rsvpDeadlineHintDeadline ? (
+                      <>
+                        {' '}
+                        es decir, hasta el{' '}
+                        <span className={brand.textBrandDark}>
+                          {format(rsvpDeadlineHintDeadline, "EEEE, d 'de' MMMM.", { locale: es })}
+                        </span>
+                      </>
+                    ) : null}
                   </span>
-                </div>
-                {rsvpDeadlineHintDeadline ? (
-                  <p className="mt-2 text-sm text-gray-900">
-                    es decir, hasta el{' '}
-                    <span className="text-gray-500">
-                      {format(rsvpDeadlineHintDeadline, "EEEE, d 'de' MMMM.", { locale: es })}
-                    </span>
-                  </p>
-                ) : null}
+                </p>
               </div>
 
-              <div className="mt-3 grid grid-cols-1 items-end gap-4 sm:grid-cols-2">
-                <div>
+              <div className="mt-4 flex w-full flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
                   <label
                     htmlFor="startTime"
-                    className="mb-1.5 block whitespace-nowrap text-sm font-medium text-gray-900"
+                    className="min-w-0 shrink text-left text-xs font-medium leading-tight text-gray-700 sm:text-sm"
                   >
                     Hora de inicio
                   </label>
-                  <div id="startTime">
+                  <div id="startTime" className="shrink-0">
                     <InlineTimePicker value={startTime} onChange={setStartTime} inputFocusClass={inputFocusClass} />
                   </div>
                 </div>
 
-                <div>
+                <div className="flex items-center justify-between gap-3">
                   <label
                     htmlFor="pickupTime"
-                    className="mb-1.5 flex h-10 items-end whitespace-nowrap text-sm font-medium text-gray-900"
+                    className="min-w-0 shrink text-left text-xs font-medium leading-tight text-gray-700 sm:text-sm"
                   >
-                    <span>Hora de recogida</span>
-                    <span className="ml-1 text-xs">(opcional)</span>
+                    Hora de recogida{' '}
+                    <span className="font-normal text-gray-500">(opcional)</span>
                   </label>
-                  <div id="pickupTime">
+                  <div id="pickupTime" className="shrink-0">
                     <InlineTimePicker
                       value={pickupTime}
                       onChange={setPickupTime}
@@ -2258,6 +2339,60 @@ export default function NewEventPage() {
           </form>
         </section>
       </div>
+
+      {showChildLimitModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div
+            className="relative mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="child-limit-title"
+          >
+            <button
+              type="button"
+              onClick={() => setShowChildLimitModal(false)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Cerrar"
+            >
+              <X className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </button>
+            <div className="flex items-center gap-2">
+              <span aria-hidden>👶</span>
+              <h3 id="child-limit-title" className="text-lg font-semibold text-gray-900">
+                Has llegado al máximo
+              </h3>
+            </div>
+            <p className="mt-2 text-sm text-gray-500">
+              Has llegado al máximo de 6 perfiles infantiles. Si necesitas añadir más, te invitamos a crear otra
+              cuenta o contactarnos.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowChildLimitModal(false)}
+              className={`mt-4 w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      ) : null}
     </main>
+  )
+}
+
+export default function NewEventPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className={`min-h-screen bg-gradient-to-b ${'from-yellow-50 to-white'}`}>
+          <AppNav />
+          <div className="mx-auto max-w-2xl px-4 py-8">
+            <p className="text-sm text-gray-500">Cargando…</p>
+          </div>
+        </main>
+      }
+    >
+      <NewEventPageContent />
+    </Suspense>
   )
 }
