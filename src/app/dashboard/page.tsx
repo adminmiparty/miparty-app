@@ -8,6 +8,14 @@ import GoogleGIcon from '@/components/GoogleGIcon'
 import { ChildrenSection, type DashboardChildRow } from '@/components/ChildrenSection'
 import { brand } from '@/lib/brand'
 import { formatEventDayMonthShort } from '@/lib/dates'
+import {
+  buildGoogleMapsSearchUrl,
+  buildPlaceAddressLine,
+  loadSavedPlaces,
+  mergeEventAndSavedLocations,
+  persistSavedPlaces,
+  type SavedPlace,
+} from '@/lib/savedPlaces'
 import { CalendarDays, Map as MapIcon, Pencil, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -789,6 +797,16 @@ export default function DashboardHomePage() {
     location_address: string | null
     google_maps_url: string | null
   } | null>(null)
+  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([])
+  const [showAddPlaceModal, setShowAddPlaceModal] = useState(false)
+  const [placeName, setPlaceName] = useState('')
+  const [placeStreet, setPlaceStreet] = useState('')
+  const [placeNumber, setPlaceNumber] = useState('')
+  const [placePostal, setPlacePostal] = useState('')
+  const [placeCity, setPlaceCity] = useState('')
+  const [placeModalError, setPlaceModalError] = useState<string | null>(null)
+  const [placeSaving, setPlaceSaving] = useState(false)
+  const [placeAddSuccessToast, setPlaceAddSuccessToast] = useState(false)
   const [viewChildFirstName, setViewChildFirstName] = useState('')
   const [viewChildLastName, setViewChildLastName] = useState('')
   const [viewChildShortName, setViewChildShortName] = useState('')
@@ -991,33 +1009,90 @@ export default function DashboardHomePage() {
 
   const hasAnyEvents = events.length > 0 || invitedItems.length > 0
 
-  const distinctLocations = useMemo(() => {
-    const m = new Map<string, { location_address: string | null; google_maps_url: string | null }>()
-    for (const e of events) {
-      const n = e.location_name?.trim()
-      if (!n) continue
-      const address = e.location_address?.trim() ?? null
-      const mapsUrl = e.google_maps_url?.trim() || null
-      const existing = m.get(n)
-      if (!existing) {
-        m.set(n, { location_address: address, google_maps_url: mapsUrl })
-        continue
-      }
-      if (!existing.location_address && address) {
-        existing.location_address = address
-      }
-      if (!existing.google_maps_url && mapsUrl) {
-        existing.google_maps_url = mapsUrl
-      }
+  const dashboardLocations = useMemo(
+    () => mergeEventAndSavedLocations(events, savedPlaces),
+    [events, savedPlaces]
+  )
+
+  const placeFormCanSave = useMemo(
+    () =>
+      Boolean(placeName.trim() && placeStreet.trim() && placeCity.trim()),
+    [placeName, placeStreet, placeCity]
+  )
+
+  useEffect(() => {
+    if (!userId) {
+      setSavedPlaces([])
+      return
     }
-    return [...m.entries()]
-      .map(([location_name, data]) => ({
-        location_name,
-        location_address: data.location_address,
-        google_maps_url: data.google_maps_url,
-      }))
-      .slice(0, 3)
-  }, [events])
+    setSavedPlaces(loadSavedPlaces(userId))
+  }, [userId])
+
+  const openAddPlaceModal = () => {
+    setPlaceName('')
+    setPlaceStreet('')
+    setPlaceNumber('')
+    setPlacePostal('')
+    setPlaceCity('')
+    setPlaceModalError(null)
+    setShowAddPlaceModal(true)
+  }
+
+  const handlePlaceSave = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!userId) {
+      return
+    }
+
+    const trimmedName = placeName.trim()
+    const trimmedStreet = placeStreet.trim()
+    const trimmedCity = placeCity.trim()
+
+    if (!trimmedName || !trimmedStreet || !trimmedCity) {
+      setPlaceModalError('Completa los campos obligatorios.')
+      return
+    }
+
+    const nameTaken = dashboardLocations.some(
+      (loc) => loc.location_name.toLowerCase() === trimmedName.toLowerCase()
+    )
+    if (nameTaken) {
+      setPlaceModalError('Ya tienes un lugar con este nombre.')
+      return
+    }
+
+    setPlaceSaving(true)
+    setPlaceModalError(null)
+
+    const newPlace: SavedPlace = {
+      id: crypto.randomUUID(),
+      location_name: trimmedName,
+      street: trimmedStreet,
+      number: placeNumber.trim(),
+      postal: placePostal.trim(),
+      city: trimmedCity,
+      location_address: buildPlaceAddressLine(
+        trimmedStreet,
+        placeNumber,
+        placePostal,
+        trimmedCity
+      ),
+      google_maps_url: buildGoogleMapsSearchUrl(
+        trimmedStreet,
+        placeNumber,
+        placePostal,
+        trimmedCity
+      ),
+    }
+
+    const next = [...savedPlaces, newPlace]
+    persistSavedPlaces(userId, next)
+    setSavedPlaces(next)
+    setPlaceSaving(false)
+    setShowAddPlaceModal(false)
+    setPlaceAddSuccessToast(true)
+    window.setTimeout(() => setPlaceAddSuccessToast(false), 2500)
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -1836,12 +1911,6 @@ export default function DashboardHomePage() {
                     {partner.phone ? (
                       <p className="text-sm text-gray-500 break-words sm:truncate">{partner.phone}</p>
                     ) : null}
-                    {(() => {
-                      const birthLine = formatPartnerBirthSummary(partner.birth_date)
-                      return birthLine ? (
-                        <p className="text-xs text-gray-400 break-words sm:truncate">{birthLine}</p>
-                      ) : null
-                    })()}
                   </>
                 ) : (
                   <p className="text-xs font-medium text-gray-400">Añadir pareja</p>
@@ -1988,9 +2057,18 @@ export default function DashboardHomePage() {
 
         <section className="card-soft mt-6 p-4 sm:mt-8 sm:p-6">
           <div>
-            <h2 className="mb-4 text-base font-semibold text-gray-900 sm:mt-2 sm:text-lg">
-              📍 Lugares
-            </h2>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+              <h2 className="text-base font-semibold text-gray-900 sm:mt-2 sm:text-lg">
+                📍 Lugares
+              </h2>
+              <button
+                type="button"
+                onClick={openAddPlaceModal}
+                className={`${brand.dashboardPrimaryPill} w-full sm:w-auto`}
+              >
+                Añadir lugar
+              </button>
+            </div>
             {loading ? (
               <div
                 className="grid grid-cols-2 gap-3 sm:grid-cols-3"
@@ -2010,13 +2088,13 @@ export default function DashboardHomePage() {
                   </div>
                 ))}
               </div>
-            ) : events.length === 0 || distinctLocations.length === 0 ? (
-              <p className="text-center text-sm text-gray-400 py-4">
-                📍 Los lugares de tus eventos aparecerán aquí automáticamente.
+            ) : dashboardLocations.length === 0 ? (
+              <p className="py-4 text-center text-sm text-gray-400">
+                📍 Añade un lugar o crea un evento para verlo aquí.
               </p>
             ) : (
               <div className="-mx-1 flex gap-3 overflow-x-auto pb-1 scroll-px-1 snap-x snap-mandatory sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 md:grid-cols-3">
-                {distinctLocations.map((location) => (
+                {dashboardLocations.map((location) => (
                   <div
                     key={location.location_name}
                     role="button"
@@ -2081,6 +2159,15 @@ export default function DashboardHomePage() {
           role="status"
         >
           ✓ Perfil actualizado
+        </p>
+      ) : null}
+
+      {placeAddSuccessToast ? (
+        <p
+          className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
+          role="status"
+        >
+          ✓ Lugar añadido
         </p>
       ) : null}
 
@@ -2829,6 +2916,124 @@ export default function DashboardHomePage() {
                 <span className="text-sm font-medium text-gray-700">Ver perfil</span>
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showAddPlaceModal ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setShowAddPlaceModal(false)}
+          role="presentation"
+        >
+          <div
+            className="relative mx-4 max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-place-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowAddPlaceModal(false)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Cerrar"
+            >
+              <X className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </button>
+            <h2 id="add-place-modal-title" className="pr-8 text-lg font-semibold text-gray-900">
+              Añadir lugar
+            </h2>
+            <form onSubmit={handlePlaceSave} className="mt-4 space-y-4">
+              <div>
+                <label htmlFor="placeName" className="text-sm font-medium text-gray-700">
+                  Nombre del lugar
+                </label>
+                <input
+                  id="placeName"
+                  type="text"
+                  value={placeName}
+                  onChange={(event) => setPlaceName(event.target.value)}
+                  required
+                  className={partnerInputClassName}
+                  placeholder="Ej. Casa de los abuelos"
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <label htmlFor="placeStreet" className="text-sm font-medium text-gray-700">
+                    Calle
+                  </label>
+                  <input
+                    id="placeStreet"
+                    type="text"
+                    value={placeStreet}
+                    onChange={(event) => setPlaceStreet(event.target.value)}
+                    required
+                    className={partnerInputClassName}
+                    placeholder="Ej. Carrer de França"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="placeNumber" className="text-sm font-medium text-gray-700">
+                    Número
+                  </label>
+                  <input
+                    id="placeNumber"
+                    type="text"
+                    inputMode="numeric"
+                    value={placeNumber}
+                    onChange={(event) => setPlaceNumber(event.target.value)}
+                    className={partnerInputClassName}
+                    placeholder="Ej. 7"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="placePostal" className="text-sm font-medium text-gray-700">
+                    Código postal
+                  </label>
+                  <input
+                    id="placePostal"
+                    type="text"
+                    inputMode="numeric"
+                    value={placePostal}
+                    onChange={(event) => setPlacePostal(event.target.value)}
+                    className={partnerInputClassName}
+                    placeholder="Ej. 07108"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="placeCity" className="text-sm font-medium text-gray-700">
+                    Ciudad
+                  </label>
+                  <input
+                    id="placeCity"
+                    type="text"
+                    value={placeCity}
+                    onChange={(event) => setPlaceCity(event.target.value)}
+                    required
+                    className={partnerInputClassName}
+                    placeholder="Ej. Sóller"
+                  />
+                </div>
+              </div>
+
+              {placeModalError ? (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {placeModalError}
+                </p>
+              ) : null}
+
+              <ModalActionButtons
+                saveLabel="Guardar lugar"
+                onCancel={() => setShowAddPlaceModal(false)}
+                hasChanges={placeFormCanSave}
+                saving={placeSaving}
+                saveType="submit"
+              />
+            </form>
           </div>
         </div>
       ) : null}
