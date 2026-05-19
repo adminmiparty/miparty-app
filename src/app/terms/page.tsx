@@ -2,45 +2,46 @@ import type { Metadata } from 'next'
 import LegalPageShell, { LegalContact, LegalSection } from '@/components/legal/LegalPageShell'
 
 export const metadata: Metadata = {
-  title: 'Terms of Service | MiParty',
-  description: 'Terms for using the MiParty family event organization platform.',
+  title: 'Términos del servicio | MiParty',
+  description: 'Condiciones de uso de la plataforma MiParty para organizar eventos familiares.',
 }
 
 export default function TermsPage() {
   return (
-    <LegalPageShell title="Terms of Service">
-      <LegalSection title="About MiParty">
+    <LegalPageShell title="Términos del servicio">
+      <LegalSection title="Qué es MiParty">
         <p>
-          MiParty is a family event organization platform. It helps you create invitations, manage
-          RSVPs, and keep celebration details in one place.
+          MiParty es una plataforma para organizar eventos en familia. Te ayuda a crear
+          invitaciones, gestionar confirmaciones de asistencia y tener todos los detalles de la
+          celebración en un solo sitio.
         </p>
       </LegalSection>
 
-      <LegalSection title="Your content">
+      <LegalSection title="Tu contenido">
         <p>
-          You are responsible for the content you publish through MiParty, including invitation text,
-          images, locations, and messages to guests. Please share accurate information and only
-          content you have the right to use.
+          Eres responsable del contenido que publicas en MiParty, incluidos textos de invitación,
+          imágenes, ubicaciones y mensajes a los invitados. Comparte información veraz y solo
+          contenido que tengas derecho a utilizar.
         </p>
       </LegalSection>
 
-      <LegalSection title="Service provided as-is">
+      <LegalSection title="Servicio prestado «tal cual»">
         <p>
-          MiParty is provided &quot;as is&quot; and &quot;as available.&quot; We work to keep the
-          platform reliable, but we do not guarantee uninterrupted access or that every feature will
-          meet every specific need.
+          MiParty se ofrece «tal cual» y «según disponibilidad». Trabajamos para que la plataforma
+          sea fiable, pero no garantizamos un acceso ininterrumpido ni que cada función cubra
+          cualquier necesidad concreta.
         </p>
       </LegalSection>
 
-      <LegalSection title="Respectful use">
+      <LegalSection title="Uso respetuoso">
         <p>
-          You agree to use MiParty lawfully and respectfully. Do not harass others, upload harmful
-          material, attempt to disrupt the service, or misuse guest or family data you access through
-          the platform.
+          Te comprometes a utilizar MiParty de forma lícita y respetuosa. No acoses a otras
+          personas, subas material dañino, intentes alterar el servicio ni uses de forma indebida
+          los datos de invitados o familiares a los que accedas a través de la plataforma.
         </p>
       </LegalSection>
 
-      <LegalSection title="Contact">
+      <LegalSection title="Contacto">
         <LegalContact />
       </LegalSection>
     </LegalPageShell>

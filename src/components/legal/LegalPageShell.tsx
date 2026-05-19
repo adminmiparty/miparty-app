@@ -69,7 +69,7 @@ export default function LegalPageShell({
               href="/privacy"
               className="font-medium text-[var(--brand-text-secondary)] transition hover:text-[var(--brand-accent-dark)]"
             >
-              Privacy Policy
+              Política de privacidad
             </Link>
             <span className="text-[var(--brand-text-muted)]" aria-hidden>
               ·
@@ -78,7 +78,7 @@ export default function LegalPageShell({
               href="/terms"
               className="font-medium text-[var(--brand-text-secondary)] transition hover:text-[var(--brand-accent-dark)]"
             >
-              Terms of Service
+              Términos del servicio
             </Link>
           </div>
           <p className="text-xs text-[var(--brand-text-muted)]">

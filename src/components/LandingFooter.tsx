@@ -59,14 +59,14 @@ export default function LandingFooter() {
             href="/privacy"
             className="font-medium text-[var(--brand-text-secondary)] transition hover:text-[var(--brand-accent-dark)]"
           >
-            Privacy Policy
+            Política de privacidad
           </Link>
           <span aria-hidden>·</span>
           <Link
             href="/terms"
             className="font-medium text-[var(--brand-text-secondary)] transition hover:text-[var(--brand-accent-dark)]"
           >
-            Terms of Service
+            Términos del servicio
           </Link>
         </div>
       </div>
