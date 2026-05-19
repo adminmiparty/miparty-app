@@ -27,6 +27,28 @@ type Child = {
   name: string
   birth_date: string | null
   last_name: string | null
+  short_name: string | null
+  allergies: string | null
+}
+
+function getSiblingsForBirthdayChild(familyChildren: Child[], selectedChildName: string) {
+  const normalizedSelected = selectedChildName.trim().toLowerCase()
+  return (
+    familyChildren?.filter((child) => {
+      const fullName = `${child.name} ${child.last_name || ''}`.trim().toLowerCase()
+      return (
+        fullName !== normalizedSelected && child.name.trim().toLowerCase() !== normalizedSelected
+      )
+    }) ?? []
+  )
+}
+
+function findBirthdayChildProfile(familyChildren: Child[], selectedChildName: string) {
+  const normalizedSelected = selectedChildName.trim().toLowerCase()
+  return familyChildren.find((child) => {
+    const fullName = `${child.name} ${child.last_name || ''}`.trim().toLowerCase()
+    return fullName === normalizedSelected || child.name.trim().toLowerCase() === normalizedSelected
+  })
 }
 
 function getChildDropdownDisplayName(child: Child) {
@@ -623,6 +645,9 @@ function NewEventPageContent() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showChildLimitModal, setShowChildLimitModal] = useState(false)
+  const [showSiblingsModal, setShowSiblingsModal] = useState(false)
+  const [selectedSiblings, setSelectedSiblings] = useState<string[]>([])
+  const [organizerFirstName, setOrganizerFirstName] = useState('')
   const [organizerDialOpen, setOrganizerDialOpen] = useState(false)
   const [bizumDialOpen, setBizumDialOpen] = useState(false)
   const organizerDialRef = useRef<HTMLDivElement>(null)
@@ -901,11 +926,12 @@ function NewEventPageContent() {
 
       const { data: userProfile } = await supabase
         .from('users')
-        .select('phone')
+        .select('phone, first_name')
         .eq('id', user.id)
         .maybeSingle()
 
       if (isMounted) {
+        setOrganizerFirstName(userProfile?.first_name?.trim() ?? '')
         setOrganizerProfilePhoneLoaded(true)
         const profilePhone =
           userProfile?.phone != null && String(userProfile.phone).trim() !== ''
@@ -922,7 +948,7 @@ function NewEventPageContent() {
 
       const { data, error: childrenError } = await supabase
         .from('children')
-        .select('id, name, birth_date, last_name')
+        .select('id, name, last_name, short_name, birth_date, allergies')
         .eq('user_id', user.id)
         .order('name', { ascending: true })
 
@@ -1451,7 +1477,42 @@ function NewEventPageContent() {
       return
     }
 
+    const siblings = getSiblingsForBirthdayChild(children, trimmedChildName)
+    if (siblings.length > 0) {
+      setSelectedSiblings([])
+      setShowSiblingsModal(true)
+      return
+    }
+
+    await completeEventCreation({ ...buildSubmitParams(), siblingIds: [] })
+  }
+
+  const completeEventCreation = async (params: {
+    trimmedChildName: string
+    trimmedNombre: string
+    trimmedApellido: string
+    trimmedEventTitle: string
+    trimmedLocationName: string
+    trimmedLocationStreet: string
+    trimmedLocationPostal: string
+    trimmedLocationCity: string
+    combinedAddress: string
+    trimmedGoogleMapsUrl: string
+    trimmedBizumPhoneNumber: string
+    parsedChildBirthDate: string | null
+    parsedEventDate: string
+    rsvpDeadlineDaysValue: number | null
+    birthdayNumberValue: number | null
+    fullOrganizerDial: string
+    trimmedOrganizerPhone: string
+    isGiftActive: boolean
+    isFoodActive: boolean
+    normalizedFoodOptions: string[]
+    siblingIds: string[]
+  }) => {
+    setShowSiblingsModal(false)
     setLoading(true)
+    setError(null)
 
     const {
       data: { user },
@@ -1464,7 +1525,7 @@ function NewEventPageContent() {
       return
     }
 
-    const fullOrganizerPhone = `${finalOrganizerDial}${trimmedOrganizerPhone}`
+    const fullOrganizerPhone = `${params.fullOrganizerDial}${params.trimmedOrganizerPhone}`
     if (!hasSavedProfilePhone && savePhoneForFuture) {
       const { error: saveProfilePhoneError } = await supabase
         .from('users')
@@ -1477,35 +1538,36 @@ function NewEventPageContent() {
       }
     }
 
-    const publicSlug = generatePublicSlug(trimmedEventTitle)
-    console.log('event insert food toggle', { foodEnabled, isFoodActive })
-    const query = encodeURIComponent(`${trimmedLocationStreet}, ${trimmedLocationPostal} ${trimmedLocationCity}, Spain`)
+    const publicSlug = generatePublicSlug(params.trimmedEventTitle)
+    console.log('event insert food toggle', { foodEnabled, isFoodActive: params.isFoodActive })
+    const query = encodeURIComponent(
+      `${params.trimmedLocationStreet}, ${params.trimmedLocationPostal} ${params.trimmedLocationCity}, Spain`
+    )
     const generatedMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`
-    const generatedGoogleMapsUrl = generatedMapsUrl
-    const finalGoogleMapsUrl = trimmedGoogleMapsUrl || generatedGoogleMapsUrl
+    const finalGoogleMapsUrl = params.trimmedGoogleMapsUrl || generatedMapsUrl
 
     const { data: insertedEvent, error: eventError } = await supabase
       .from('events')
       .insert({
         user_id: user.id,
-        child_name: trimmedChildName,
-        child_birth_date: parsedChildBirthDate || null,
-        title: trimmedEventTitle,
-        event_date: parsedEventDate,
+        child_name: params.trimmedChildName,
+        child_birth_date: params.parsedChildBirthDate || null,
+        title: params.trimmedEventTitle,
+        event_date: params.parsedEventDate,
         start_time: startTime,
         pickup_time: pickupTime || null,
-        location_name: trimmedLocationName,
-        location_address: combinedAddress,
+        location_name: params.trimmedLocationName,
+        location_address: params.combinedAddress,
         google_maps_url: finalGoogleMapsUrl,
-        gift_option: isGiftActive ? giftOption : 'regalo_libre',
+        gift_option: params.isGiftActive ? giftOption : 'regalo_libre',
         bizum_phone:
-          isGiftActive && giftOption === 'bizum_pool'
-            ? `${resolveDialCode(bizumCountryCode, bizumCustomCode)}${trimmedBizumPhoneNumber}`
+          params.isGiftActive && giftOption === 'bizum_pool'
+            ? `${resolveDialCode(bizumCountryCode, bizumCustomCode)}${params.trimmedBizumPhoneNumber}`
             : null,
-        rsvp_deadline_days: rsvpDeadlineDaysValue,
-        birthday_number: birthdayNumberValue,
+        rsvp_deadline_days: params.rsvpDeadlineDaysValue,
+        birthday_number: params.birthdayNumberValue,
         organizer_phone: fullOrganizerPhone,
-        enable_food_options: isFoodActive ? foodEnabled : false,
+        enable_food_options: params.isFoodActive ? foodEnabled : false,
         organizer_notes: showNotes ? notes.trim() || null : null,
         invitation_theme: themeForPersistence(invitationTheme),
         invitation_image_url: showImage ? (invitationImageUrl ?? null) : null,
@@ -1523,8 +1585,8 @@ function NewEventPageContent() {
       return
     }
 
-    if (isFoodActive && foodEnabled && normalizedFoodOptions.length > 0) {
-      const optionRows = normalizedFoodOptions.map((option) => ({
+    if (params.isFoodActive && foodEnabled && params.normalizedFoodOptions.length > 0) {
+      const optionRows = params.normalizedFoodOptions.map((option) => ({
         event_id: insertedEvent.id,
         label: option,
       }))
@@ -1541,13 +1603,51 @@ function NewEventPageContent() {
     if (isNewChildSelection) {
       const { error: childInsertError } = await supabase.from('children').insert({
         user_id: user.id,
-        name: trimmedNombre,
-        last_name: trimmedApellido || null,
-        birth_date: parsedChildBirthDate || null,
+        name: params.trimmedNombre,
+        last_name: params.trimmedApellido || null,
+        birth_date: params.parsedChildBirthDate || null,
       })
 
       if (childInsertError) {
         setError(childInsertError.message)
+        setLoading(false)
+        return
+      }
+    }
+
+    const parentNameForRsvp = organizerFirstName.trim() || 'Organizador'
+    const birthdayChild = findBirthdayChildProfile(children, params.trimmedChildName)
+
+    const { error: birthdayRsvpError } = await supabase.from('rsvps').insert({
+      event_id: insertedEvent.id,
+      child_name: params.trimmedChildName,
+      guest_parent_name: parentNameForRsvp,
+      attendance_status: 'confirmed',
+      is_family: true,
+      allergy_notes: birthdayChild?.allergies || null,
+    })
+
+    if (birthdayRsvpError) {
+      setError(birthdayRsvpError.message)
+      setLoading(false)
+      return
+    }
+
+    for (const siblingId of params.siblingIds) {
+      const sibling = children.find((child) => child.id === siblingId)
+      if (!sibling) continue
+
+      const { error: siblingRsvpError } = await supabase.from('rsvps').insert({
+        event_id: insertedEvent.id,
+        child_name: `${sibling.name} ${sibling.last_name || ''}`.trim(),
+        guest_parent_name: parentNameForRsvp,
+        attendance_status: 'confirmed',
+        is_family: true,
+        allergy_notes: sibling.allergies || null,
+      })
+
+      if (siblingRsvpError) {
+        setError(siblingRsvpError.message)
         setLoading(false)
         return
       }
@@ -1559,6 +1659,83 @@ function NewEventPageContent() {
     const shareThemeQuery = invitationTheme ? `?theme=${invitationTheme}` : ''
     router.push(`/dashboard/eventos/${insertedEvent.public_slug}/compartir${shareThemeQuery}`)
   }
+
+  const buildSubmitParams = () => {
+    const trimmedNombre = childName.trim()
+    const trimmedApellido = childLastName.trim()
+    const trimmedChildName = isNewChildSelection ? `${trimmedNombre} ${trimmedApellido}`.trim() : trimmedNombre
+    const trimmedEventTitle = eventTitle.trim()
+    const trimmedLocationName = locationName.trim()
+    const trimmedLocationStreet = locationStreet.trim()
+    const trimmedLocationCity = locationCity.trim()
+    const trimmedLocationPostal = locationPostal.trim()
+    const combinedAddress = `${trimmedLocationStreet}, ${trimmedLocationPostal} ${trimmedLocationCity}`
+    const trimmedGoogleMapsUrl = googleMapsUrl.trim()
+    const trimmedBizumPhoneNumber = bizumPhoneNumber.trim()
+    const parsedChildBirthDate = formatDisplayToIsoDate(childBirthDate)
+    const parsedEventDate = formatDisplayToIsoDate(eventDate) ?? ''
+    const finalOrganizerDial = resolveDialCode(organizerCountryCode, organizerCustomCode)
+    const trimmedOrganizerPhone = organizerPhoneNumber.trim()
+
+    const rsvpTrimmed = rsvpDeadlineDays.trim()
+    let rsvpDeadlineDaysValue: number | null = null
+    if (rsvpTrimmed !== '') {
+      rsvpDeadlineDaysValue = Number.parseInt(rsvpTrimmed, 10)
+    }
+
+    let birthdayNumberValue: number | null = null
+    const birthdayTrimmed = birthdayNumber.trim()
+    if (birthdayTrimmed !== '') {
+      birthdayNumberValue = Number.parseInt(birthdayTrimmed, 10)
+    }
+
+    const isGiftActive = showGift
+    const isFoodActive = showFood
+    const normalizedFoodOptions =
+      isFoodActive && foodEnabled
+        ? foodOptions.map((option) => option.trim()).filter((option) => option.length > 0)
+        : []
+
+    return {
+      trimmedChildName,
+      trimmedNombre,
+      trimmedApellido,
+      trimmedEventTitle,
+      trimmedLocationName,
+      trimmedLocationStreet,
+      trimmedLocationPostal,
+      trimmedLocationCity,
+      combinedAddress,
+      trimmedGoogleMapsUrl,
+      trimmedBizumPhoneNumber,
+      parsedChildBirthDate,
+      parsedEventDate,
+      rsvpDeadlineDaysValue,
+      birthdayNumberValue,
+      fullOrganizerDial: finalOrganizerDial,
+      trimmedOrganizerPhone,
+      isGiftActive,
+      isFoodActive,
+      normalizedFoodOptions,
+    }
+  }
+
+  const handleSiblingsModalContinue = () => {
+    void completeEventCreation({ ...buildSubmitParams(), siblingIds: selectedSiblings })
+  }
+
+  const handleSiblingsModalBirthdayOnly = () => {
+    void completeEventCreation({ ...buildSubmitParams(), siblingIds: [] })
+  }
+
+  const siblingsForModal = useMemo(() => {
+    const trimmedNombre = childName.trim()
+    const trimmedApellido = childLastName.trim()
+    const trimmedChildName = isNewChildSelection
+      ? `${trimmedNombre} ${trimmedApellido}`.trim()
+      : trimmedNombre
+    return getSiblingsForBirthdayChild(children, trimmedChildName)
+  }, [children, childName, childLastName, isNewChildSelection])
 
   return (
     <main className={pageMainClass}>
@@ -2599,6 +2776,65 @@ function NewEventPageContent() {
           </form>
         </section>
       </div>
+
+      {showSiblingsModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div
+            className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="siblings-modal-title"
+          >
+            <h3 id="siblings-modal-title" className="text-lg font-semibold text-gray-900">
+              ¿Quién más de tu familia asistirá?
+            </h3>
+            <p className="mt-2 text-sm text-gray-500">
+              Selecciona los hermanos/as que también estarán en la fiesta
+            </p>
+            <ul className="mt-4 space-y-3">
+              {siblingsForModal.map((sibling) => {
+                const siblingLabel = `${sibling.name} ${sibling.last_name || ''}`.trim()
+                const checked = selectedSiblings.includes(sibling.id)
+                return (
+                  <li key={sibling.id}>
+                    <label className="flex cursor-pointer items-center gap-3 text-sm text-gray-800">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          setSelectedSiblings((previous) =>
+                            checked
+                              ? previous.filter((id) => id !== sibling.id)
+                              : [...previous, sibling.id]
+                          )
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
+                      />
+                      <span>{siblingLabel}</span>
+                    </label>
+                  </li>
+                )
+              })}
+            </ul>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleSiblingsModalContinue}
+              className={`mt-6 w-full rounded-lg px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${brand.buttonPrimary}`}
+            >
+              {loading ? 'Guardando...' : 'Continuar'}
+            </button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleSiblingsModalBirthdayOnly}
+              className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Solo el cumpleañero/a
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {showChildLimitModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">

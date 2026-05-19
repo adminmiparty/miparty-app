@@ -1837,7 +1837,12 @@ export default function DashboardHomePage() {
     setPasswordSuccess(true)
   }
 
-  const greetingTitle = userFirstName ? `Hola ${userFirstName} 👋` : 'Hola 👋'
+  const greetingName =
+    userDbProfile?.first_name ||
+    authUser?.user_metadata?.full_name?.split(' ')[0] ||
+    authUser?.email?.split('@')[0] ||
+    ''
+  const greetingTitle = greetingName ? `Hola, ${greetingName} 👋` : 'Hola 👋'
 
   const profileInitials = parentProfile
     ? initialsFromDisplay(parentProfile.fullName, parentProfile.email)

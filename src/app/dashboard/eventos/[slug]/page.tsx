@@ -56,6 +56,18 @@ type RsvpItem = {
   food_preference: string | null
   allergy_notes: string | null
   extra_notes: string | null
+  is_family: boolean | null
+}
+
+function getFamilyRsvpBadge(
+  rsvp: RsvpItem,
+  eventChildName: string
+): { label: string; emoji: string } | null {
+  if (!rsvp.is_family) return null
+  if (rsvp.child_name.trim().toLowerCase() === eventChildName.trim().toLowerCase()) {
+    return { emoji: '🎂', label: 'Cumpleañero/a' }
+  }
+  return { emoji: '👨‍👩‍👧', label: 'Familia' }
 }
 
 function formatTimeValue(time: string) {
@@ -262,7 +274,7 @@ export default function EventControlCenterPage() {
       const { data: rsvpRows } = await supabase
         .from('rsvps')
         .select(
-          'id, child_name, guest_parent_name, guest_parent_phone, attendance_status, food_preference, allergy_notes, extra_notes'
+          'id, child_name, guest_parent_name, guest_parent_phone, attendance_status, food_preference, allergy_notes, extra_notes, is_family'
         )
         .eq('event_id', eventRow.id)
         .order('created_at', { ascending: false })
@@ -323,13 +335,17 @@ export default function EventControlCenterPage() {
     return eventDay >= todayStart
   }, [event?.event_date])
 
-  const filteredRsvps = useMemo(
-    () =>
+  const filteredRsvps = useMemo(() => {
+    const list =
       activeFilters.length === 0
         ? rsvps
-        : rsvps.filter((r) => activeFilters.includes(r.attendance_status ?? 'pending')),
-    [rsvps, activeFilters]
-  )
+        : rsvps.filter((r) => activeFilters.includes(r.attendance_status ?? 'pending'))
+    return [...list].sort((a, b) => {
+      if (a.is_family && !b.is_family) return -1
+      if (!a.is_family && b.is_family) return 1
+      return 0
+    })
+  }, [rsvps, activeFilters])
 
   const showDemoLucía = activeFilters.length === 0 || activeFilters.includes('confirmed')
   const showDemoCarlos = activeFilters.length === 0 || activeFilters.includes('maybe')
@@ -954,11 +970,24 @@ export default function EventControlCenterPage() {
                         {filteredRsvps.map((rsvp) => {
                           const status = rsvpStatusMeta(rsvp.attendance_status)
                           const fullChildName = rsvp.child_name.trim()
+                          const familyBadge = event ? getFamilyRsvpBadge(rsvp, event.child_name) : null
                           return (
-                            <article key={rsvp.id} className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+                            <article
+                              key={rsvp.id}
+                              className={`rounded-xl border border-gray-200 p-3 shadow-sm ${
+                                rsvp.is_family ? 'bg-yellow-50' : 'bg-white'
+                              }`}
+                            >
                               <div className="flex items-start justify-between gap-2">
                                 <div>
-                                  <p className="text-sm font-semibold text-gray-900">{fullChildName}</p>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-sm font-semibold text-gray-900">{fullChildName}</p>
+                                    {familyBadge ? (
+                                      <span className="rounded-full border border-yellow-200 bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-900">
+                                        {familyBadge.emoji} {familyBadge.label}
+                                      </span>
+                                    ) : null}
+                                  </div>
                                   <p className="text-xs text-gray-500">Adulto: {rsvp.guest_parent_name}</p>
                                 </div>
                                 <span className={`rounded-full border px-2 py-1 text-xs font-medium ${status.badge}`}>
@@ -1004,14 +1033,27 @@ export default function EventControlCenterPage() {
                             filteredRsvps.map((rsvp) => {
                             const status = rsvpStatusMeta(rsvp.attendance_status)
                             const fullChildName = rsvp.child_name.trim()
+                            const familyBadge = event ? getFamilyRsvpBadge(rsvp, event.child_name) : null
                             const foodRaw = (rsvp.food_preference ?? '').trim()
                             const foodDisplay = foodRaw ? `🍽️ ${foodRaw}` : ''
                             const allergyRaw = (rsvp.allergy_notes ?? '').trim()
                             const messageRaw = (rsvp.extra_notes ?? '').trim()
                             const phoneRaw = (rsvp.guest_parent_phone ?? '').trim()
                             return (
-                              <tr key={rsvp.id} className="border-b border-gray-100">
-                                <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">{fullChildName}</td>
+                              <tr
+                                key={rsvp.id}
+                                className={`border-b border-gray-100 ${rsvp.is_family ? 'bg-yellow-50' : ''}`}
+                              >
+                                <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span>{fullChildName}</span>
+                                    {familyBadge ? (
+                                      <span className="rounded-full border border-yellow-200 bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-900">
+                                        {familyBadge.emoji} {familyBadge.label}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </td>
                                 <td
                                   className="whitespace-nowrap px-3 py-2 text-gray-700"
                                   title={rsvp.guest_parent_name || undefined}
