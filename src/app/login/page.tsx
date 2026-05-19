@@ -1,5 +1,7 @@
 'use client'
 
+import AuthPageBrand from '@/components/AuthPageBrand'
+import AuthPageShell, { authCardClassName } from '@/components/AuthPageShell'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useState } from 'react'
@@ -53,20 +55,12 @@ export default function LoginPage() {
   }
 
   return (
-    <main className={`min-h-screen ${brand.pageBg} px-4 py-8`}>
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-sm flex-col items-center justify-center gap-5">
-        <div className="text-center">
-          <p className="text-4xl" aria-hidden="true">
-            🎉
-          </p>
-          <h1 className="mt-2 text-3xl font-bold text-gray-900">MiParty</h1>
-          <p className="mt-1 text-sm text-gray-500">Organiza fiestas sin el caos</p>
-        </div>
-
-        <section className="w-full rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
-          <div className="mb-6">
+    <AuthPageShell>
+      <AuthPageBrand />
+      <section className={authCardClassName}>
+          <div className="mb-5 sm:mb-6">
             <p className={`text-sm font-medium ${brand.textBrand}`}>Bienvenido a MiParty</p>
-            <h2 className="mt-1 text-2xl font-bold text-gray-900">Inicia sesion</h2>
+            <h2 className="mt-1 text-xl font-bold text-gray-900 sm:text-2xl">Inicia sesion</h2>
             <p className="mt-2 text-sm text-gray-500">
               Accede para gestionar tus eventos y ver tu panel.
             </p>
@@ -153,8 +147,7 @@ export default function LoginPage() {
               Crear cuenta
             </Link>
           </p>
-        </section>
-      </div>
-    </main>
+      </section>
+    </AuthPageShell>
   )
 }

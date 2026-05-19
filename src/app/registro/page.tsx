@@ -1,5 +1,7 @@
 'use client'
 
+import AuthPageBrand from '@/components/AuthPageBrand'
+import AuthPageShell, { authCardClassName } from '@/components/AuthPageShell'
 import Link from 'next/link'
 import { FormEvent, useState } from 'react'
 import { brand } from '@/lib/brand'
@@ -60,13 +62,12 @@ export default function SignupPage() {
 
   if (signupSuccess) {
     return (
-      <main className={`min-h-screen ${brand.pageBg} px-4 py-8`}>
-        <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-sm items-center justify-center">
-          <section className="w-full rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-xl">
-            <p className="text-4xl" aria-hidden="true">
+      <AuthPageShell>
+        <section className={`${authCardClassName} text-center`}>
+            <p className="text-3xl sm:text-4xl" aria-hidden="true">
               📬
             </p>
-            <h1 className="mt-3 text-2xl font-bold text-gray-900">Revisa tu correo</h1>
+            <h1 className="mt-3 text-xl font-bold text-gray-900 sm:text-2xl">Revisa tu correo</h1>
             <p className="mt-2 text-sm text-gray-500">
               Te enviamos un enlace de confirmacion. Abre tu email para activar tu cuenta de
               MiParty.
@@ -77,27 +78,18 @@ export default function SignupPage() {
                 Iniciar sesion
               </Link>
             </p>
-          </section>
-        </div>
-      </main>
+        </section>
+      </AuthPageShell>
     )
   }
 
   return (
-    <main className={`min-h-screen ${brand.pageBg} px-4 py-8`}>
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-sm flex-col items-center justify-center gap-5">
-        <div className="text-center">
-          <p className="text-4xl" aria-hidden="true">
-            🎉
-          </p>
-          <h1 className="mt-2 text-3xl font-bold text-gray-900">MiParty</h1>
-          <p className="mt-1 text-sm text-gray-500">Organiza fiestas sin el caos</p>
-        </div>
-
-        <section className="w-full rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
-          <div className="mb-6">
+    <AuthPageShell>
+      <AuthPageBrand />
+      <section className={authCardClassName}>
+          <div className="mb-5 sm:mb-6">
             <p className={`text-sm font-medium ${brand.textBrand}`}>Crea tu cuenta</p>
-            <h2 className="mt-1 text-2xl font-bold text-gray-900">Empieza en MiParty</h2>
+            <h2 className="mt-1 text-xl font-bold text-gray-900 sm:text-2xl">Empieza en MiParty</h2>
             <p className="mt-2 text-sm text-gray-500">
               Registrate para organizar eventos y compartir momentos con amigos.
             </p>
@@ -207,8 +199,7 @@ export default function SignupPage() {
               Iniciar sesion
             </Link>
           </p>
-        </section>
-      </div>
-    </main>
+      </section>
+    </AuthPageShell>
   )
 }
