@@ -72,7 +72,8 @@ type InvitedListItem = {
   public_slug: string
   title: string
   event_date: string
-  child_name: string
+  start_time: string | null
+  location_name: string | null
   attendance_status: string | null
   invitation_theme: string | null
   invitation_image_url: string | null
@@ -610,14 +611,24 @@ function statusDotClass(status: 'Próximo' | 'Hoy' | 'Pasado') {
   return 'bg-green-500'
 }
 
+function invitedAttendanceLabel(status: string | null) {
+  if (status === 'confirmed') return <span>✅ Confirmado</span>
+  if (status === 'declined') return <span>❌ No puede</span>
+  return <span>🤔 Pendiente</span>
+}
+
 function EventRow({
   event,
   rsvpCounts,
   todayStr,
+  isInvited = false,
+  attendanceStatus = null,
 }: {
   event: EventListItem
   rsvpCounts: RsvpCounts
   todayStr: string
+  isInvited?: boolean
+  attendanceStatus?: string | null
 }) {
   const status = eventStatusLabel(event.event_date, todayStr)
   const themeKey = event.invitation_theme ?? 'yellow'
@@ -626,7 +637,7 @@ function EventRow({
   const timeLabel = formatTimeShort(event.start_time)
   const dateShort = formatEventDayMonthShort(event.event_date)
   const loc = event.location_name?.trim()
-  const to = `/dashboard/eventos/${event.public_slug}`
+  const to = isInvited ? `/e/${event.public_slug}` : `/dashboard/eventos/${event.public_slug}`
   const img = event.invitation_image_url?.trim()
   const thumbBgClass = themeEventThumbBg[themeKey] ?? themeEventThumbBg.yellow
   const isPastEvent = event.event_date < todayStr
@@ -639,7 +650,9 @@ function EventRow({
         ? `${rsvpCounts.confirmed} asistieron`
         : `${rsvpCounts.confirmed} confirmados`
 
-  const metaCounts = (
+  const metaCounts = isInvited ? (
+    invitedAttendanceLabel(attendanceStatus)
+  ) : (
     <>
       <span>👥 {attendeeLabel}</span>
       {rsvpCounts.declined > 0 ? <span>❌ {rsvpCounts.declined} no pueden</span> : null}
@@ -670,11 +683,19 @@ function EventRow({
           )}
           <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 sm:min-w-0 sm:gap-2">
-            <span
-              className={`h-2 w-2 shrink-0 rounded-full ${statusDotClass(status)}`}
-              aria-hidden
-            />
-            <span className="shrink-0 text-xs font-medium text-gray-600">{status}</span>
+            {isInvited ? (
+              <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700">
+                Invitado/a
+              </span>
+            ) : (
+              <>
+                <span
+                  className={`h-2 w-2 shrink-0 rounded-full ${statusDotClass(status)}`}
+                  aria-hidden
+                />
+                <span className="shrink-0 text-xs font-medium text-gray-600">{status}</span>
+              </>
+            )}
             <p className="min-w-0 text-sm font-semibold leading-snug text-gray-900 sm:flex-1 sm:truncate">
               {event.title}
             </p>
@@ -717,6 +738,8 @@ type InvitedEventRecord = {
   id: string
   title: string
   event_date: string
+  start_time: string | null
+  location_name: string | null
   public_slug: string
   user_id: string
   invitation_theme: string | null
@@ -736,10 +759,10 @@ function invitedItemToEventListItem(item: InvitedListItem): EventListItem {
     id: item.eventId,
     public_slug: item.public_slug,
     title: item.title,
-    child_name: item.child_name,
+    child_name: '',
     event_date: item.event_date,
-    start_time: null,
-    location_name: null,
+    start_time: item.start_time,
+    location_name: item.location_name,
     location_address: null,
     google_maps_url: null,
     invitation_theme: item.invitation_theme,
@@ -1009,6 +1032,16 @@ export default function DashboardHomePage() {
 
   const hasAnyEvents = events.length > 0 || invitedItems.length > 0
 
+  const organizedEventIds = useMemo(() => new Set(events.map((e) => e.id)), [events])
+
+  const invitedAttendanceByEventId = useMemo(() => {
+    const map: Record<string, string | null> = {}
+    for (const item of invitedItems) {
+      map[item.eventId] = item.attendance_status
+    }
+    return map
+  }, [invitedItems])
+
   const dashboardLocations = useMemo(
     () => mergeEventAndSavedLocations(events, savedPlaces),
     [events, savedPlaces]
@@ -1202,65 +1235,78 @@ export default function DashboardHomePage() {
         return
       }
 
-      const list = (eventsRes.data ?? []) as EventListItem[]
+      const list = [...((eventsRes.data ?? []) as EventListItem[])].sort((a, b) =>
+        b.event_date.localeCompare(a.event_date)
+      )
       setEvents(list)
 
-      const childNames = loadedChildren
-        .map((c) => `${c.name} ${c.last_name ?? ''}`.trim())
-        .filter(Boolean)
+      const organizedIds = new Set(list.map((e) => e.id))
 
       let invited: InvitedListItem[] = []
-      if (childNames.length > 0) {
-        const { data: invitedRows, error: invitedError } = await supabase
-          .from('rsvps')
-          .select(
-            'event_id, child_name, attendance_status, events ( id, title, event_date, public_slug, user_id, invitation_theme, invitation_image_url )'
-          )
-          .in('child_name', childNames)
+      const { data: invitedRsvps, error: invitedError } = await supabase
+        .from('rsvps')
+        .select(
+          `
+    id,
+    attendance_status,
+    event_id,
+    events (
+      id,
+      title,
+      event_date,
+      start_time,
+      location_name,
+      public_slug,
+      invitation_theme,
+      invitation_image_url,
+      user_id
+    )
+  `
+        )
+        .eq('user_id', user.id)
 
-        if (!isMounted) return
+      if (!isMounted) return
 
-        if (!invitedError && invitedRows) {
-          const seen = new Set<string>()
-          for (const row of invitedRows as {
-            event_id: string
-            child_name: string
-            attendance_status: string | null
-            events: InvitedEventRecord | InvitedEventRecord[] | null
-          }[]) {
-            const ev = normalizeInvitedNestedEvent(row.events)
-            if (!ev || ev.user_id === user.id) continue
-            const dedupeKey = `${ev.id}|${row.child_name}`
-            if (seen.has(dedupeKey)) continue
-            seen.add(dedupeKey)
-            invited.push({
-              eventId: ev.id,
-              public_slug: ev.public_slug,
-              title: ev.title,
-              event_date: ev.event_date,
-              child_name: row.child_name,
-              attendance_status: row.attendance_status,
-              invitation_theme: ev.invitation_theme,
-              invitation_image_url: ev.invitation_image_url ?? null,
-            })
-          }
-          invited.sort((a, b) => (a.event_date < b.event_date ? 1 : a.event_date > b.event_date ? -1 : 0))
+      if (!invitedError && invitedRsvps) {
+        const seen = new Set<string>()
+        for (const row of invitedRsvps as {
+          id: string
+          attendance_status: string | null
+          event_id: string
+          events: InvitedEventRecord | InvitedEventRecord[] | null
+        }[]) {
+          const ev = normalizeInvitedNestedEvent(row.events)
+          if (!ev || organizedIds.has(ev.id)) continue
+          if (seen.has(ev.id)) continue
+          seen.add(ev.id)
+          invited.push({
+            eventId: ev.id,
+            public_slug: ev.public_slug,
+            title: ev.title,
+            event_date: ev.event_date,
+            start_time: ev.start_time,
+            location_name: ev.location_name,
+            attendance_status: row.attendance_status,
+            invitation_theme: ev.invitation_theme,
+            invitation_image_url: ev.invitation_image_url ?? null,
+          })
         }
+        invited.sort((a, b) => b.event_date.localeCompare(a.event_date))
       }
 
       const emptyRsvpCounts = (): RsvpCounts => ({ confirmed: 0, declined: 0, maybe: 0 })
       const byEvent: Record<string, RsvpCounts> = {}
 
-      const allEventIds = [...new Set([...list.map((e) => e.id), ...invited.map((i) => i.eventId)])]
-      for (const id of allEventIds) {
+      const organizedEventIds = list.map((e) => e.id)
+      for (const id of organizedEventIds) {
         byEvent[id] = emptyRsvpCounts()
       }
 
-      if (allEventIds.length > 0) {
+      if (organizedEventIds.length > 0) {
         const { data: rsvpRows, error: rsvpError } = await supabase
           .from('rsvps')
           .select('event_id, attendance_status')
-          .in('event_id', allEventIds)
+          .in('event_id', organizedEventIds)
 
         if (!isMounted) return
 
@@ -2030,6 +2076,8 @@ export default function DashboardHomePage() {
                                 }
                               }
                               todayStr={todayStr}
+                              isInvited={!organizedEventIds.has(event.id)}
+                              attendanceStatus={invitedAttendanceByEventId[event.id] ?? null}
                             />
                           ))
                         : null}
@@ -2045,6 +2093,8 @@ export default function DashboardHomePage() {
                             }
                           }
                           todayStr={todayStr}
+                          isInvited={!organizedEventIds.has(lastPastEvent.id)}
+                          attendanceStatus={invitedAttendanceByEventId[lastPastEvent.id] ?? null}
                         />
                       ) : null}
                     </ul>
