@@ -199,7 +199,7 @@ export function ChildrenSection({
     : null
 
   return (
-    <section className="mb-6 sm:mb-8">
+    <section className="mb-5 sm:mb-8">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-gray-900 sm:text-lg">Mis hijos/as</h2>
         <button
@@ -226,7 +226,7 @@ export function ChildrenSection({
       />
       {isLoading ? (
         <div
-          className="grid grid-cols-2 gap-3 sm:grid-cols-3"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3"
           aria-busy="true"
           aria-label="Cargando hijos"
         >
@@ -244,7 +244,7 @@ export function ChildrenSection({
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
           {displayed.map((child, index) => {
             const fullName = `${child.name} ${child.last_name || ''}`.trim()
             const birth = child.birth_date?.trim()
@@ -271,7 +271,7 @@ export function ChildrenSection({
                 aria-label={`Opciones de ${fullName}`}
                 aria-haspopup="menu"
                 aria-expanded={isCardActive}
-                className={`card-soft group relative flex min-h-[5rem] w-full cursor-pointer flex-row items-center gap-3 p-2 text-left transition hover:shadow-[var(--shadow-card-hover)] hover:-translate-y-px focus-visible:outline-none ${brand.cardFocusRing} ${
+                className={`card-soft group relative flex min-h-[5rem] w-full cursor-pointer flex-row items-center gap-3 p-3 text-left transition hover:shadow-[var(--shadow-card-hover)] hover:-translate-y-px focus-visible:outline-none sm:p-2 ${brand.cardFocusRing} ${
                   isCardActive ? `shadow-[var(--shadow-card-hover)] ${brand.cardActiveRing}` : ''
                 }`}
               >
@@ -311,18 +311,23 @@ export function ChildrenSection({
                   </div>
                 </button>
                 <div className="flex min-w-0 flex-1 flex-col items-start justify-start gap-0.5">
-                  <p className="truncate text-sm font-medium text-gray-700" title={fullName}>
+                  <p
+                    className="text-sm font-medium leading-snug text-gray-700 break-words sm:truncate"
+                    title={fullName}
+                  >
                     {fullName}
                   </p>
                   {birth ? (
-                    <p className="truncate text-xs text-gray-400">
+                    <p className="text-xs leading-snug text-gray-400 break-words sm:truncate">
                       {age != null ? `${age} años · ${birthFmt}` : birthFmt}
                     </p>
                   ) : (
                     <p className="text-xs italic text-gray-300">Fecha de nacimiento no añadida</p>
                   )}
                   {child.allergies ? (
-                    <p className="truncate text-xs text-gray-400">Alergias: {child.allergies}</p>
+                    <p className="line-clamp-2 text-xs leading-snug text-gray-400 break-words sm:truncate">
+                      Alergias: {child.allergies}
+                    </p>
                   ) : null}
                 </div>
               </div>

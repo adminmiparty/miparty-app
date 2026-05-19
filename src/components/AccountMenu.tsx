@@ -136,14 +136,15 @@ export default function AccountMenu({ signedOut }: AccountMenuProps) {
         onClick={() => setShowDropdown(!showDropdown)}
         aria-expanded={showDropdown}
         aria-haspopup="menu"
-        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2.5 text-sm transition hover:bg-[var(--brand-primary-light)]"
+        aria-label={`Menú de cuenta, ${displayName}`}
+        className="flex items-center gap-0 rounded-full p-1 text-sm transition hover:bg-[var(--brand-primary-light)] sm:gap-2 sm:py-1 sm:pl-1 sm:pr-2.5"
       >
         <AccountAvatar name={displayName} avatarUrl={avatarUrl} />
-        <span className="max-w-[8rem] truncate font-medium text-gray-900 sm:max-w-[10rem]">
+        <span className="hidden max-w-[10rem] truncate font-medium text-gray-900 sm:inline">
           {displayName}
         </span>
         <ChevronDown
-          className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition ${showDropdown ? 'rotate-180' : ''}`}
+          className={`hidden h-3.5 w-3.5 shrink-0 text-gray-400 transition sm:block ${showDropdown ? 'rotate-180' : ''}`}
           aria-hidden
         />
       </button>

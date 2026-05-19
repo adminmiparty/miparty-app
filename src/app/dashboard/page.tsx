@@ -631,36 +631,59 @@ function EventRow({
         ? `${rsvpCounts.confirmed} asistieron`
         : `${rsvpCounts.confirmed} confirmados`
 
+  const metaCounts = (
+    <>
+      <span>👥 {attendeeLabel}</span>
+      {rsvpCounts.declined > 0 ? <span>❌ {rsvpCounts.declined} no pueden</span> : null}
+      {rsvpCounts.maybe > 0 ? <span>🤔 {rsvpCounts.maybe} aún no saben</span> : null}
+    </>
+  )
+
   return (
     <li className="w-full">
       <Link
         href={to}
-        className={`flex w-full flex-row items-center gap-3 rounded-xl border border-gray-100 border-l-4 ${leftBorderClass} bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:ring-2 ${hoverRingClass}`}
+        className={`flex w-full flex-col gap-2.5 rounded-xl border border-gray-100 border-l-4 ${leftBorderClass} bg-white p-3.5 shadow-sm transition-shadow hover:shadow-md hover:ring-2 sm:flex-row sm:items-center sm:gap-3 sm:p-3 ${hoverRingClass}`}
       >
-        {img ? (
-          <img
-            src={img}
-            alt=""
-            className="h-10 w-10 shrink-0 rounded-lg object-cover"
-          />
-        ) : (
-          <div
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border text-lg leading-none ${thumbBgClass}`}
-            aria-hidden
-          >
-            🎉
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
+          {img ? (
+            <img
+              src={img}
+              alt=""
+              className="h-9 w-9 shrink-0 rounded-lg object-cover sm:h-10 sm:w-10"
+            />
+          ) : (
+            <div
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-base leading-none sm:h-10 sm:w-10 sm:text-lg ${thumbBgClass}`}
+              aria-hidden
+            >
+              🎉
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 sm:min-w-0 sm:gap-2">
             <span
               className={`h-2 w-2 shrink-0 rounded-full ${statusDotClass(status)}`}
               aria-hidden
             />
             <span className="shrink-0 text-xs font-medium text-gray-600">{status}</span>
-            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{event.title}</p>
+            <p className="min-w-0 text-sm font-semibold leading-snug text-gray-900 sm:flex-1 sm:truncate">
+              {event.title}
+            </p>
           </div>
-          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-500 sm:hidden">
+            📅 {dateShort}
+            {timeLabel ? ` · ${timeLabel}` : ''}
+          </p>
+          {loc ? (
+            <p className="mt-0.5 text-xs text-gray-500 sm:hidden" title={loc}>
+              📍 {loc}
+            </p>
+          ) : null}
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500 sm:hidden">
+            {metaCounts}
+          </div>
+          <div className="mt-1 hidden min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500 sm:flex">
             <span>
               📅 {dateShort}
               {timeLabel ? ` · ${timeLabel}` : ''}
@@ -670,22 +693,11 @@ function EventRow({
                 📍 {loc}
               </span>
             ) : null}
-            <span>
-              👥 {attendeeLabel}
-            </span>
-            {rsvpCounts.declined > 0 ? (
-              <span>
-                ❌ {rsvpCounts.declined} no pueden
-              </span>
-            ) : null}
-            {rsvpCounts.maybe > 0 ? (
-              <span>
-                🤔 {rsvpCounts.maybe} aún no saben
-              </span>
-            ) : null}
+            {metaCounts}
+          </div>
           </div>
         </div>
-        <span className="shrink-0 self-center text-base font-medium text-gray-400" aria-hidden>
+        <span className="hidden shrink-0 self-center text-base font-medium text-gray-400 sm:block" aria-hidden>
           →
         </span>
       </Link>
@@ -1693,13 +1705,15 @@ export default function DashboardHomePage() {
   }, [avatarUrl])
 
   return (
-    <main className={`min-h-screen ${brand.pageBg} pb-12`}>
+    <main
+      className={`min-h-screen ${brand.pageBg} pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] sm:pb-12`}
+    >
       <AppNav brandHref="/" />
-      <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-8">
-        <header className="mb-6 sm:mb-8">
+      <div className="mx-auto w-full max-w-4xl px-4 py-5 sm:px-6 sm:py-8 md:px-8">
+        <header className="mb-5 sm:mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">{greetingTitle}</h1>
-            <p className="mt-1 text-sm text-gray-600 sm:text-base">
+            <h1 className="text-xl font-bold text-gray-900 sm:text-2xl md:text-3xl">{greetingTitle}</h1>
+            <p className="mt-1 text-sm text-gray-600">
               Todos tus eventos y cumpleaños organizados en un solo lugar.
             </p>
           </div>
@@ -1707,7 +1721,7 @@ export default function DashboardHomePage() {
 
         {loading && !parentProfile ? (
           <div
-            className="mb-6 grid grid-cols-2 gap-3 sm:mb-8"
+            className="mb-6 grid grid-cols-1 gap-3 sm:mb-8 sm:grid-cols-2"
             aria-busy="true"
             aria-label="Cargando perfil"
           >
@@ -1728,7 +1742,7 @@ export default function DashboardHomePage() {
         ) : null}
 
         {parentProfile ? (
-          <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8">
+          <div className="mb-6 grid grid-cols-1 gap-3 sm:mb-8 sm:grid-cols-2">
             <div
               role="button"
               tabIndex={0}
@@ -1769,13 +1783,13 @@ export default function DashboardHomePage() {
                 </div>
               )}
               <div className="min-w-0 flex-1 pr-6">
-                <p className="truncate text-base font-semibold text-gray-900">
+                <p className="text-base font-semibold leading-snug text-gray-900 break-words sm:truncate">
                   {parentProfile.fullName ?? 'Tu cuenta'}
                 </p>
                 {parentProfile.phone ? (
-                  <p className="truncate text-sm text-gray-500">{parentProfile.phone}</p>
+                  <p className="text-sm text-gray-500 break-words sm:truncate">{parentProfile.phone}</p>
                 ) : null}
-                <p className="truncate text-sm text-gray-400">{parentProfile.email}</p>
+                <p className="text-sm text-gray-400 break-words sm:truncate">{parentProfile.email}</p>
               </div>
             </div>
             <div
@@ -1816,16 +1830,16 @@ export default function DashboardHomePage() {
               <div className={`min-w-0 flex-1 text-left ${partner ? 'pr-6' : ''}`}>
                 {partner ? (
                   <>
-                    <p className="truncate text-base font-semibold text-gray-900">
+                    <p className="text-base font-semibold leading-snug text-gray-900 break-words sm:truncate">
                       {partnerDisplayLabel(partner)}
                     </p>
                     {partner.phone ? (
-                      <p className="truncate text-sm text-gray-500">{partner.phone}</p>
+                      <p className="text-sm text-gray-500 break-words sm:truncate">{partner.phone}</p>
                     ) : null}
                     {(() => {
                       const birthLine = formatPartnerBirthSummary(partner.birth_date)
                       return birthLine ? (
-                        <p className="truncate text-xs text-gray-400">{birthLine}</p>
+                        <p className="text-xs text-gray-400 break-words sm:truncate">{birthLine}</p>
                       ) : null
                     })()}
                   </>
@@ -1854,9 +1868,9 @@ export default function DashboardHomePage() {
           ) : null}
 
           {!error ? (
-            <div className="px-4 sm:px-6">
-              <div className="mb-4 mt-2 flex items-center justify-between gap-2">
-                <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+            <div>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 sm:mt-2">
+                <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900 sm:text-lg">
                   <CalendarDays className="h-4 w-4 shrink-0 text-gray-600" strokeWidth={2} aria-hidden />
                   Eventos
                 </h2>
@@ -1880,23 +1894,23 @@ export default function DashboardHomePage() {
                 <p className="py-6 text-center text-sm text-gray-500">🎉 Todos tus eventos aparecerán aquí.</p>
               ) : (
                 <>
-                  <div className="mb-4 grid w-full grid-cols-2 gap-3">
+                  <div className="mb-4 grid w-full grid-cols-2 gap-2 sm:gap-3">
                     <button
                       type="button"
                       onClick={() => setShowProximos((v) => !v)}
-                      className={`pill-soft flex w-full cursor-pointer items-center justify-between border py-2 px-4 text-left transition ${
+                      className={`pill-soft flex w-full cursor-pointer items-center justify-between border py-2 px-3 text-left transition sm:px-4 ${
                         showProximos
                           ? `bg-white ${brand.borderBrand} shadow-sm`
                           : 'border-gray-200 bg-white opacity-50 text-gray-400'
                       }`}
                     >
                       <span
-                        className={`text-sm font-medium ${showProximos ? 'text-gray-600' : 'text-gray-400'}`}
+                        className={`text-xs font-medium sm:text-sm ${showProximos ? 'text-gray-600' : 'text-gray-400'}`}
                       >
                         Próximos
                       </span>
                       <span
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold sm:h-6 sm:w-6 sm:text-xs ${
                           showProximos ? brand.togglePillActive : 'bg-gray-200 text-gray-500'
                         }`}
                       >
@@ -1906,19 +1920,19 @@ export default function DashboardHomePage() {
                     <button
                       type="button"
                       onClick={() => setShowPasados((v) => !v)}
-                      className={`pill-soft flex w-full cursor-pointer items-center justify-between border py-2 px-4 text-left transition ${
+                      className={`pill-soft flex w-full cursor-pointer items-center justify-between border py-2 px-3 text-left transition sm:px-4 ${
                         showPasados
                           ? `bg-white ${brand.borderBrand} shadow-sm`
                           : 'border-gray-200 bg-white opacity-50 text-gray-400'
                       }`}
                     >
                       <span
-                        className={`text-sm font-medium ${showPasados ? 'text-gray-600' : 'text-gray-400'}`}
+                        className={`text-xs font-medium sm:text-sm ${showPasados ? 'text-gray-600' : 'text-gray-400'}`}
                       >
                         Pasados
                       </span>
                       <span
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold sm:h-6 sm:w-6 sm:text-xs ${
                           showPasados ? brand.togglePillActive : 'bg-gray-200 text-gray-500'
                         }`}
                       >
@@ -1972,9 +1986,9 @@ export default function DashboardHomePage() {
           ) : null}
         </section>
 
-        <section className="card-soft mt-8 p-4 sm:p-6">
-          <div className="px-4 sm:px-6">
-            <h2 className="mb-4 mt-2 text-lg font-semibold text-gray-900">
+        <section className="card-soft mt-6 p-4 sm:mt-8 sm:p-6">
+          <div>
+            <h2 className="mb-4 text-base font-semibold text-gray-900 sm:mt-2 sm:text-lg">
               📍 Lugares
             </h2>
             {loading ? (
@@ -2001,7 +2015,7 @@ export default function DashboardHomePage() {
                 📍 Los lugares de tus eventos aparecerán aquí automáticamente.
               </p>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="-mx-1 flex gap-3 overflow-x-auto pb-1 scroll-px-1 snap-x snap-mandatory sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 md:grid-cols-3">
                 {distinctLocations.map((location) => (
                   <div
                     key={location.location_name}
@@ -2014,7 +2028,7 @@ export default function DashboardHomePage() {
                         setLocationActionTarget(location)
                       }
                     }}
-                    className="card-soft flex w-full cursor-pointer flex-row items-center gap-3 p-3 transition hover:shadow-md"
+                    className="card-soft flex w-[min(82vw,17rem)] shrink-0 cursor-pointer snap-start flex-row items-center gap-3 p-3 transition hover:shadow-md sm:w-full sm:shrink"
                   >
                     <div
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100"
@@ -2023,12 +2037,12 @@ export default function DashboardHomePage() {
                       <MapIcon className="h-4 w-4 text-gray-400" strokeWidth={2} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-700">
+                      <p className="text-sm font-medium leading-snug text-gray-700 line-clamp-2 sm:truncate">
                         {location.location_name}
                       </p>
                       {location.location_address ? (
                         <p
-                          className="mt-0.5 truncate text-xs text-gray-400"
+                          className="mt-0.5 text-xs leading-snug text-gray-400 line-clamp-2 sm:truncate"
                           title={location.location_address}
                         >
                           {location.location_address}
@@ -2045,7 +2059,7 @@ export default function DashboardHomePage() {
 
       {partnerSaveSuccess ? (
         <p
-          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
+          className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
           role="status"
         >
           Pareja guardada ✓
@@ -2054,7 +2068,7 @@ export default function DashboardHomePage() {
 
       {childAddSuccessToast ? (
         <div
-          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
+          className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
           role="status"
         >
           🎉 Perfil añadido
@@ -2063,7 +2077,7 @@ export default function DashboardHomePage() {
 
       {childUpdateSuccessToast ? (
         <p
-          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
+          className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
           role="status"
         >
           ✓ Perfil actualizado
@@ -2071,7 +2085,7 @@ export default function DashboardHomePage() {
       ) : null}
 
       {profileSuccessToast ? (
-        <div className="fixed bottom-6 left-1/2 z-[60] flex max-w-sm -translate-x-1/2 flex-col items-center gap-2 px-2">
+        <div className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[60] flex max-w-sm -translate-x-1/2 flex-col items-center gap-2 px-2">
           <div className="rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-lg">
             Cambios guardados ✓
           </div>
