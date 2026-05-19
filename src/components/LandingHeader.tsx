@@ -12,6 +12,25 @@ function scrollToTopIfHome(event: MouseEvent<HTMLAnchorElement>) {
   }
 }
 
+function scrollToSection(event: MouseEvent<HTMLAnchorElement>) {
+  if (typeof window === 'undefined' || window.location.pathname !== '/') {
+    return
+  }
+
+  const href = event.currentTarget.getAttribute('href')
+  if (!href?.startsWith('#')) {
+    return
+  }
+
+  const target = document.getElementById(href.slice(1))
+  if (!target) {
+    return
+  }
+
+  event.preventDefault()
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 export default function LandingHeader() {
   return (
     <header className={`${brand.navSticky} z-40`}>
@@ -24,13 +43,13 @@ export default function LandingHeader() {
           MiParty
         </Link>
         <nav className="hidden items-center gap-6 text-sm text-gray-600 sm:flex" aria-label="Principal">
-          <a href="#producto" className="transition hover:text-gray-900">
-            El producto
+          <a href="#producto" onClick={scrollToSection} className="transition hover:text-gray-900">
+            Qué es
           </a>
-          <a href="#como-funciona" className="transition hover:text-gray-900">
+          <a href="#como-funciona" onClick={scrollToSection} className="transition hover:text-gray-900">
             Cómo funciona
           </a>
-          <a href="#precios" className="transition hover:text-gray-900">
+          <a href="#precios" onClick={scrollToSection} className="transition hover:text-gray-900">
             Precios
           </a>
         </nav>

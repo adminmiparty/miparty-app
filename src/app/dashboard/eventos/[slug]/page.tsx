@@ -11,7 +11,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { subDays } from 'date-fns'
 import { brand } from '@/lib/brand'
-import { formatSpanishFullDate, formatSpanishWeekdayDayMonthYear, parseIsoDateParts } from '@/lib/dates'
+import { formatSpanishDateMedium, formatSpanishFullDate, parseIsoDateParts } from '@/lib/dates'
 import { createClient } from '@/lib/supabase/client'
 import ShareButton from '@/components/ShareButton'
 
@@ -68,7 +68,7 @@ function formatRsvpConfirmacionesDate(isoDate: string, daysBefore: number) {
   const eventDay = new Date(parts.year, parts.month - 1, parts.day)
   const deadline = subDays(eventDay, daysBefore)
   const iso = `${deadline.getFullYear()}-${String(deadline.getMonth() + 1).padStart(2, '0')}-${String(deadline.getDate()).padStart(2, '0')}`
-  return formatSpanishWeekdayDayMonthYear(iso)
+  return formatSpanishDateMedium(iso)
 }
 
 function formatDashboardGiftLine(event: {
@@ -608,7 +608,7 @@ export default function EventControlCenterPage() {
                   : `🕒 A las ${formatTimeValue(event.start_time)}`}
               </p>
 
-              <p className="mt-2 text-sm text-gray-400">{confirmacionesLine}</p>
+              <p className="mt-2 text-xs leading-tight text-gray-400 whitespace-nowrap">{confirmacionesLine}</p>
 
               {hasLocationDetails ? (
                 <div className="mt-3 space-y-1">
