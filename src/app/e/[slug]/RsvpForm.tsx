@@ -371,6 +371,7 @@ function RsvpFormInner({
   const [inlinePassword, setInlinePassword] = useState('')
   const [inlineLoginError, setInlineLoginError] = useState('')
   const [inlineLoginSuccess, setInlineLoginSuccess] = useState(false)
+  const [justSignedUp, setJustSignedUp] = useState(false)
   const oauthLinkDoneRef = useRef(false)
 
   function handleMessageInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -511,6 +512,7 @@ function RsvpFormInner({
       })
       setIsLoggedIn(true)
       setLoggedInUserId(session.user.id)
+      setJustSignedUp(true)
       setShowSignupModal(true)
       const storedChildName = stored.childLast
         ? `${stored.childFirst} ${stored.childLast}`.trim()
@@ -703,6 +705,7 @@ function RsvpFormInner({
     })
     setIsLoggedIn(true)
     setLoggedInUserId(uid)
+    setJustSignedUp(true)
     await prefillWelcomeForm(trimmedParentName, trimmedParentPhone)
     setModalView('welcome')
   }
@@ -732,6 +735,7 @@ function RsvpFormInner({
     await sb.from('rsvps').update({ user_id: data.user.id }).eq('id', submittedRsvpId)
     setIsLoggedIn(true)
     setLoggedInUserId(data.user.id)
+    setJustSignedUp(true)
     const trimmedParentName = parentName.trim()
     const trimmedParentPhoneNumber = parentPhoneNumber.trim()
     const finalParentDial = resolveDialCode(parentCountryCode, parentCustomCode)
@@ -1261,6 +1265,19 @@ END:VCALENDAR`
     URL.revokeObjectURL(url)
   }
 
+  const renderJustSignedUpProfileCta = () =>
+    justSignedUp ? (
+      <div className="mt-3 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3">
+        <p className="mb-2 text-center text-xs text-gray-500">🎉 Tu cuenta MiParty ha sido creada</p>
+        <a
+          href="/dashboard"
+          className="block w-full rounded-lg bg-yellow-400 px-4 py-2.5 text-center text-sm font-semibold text-gray-900 transition hover:bg-yellow-500"
+        >
+          Explorar mi perfil →
+        </a>
+      </div>
+    ) : null
+
   const renderResponseSummary = () => {
     if (!submittedData || !submittedStatus) return null
     const statusLabel = {
@@ -1695,12 +1712,13 @@ END:VCALENDAR`
           Tu cuenta ha sido creada y tu respuesta guardada. Ahora puedes organizar tus propios cumpleaños,
           gestionar confirmaciones y llevar el control de todo desde un solo lugar.
         </p>
-        <Link
-          href="/dashboard"
-          className={`mt-4 inline-flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
+        <button
+          type="button"
+          onClick={() => setShowSignupModal(false)}
+          className={`mt-4 w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
         >
-          Empezar a organizar 🎂
-        </Link>
+          Volver a mi confirmación 🎉
+        </button>
         <button
           type="button"
           onClick={() => setShowSignupModal(false)}
@@ -1965,6 +1983,7 @@ END:VCALENDAR`
           </div>
         ) : null}
         {renderResponseSummary()}
+        {renderJustSignedUpProfileCta()}
         {!isPreview && submittedEditToken ? (
           <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
             <p className="text-center text-xs leading-relaxed text-gray-600">
@@ -1998,6 +2017,7 @@ END:VCALENDAR`
           {'Gracias por avisar 🙌\n¡Esperamos veros en la próxima!'}
         </p>
         {renderResponseSummary()}
+        {renderJustSignedUpProfileCta()}
         {!isPreview && submittedEditToken ? (
           <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
             <p className="text-center text-xs leading-relaxed text-gray-600">{editLinkIntroCopy.declined}</p>
@@ -2031,6 +2051,7 @@ END:VCALENDAR`
           }
         </p>
         {renderResponseSummary()}
+        {renderJustSignedUpProfileCta()}
         {!isPreview && submittedEditToken ? (
           <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
             <p className="text-center text-xs leading-relaxed text-gray-600">{editLinkIntroCopy.maybe}</p>

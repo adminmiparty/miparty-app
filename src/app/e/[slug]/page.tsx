@@ -1,6 +1,7 @@
 import AppNav from '@/components/AppNav'
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { subDays } from 'date-fns'
 import {
   formatSpanishFullDate,
@@ -169,6 +170,25 @@ export default async function PublicEventPage({
         </main>
       </>
     )
+  }
+
+  if (!isPreview) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user) {
+      const { data: existingRsvp } = await supabase
+        .from('rsvps')
+        .select('edit_token')
+        .eq('event_id', event.id)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (existingRsvp?.edit_token) {
+        redirect(`/rsvp/${existingRsvp.edit_token}`)
+      }
+    }
   }
 
   let foodOptions: FoodOption[] = []

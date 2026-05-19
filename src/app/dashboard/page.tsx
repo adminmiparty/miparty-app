@@ -1243,56 +1243,81 @@ export default function DashboardHomePage() {
       const organizedIds = new Set(list.map((e) => e.id))
 
       let invited: InvitedListItem[] = []
-      const { data: invitedRsvps, error: invitedError } = await supabase
+      const { data: userRsvps } = await supabase
         .from('rsvps')
-        .select(
-          `
-    id,
-    attendance_status,
-    event_id,
-    events (
-      id,
-      title,
-      event_date,
-      start_time,
-      location_name,
-      public_slug,
-      invitation_theme,
-      invitation_image_url,
-      user_id
-    )
-  `
-        )
+        .select('id, attendance_status, event_id')
         .eq('user_id', user.id)
+
+      console.log('User rsvps:', userRsvps)
 
       if (!isMounted) return
 
-      if (!invitedError && invitedRsvps) {
-        const seen = new Set<string>()
-        for (const row of invitedRsvps as {
-          id: string
-          attendance_status: string | null
-          event_id: string
-          events: InvitedEventRecord | InvitedEventRecord[] | null
-        }[]) {
-          const ev = normalizeInvitedNestedEvent(row.events)
-          if (!ev || organizedIds.has(ev.id)) continue
-          if (seen.has(ev.id)) continue
-          seen.add(ev.id)
-          invited.push({
-            eventId: ev.id,
-            public_slug: ev.public_slug,
-            title: ev.title,
-            event_date: ev.event_date,
-            start_time: ev.start_time,
-            location_name: ev.location_name,
-            attendance_status: row.attendance_status,
-            invitation_theme: ev.invitation_theme,
-            invitation_image_url: ev.invitation_image_url ?? null,
-          })
+      const rsvpEventIds = (userRsvps || [])
+        .map((r) => r.event_id)
+        .filter(Boolean)
+
+      let invitedEventsData: Array<
+        EventListItem & {
+          isInvited: boolean
+          attendanceStatus: string | null
+          confirmedCount: number
+          declinedCount: number
+          maybeCount: number
         }
-        invited.sort((a, b) => b.event_date.localeCompare(a.event_date))
+      > = []
+
+      if (rsvpEventIds.length > 0) {
+        const { data: rsvpEvents } = await supabase
+          .from('events')
+          .select(
+            'id, title, event_date, start_time, location_name, public_slug, invitation_theme, invitation_image_url, user_id'
+          )
+          .in('id', rsvpEventIds)
+          .neq('user_id', user.id)
+          .eq('status', 'active')
+
+        console.log('Rsvp events:', rsvpEvents)
+
+        invitedEventsData = (rsvpEvents || []).map((e) => ({
+          id: e.id,
+          public_slug: e.public_slug,
+          title: e.title,
+          child_name: '',
+          event_date: e.event_date,
+          start_time: e.start_time,
+          location_name: e.location_name,
+          location_address: null,
+          google_maps_url: null,
+          invitation_theme: e.invitation_theme,
+          invitation_image_url: e.invitation_image_url ?? null,
+          isInvited: true,
+          attendanceStatus:
+            userRsvps?.find((r) => r.event_id === e.id)?.attendance_status ?? null,
+          confirmedCount: 0,
+          declinedCount: 0,
+          maybeCount: 0,
+        }))
       }
+
+      console.log('Invited events after filter:', invitedEventsData)
+
+      const seen = new Set<string>()
+      for (const e of invitedEventsData) {
+        if (organizedIds.has(e.id) || seen.has(e.id)) continue
+        seen.add(e.id)
+        invited.push({
+          eventId: e.id,
+          public_slug: e.public_slug,
+          title: e.title,
+          event_date: e.event_date,
+          start_time: e.start_time,
+          location_name: e.location_name,
+          attendance_status: e.attendanceStatus,
+          invitation_theme: e.invitation_theme,
+          invitation_image_url: e.invitation_image_url,
+        })
+      }
+      invited.sort((a, b) => b.event_date.localeCompare(a.event_date))
 
       const emptyRsvpCounts = (): RsvpCounts => ({ confirmed: 0, declined: 0, maybe: 0 })
       const byEvent: Record<string, RsvpCounts> = {}
