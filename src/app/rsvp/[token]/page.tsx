@@ -77,6 +77,48 @@ function resolveDialCode(countryCode: string, customCode: string): string {
   return countryCode === 'otro' ? sanitizeDialPrefix(customCode) : countryCode
 }
 
+const SPANISH_MONTHS = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+]
+
+function composeBirthDateIso(day: string, month: string, year: string): string | null {
+  if (!day || !month || !year) return null
+  const dayNumber = Number.parseInt(day, 10)
+  const monthNumber = Number.parseInt(month, 10)
+  const yearNumber = Number.parseInt(year, 10)
+  if (
+    Number.isNaN(dayNumber) ||
+    Number.isNaN(monthNumber) ||
+    Number.isNaN(yearNumber) ||
+    monthNumber < 1 ||
+    monthNumber > 12 ||
+    dayNumber < 1 ||
+    dayNumber > 31
+  ) {
+    return null
+  }
+  const parsed = new Date(yearNumber, monthNumber - 1, dayNumber)
+  if (
+    parsed.getFullYear() !== yearNumber ||
+    parsed.getMonth() + 1 !== monthNumber ||
+    parsed.getDate() !== dayNumber
+  ) {
+    return null
+  }
+  return `${year}-${month}-${day}`
+}
+
 function dialCodeShortLabel(code: string): string {
   if (code === '+57') return '🇨🇴 +57'
   if (code === 'otro') return '✏️ Otro'
@@ -289,6 +331,189 @@ export default function RsvpEditPage() {
   const [signupToggle, setSignupToggle] = useState(false)
   const [showWelcomeModal, setShowWelcomeModal] = useState(false)
   const [welcomeModalView, setWelcomeModalView] = useState<'welcome' | 'success'>('welcome')
+  const [welcomeFirstName, setWelcomeFirstName] = useState('')
+  const [welcomeLastName, setWelcomeLastName] = useState('')
+  const [welcomePhone, setWelcomePhone] = useState('')
+  const [welcomePhoneCode, setWelcomePhoneCode] = useState('+34')
+  const [welcomeCustomDialCode, setWelcomeCustomDialCode] = useState('')
+  const [welcomeBirthDay, setWelcomeBirthDay] = useState('')
+  const [welcomeBirthMonth, setWelcomeBirthMonth] = useState('')
+  const [welcomeBirthYear, setWelcomeBirthYear] = useState('')
+  const [welcomeChildFirstName, setWelcomeChildFirstName] = useState('')
+  const [welcomeChildLastName, setWelcomeChildLastName] = useState('')
+  const [welcomeChildBirthDay, setWelcomeChildBirthDay] = useState('')
+  const [welcomeChildBirthMonth, setWelcomeChildBirthMonth] = useState('')
+  const [welcomeChildBirthYear, setWelcomeChildBirthYear] = useState('')
+  const [showWelcomeSecondChild, setShowWelcomeSecondChild] = useState(false)
+  const [welcomeChild2FirstName, setWelcomeChild2FirstName] = useState('')
+  const [welcomeChild2LastName, setWelcomeChild2LastName] = useState('')
+  const [welcomeChild2BirthDay, setWelcomeChild2BirthDay] = useState('')
+  const [welcomeChild2BirthMonth, setWelcomeChild2BirthMonth] = useState('')
+  const [welcomeChild2BirthYear, setWelcomeChild2BirthYear] = useState('')
+  const [welcomeChildBirthError, setWelcomeChildBirthError] = useState(false)
+
+  const welcomeBirthYears = useMemo(
+    () => Array.from({ length: 101 }, (_, index) => String(new Date().getFullYear() - index)),
+    [],
+  )
+
+  const prefillAndOpenWelcomeModal = async () => {
+    const { data: rsvpData } = await supabase
+      .from('rsvps')
+      .select('guest_parent_name, guest_parent_phone, child_name, guest_parent_email')
+      .eq('edit_token', token)
+      .maybeSingle()
+
+    const nameParts = (rsvpData?.guest_parent_name || '').trim().split(/\s+/).filter(Boolean)
+    setWelcomeFirstName(nameParts[0] || '')
+    setWelcomeLastName(nameParts.slice(1).join(' ') || '')
+
+    const childParts = (rsvpData?.child_name || '').trim().split(/\s+/).filter(Boolean)
+    const rsvpChildFirst = childParts[0] || ''
+    const rsvpChildLast = childParts.slice(1).join(' ') || ''
+    setWelcomeChildFirstName(rsvpChildFirst)
+    setWelcomeChildLastName(rsvpChildLast)
+    setWelcomeChildBirthDay('')
+    setWelcomeChildBirthMonth('')
+    setWelcomeChildBirthYear('')
+    setShowWelcomeSecondChild(false)
+    setWelcomeChild2FirstName('')
+    setWelcomeChild2LastName('')
+    setWelcomeChild2BirthDay('')
+    setWelcomeChild2BirthMonth('')
+    setWelcomeChild2BirthYear('')
+    setWelcomeChildBirthError(false)
+    setWelcomeBirthDay('')
+    setWelcomeBirthMonth('')
+    setWelcomeBirthYear('')
+
+    const fullPhone = (rsvpData?.guest_parent_phone || '').trim()
+    if (fullPhone) {
+      const phoneParts = splitGuestPhone(fullPhone)
+      setWelcomePhoneCode(phoneParts.countryCode)
+      setWelcomeCustomDialCode(phoneParts.customCode)
+      setWelcomePhone(phoneParts.number)
+    } else {
+      setWelcomePhoneCode('+34')
+      setWelcomeCustomDialCode('')
+      setWelcomePhone('')
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (user) {
+      const { data: recentChild } = await supabase
+        .from('children')
+        .select('id, name, last_name, birth_date')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (recentChild) {
+        setWelcomeChildFirstName(recentChild.name ?? rsvpChildFirst)
+        setWelcomeChildLastName(recentChild.last_name || rsvpChildLast)
+        if (recentChild.birth_date) {
+          const [year, month, day] = String(recentChild.birth_date).split('T')[0].split('-')
+          setWelcomeChildBirthYear(year ?? '')
+          setWelcomeChildBirthMonth(month ?? '')
+          setWelcomeChildBirthDay(day ?? '')
+        }
+      }
+    }
+
+    setWelcomeModalView('welcome')
+    setShowWelcomeModal(true)
+  }
+
+  const validateWelcomeChildBirthDate = () => {
+    const hasComplete =
+      Boolean(welcomeChildBirthDay) && Boolean(welcomeChildBirthMonth) && Boolean(welcomeChildBirthYear)
+    if (!hasComplete) {
+      setWelcomeChildBirthError(true)
+      return false
+    }
+    setWelcomeChildBirthError(false)
+    return true
+  }
+
+  const persistWelcomeProfile = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return
+
+    const welcomeDial = resolveDialCode(welcomePhoneCode, welcomeCustomDialCode)
+    const welcomeFullPhone =
+      welcomePhone.trim().length > 0 ? `${welcomeDial}${welcomePhone.replace(/\s/g, '')}` : null
+    const welcomeBirthDate = composeBirthDateIso(welcomeBirthDay, welcomeBirthMonth, welcomeBirthYear)
+
+    await supabase.from('users').upsert({
+      id: user.id,
+      first_name: welcomeFirstName.trim() || null,
+      last_name: welcomeLastName.trim() || null,
+      phone: welcomeFullPhone,
+      birth_date: welcomeBirthDate,
+    })
+
+    const childBirthDate =
+      welcomeChildBirthDay && welcomeChildBirthMonth && welcomeChildBirthYear
+        ? `${welcomeChildBirthYear}-${String(welcomeChildBirthMonth).padStart(2, '0')}-${String(welcomeChildBirthDay).padStart(2, '0')}`
+        : null
+
+    if (childBirthDate) {
+      const { data: existingChildren } = await supabase
+        .from('children')
+        .select('id, name, birth_date')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+
+      const existingChild = existingChildren?.[0] || null
+      if (existingChild) {
+        await supabase
+          .from('children')
+          .update({
+            last_name: welcomeChildLastName.trim() || null,
+            birth_date: childBirthDate,
+          })
+          .eq('id', existingChild.id)
+      } else {
+        await supabase.from('children').insert({
+          user_id: user.id,
+          name: welcomeChildFirstName.trim(),
+          last_name: welcomeChildLastName.trim() || null,
+          birth_date: childBirthDate,
+        })
+      }
+    }
+
+    const child2BirthDate =
+      welcomeChild2BirthYear && welcomeChild2BirthMonth && welcomeChild2BirthDay
+        ? `${welcomeChild2BirthYear}-${welcomeChild2BirthMonth.padStart(2, '0')}-${welcomeChild2BirthDay.padStart(2, '0')}`
+        : null
+
+    if (child2BirthDate && welcomeChild2FirstName.trim()) {
+      await supabase.from('children').insert({
+        user_id: user.id,
+        name: welcomeChild2FirstName.trim(),
+        last_name: welcomeChild2LastName.trim() || null,
+        birth_date: child2BirthDate,
+      })
+    }
+  }
+
+  const handleSaveWelcomeProfile = async () => {
+    if (!validateWelcomeChildBirthDate()) return
+    await persistWelcomeProfile()
+    setWelcomeModalView('success')
+  }
+
+  const handleSkipWelcomeProfile = async () => {
+    if (!validateWelcomeChildBirthDate()) return
+    await persistWelcomeProfile()
+    setWelcomeModalView('success')
+  }
 
   const resolvedThemeKey: ThemeKeyType =
     themeKey === 'yellow' || themeKey === 'pink' || themeKey === 'blue' || themeKey === 'green' || themeKey === 'purple'
@@ -312,8 +537,7 @@ export default function RsvpEditPage() {
         await sb.from('rsvps').update({ user_id: session.user.id }).eq('edit_token', token)
       }
       setIsLoggedIn(true)
-      setShowWelcomeModal(true)
-      setWelcomeModalView('welcome')
+      void prefillAndOpenWelcomeModal()
     })
 
     return () => subscription.unsubscribe()
@@ -630,8 +854,7 @@ export default function RsvpEditPage() {
     if (uid) {
       await supabase.from('rsvps').update({ user_id: uid }).eq('edit_token', token)
       setIsLoggedIn(true)
-      setShowWelcomeModal(true)
-      setWelcomeModalView('welcome')
+      await prefillAndOpenWelcomeModal()
     }
   }
 
@@ -834,55 +1057,373 @@ export default function RsvpEditPage() {
   }
 
   const renderWelcomeModal = () => {
-    if (!showWelcomeModal || welcomeModalView !== 'welcome') return null
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-        <div className="mx-4 max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <h2 className="text-lg font-bold text-gray-900">¡Bienvenido/a a MiParty! 🎉</h2>
+    if (!showWelcomeModal) return null
+
+    const displayFirstName = welcomeFirstName.trim() || 'ahí'
+    const childProfileName =
+      [welcomeChildFirstName.trim(), welcomeChildLastName.trim()].filter(Boolean).join(' ') || 'tu hijo/a'
+
+    if (welcomeModalView === 'success') {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="relative mx-4 max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <button
               type="button"
               onClick={() => setShowWelcomeModal(false)}
-              className="shrink-0 text-2xl leading-none text-gray-400 hover:text-gray-700"
+              className="absolute right-3 top-2 text-2xl leading-none text-gray-400 hover:text-gray-700"
               aria-label="Cerrar"
             >
               ×
             </button>
+            <p className="text-center text-4xl" aria-hidden>
+              🎉
+            </p>
+            <h3 className="mt-2 text-center text-xl font-bold text-gray-900">
+              ¡Bienvenido/a, {displayFirstName}! 🎉
+            </h3>
+            <p className="mt-2 text-center text-sm text-gray-500">
+              Tu cuenta ha sido creada y tu perfil guardado. Ahora puedes organizar tus propios cumpleaños y
+              gestionar confirmaciones desde un solo lugar.
+            </p>
+            <Link
+              href="/dashboard"
+              className={`mt-4 inline-flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
+            >
+              Ir a mi perfil →
+            </Link>
           </div>
-          <p className="text-sm text-gray-600">Tu cuenta ha sido creada. Ahora puedes:</p>
-          <ul className="mt-4 space-y-3">
-            <li className="flex gap-2 text-sm text-gray-800">
-              <span className="shrink-0 text-green-600" aria-hidden>
-                ✓
-              </span>
-              <span>Organizar cumpleaños desde un solo lugar</span>
-            </li>
-            <li className="flex gap-2 text-sm text-gray-800">
-              <span className="shrink-0 text-green-600" aria-hidden>
-                ✓
-              </span>
-              <span>Gestionar confirmaciones y alergias</span>
-            </li>
-            <li className="rounded-lg border border-yellow-200 bg-yellow-50 p-2">
-              <div className="flex gap-2 text-sm text-yellow-800">
-                <span className="shrink-0 text-green-600" aria-hidden>
-                  ✓
-                </span>
-                <span>Tu primer evento completamente gratis 🎁</span>
-              </div>
-            </li>
-          </ul>
-          <Link
-            href="/dashboard"
-            className={`mt-6 inline-flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
+        </div>
+      )
+    }
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+        <div className="relative mx-4 max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+          <button
+            type="button"
+            onClick={() => setShowWelcomeModal(false)}
+            className="absolute right-3 top-2 text-2xl leading-none text-gray-400 hover:text-gray-700"
+            aria-label="Cerrar"
           >
-            Ir a mi perfil →
-          </Link>
+            ×
+          </button>
+          <h2 className="pr-8 text-lg font-bold text-gray-900">¡Bienvenido/a, {displayFirstName}! 🎉</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Tu cuenta ha sido creada. Completa tu perfil para una mejor experiencia.
+          </p>
+          <p className="mt-4 text-sm font-semibold text-gray-900">Tus datos</p>
+          <div className="mt-3 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="welcomeFirstName" className="text-xs font-medium text-gray-600">
+                  Nombre
+                </label>
+                <input
+                  id="welcomeFirstName"
+                  type="text"
+                  value={welcomeFirstName}
+                  onChange={(e) => setWelcomeFirstName(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                />
+              </div>
+              <div>
+                <label htmlFor="welcomeLastName" className="text-xs font-medium text-gray-600">
+                  Apellido(s)
+                </label>
+                <input
+                  id="welcomeLastName"
+                  type="text"
+                  value={welcomeLastName}
+                  onChange={(e) => setWelcomeLastName(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="welcomePhone" className="mb-1.5 block text-sm font-medium text-gray-900">
+                Teléfono
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={welcomePhoneCode}
+                  onChange={(e) => setWelcomePhoneCode(e.target.value)}
+                  className="rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  aria-label="Prefijo"
+                >
+                  <option value="+34">🇪🇸 +34</option>
+                  <option value="+57">🇨🇴 +57</option>
+                  <option value="otro">✏️ Otro</option>
+                </select>
+                {welcomePhoneCode === 'otro' ? (
+                  <input
+                    type="text"
+                    inputMode="tel"
+                    value={welcomeCustomDialCode}
+                    onChange={(e) => setWelcomeCustomDialCode(sanitizeDialPrefix(e.target.value))}
+                    maxLength={5}
+                    placeholder="+00"
+                    aria-label="Prefijo internacional"
+                    className="w-16 shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  />
+                ) : null}
+                <input
+                  id="welcomePhone"
+                  type="tel"
+                  inputMode="tel"
+                  value={welcomePhone}
+                  onChange={(e) => setWelcomePhone(e.target.value)}
+                  placeholder="Ej. 612345678"
+                  className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                />
+              </div>
+            </div>
+            <div>
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <span className="text-sm font-medium text-gray-900">Tu fecha de nacimiento</span>
+                <span className="text-xs text-gray-400">(opcional)</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <select
+                  value={welcomeBirthDay}
+                  onChange={(e) => setWelcomeBirthDay(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  aria-label="Día"
+                >
+                  <option value="">Día</option>
+                  {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((day) => (
+                    <option key={day} value={day}>
+                      {day}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={welcomeBirthMonth}
+                  onChange={(e) => setWelcomeBirthMonth(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  aria-label="Mes"
+                >
+                  <option value="">Mes</option>
+                  {SPANISH_MONTHS.map((monthName, index) => {
+                    const monthValue = String(index + 1).padStart(2, '0')
+                    return (
+                      <option key={monthValue} value={monthValue}>
+                        {monthName}
+                      </option>
+                    )
+                  })}
+                </select>
+                <select
+                  value={welcomeBirthYear}
+                  onChange={(e) => setWelcomeBirthYear(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  aria-label="Año"
+                >
+                  <option value="">Año</option>
+                  {welcomeBirthYears.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+          <p className="mt-4 text-sm font-semibold text-gray-900">Perfil de {childProfileName}</p>
+          <div className="mt-3 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="welcomeChildFirstName" className="text-xs font-medium text-gray-600">
+                  Nombre
+                </label>
+                <input
+                  id="welcomeChildFirstName"
+                  type="text"
+                  value={welcomeChildFirstName}
+                  onChange={(e) => setWelcomeChildFirstName(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                />
+              </div>
+              <div>
+                <label htmlFor="welcomeChildLastName" className="text-xs font-medium text-gray-600">
+                  Apellido(s)
+                </label>
+                <input
+                  id="welcomeChildLastName"
+                  type="text"
+                  value={welcomeChildLastName}
+                  onChange={(e) => setWelcomeChildLastName(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-900">Fecha de nacimiento</label>
+              <div className="grid grid-cols-3 gap-2">
+                <select
+                  value={welcomeChildBirthDay}
+                  onChange={(e) => {
+                    setWelcomeChildBirthDay(e.target.value)
+                    setWelcomeChildBirthError(false)
+                  }}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  aria-label="Día"
+                >
+                  <option value="">Día</option>
+                  {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((day) => (
+                    <option key={`child-${day}`} value={day}>
+                      {day}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={welcomeChildBirthMonth}
+                  onChange={(e) => {
+                    setWelcomeChildBirthMonth(e.target.value)
+                    setWelcomeChildBirthError(false)
+                  }}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  aria-label="Mes"
+                >
+                  <option value="">Mes</option>
+                  {SPANISH_MONTHS.map((monthName, index) => {
+                    const monthValue = String(index + 1).padStart(2, '0')
+                    return (
+                      <option key={`child-${monthValue}`} value={monthValue}>
+                        {monthName}
+                      </option>
+                    )
+                  })}
+                </select>
+                <select
+                  value={welcomeChildBirthYear}
+                  onChange={(e) => {
+                    setWelcomeChildBirthYear(e.target.value)
+                    setWelcomeChildBirthError(false)
+                  }}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  aria-label="Año"
+                >
+                  <option value="">Año</option>
+                  {welcomeBirthYears.map((year) => (
+                    <option key={`child-${year}`} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {welcomeChildBirthError ? (
+                <p className="mt-1 text-xs text-red-500">La fecha de nacimiento es obligatoria</p>
+              ) : (
+                <p className="mt-1 text-xs text-gray-400">(importante para recordatorios)</p>
+              )}
+            </div>
+          </div>
+          {!showWelcomeSecondChild ? (
+            <button
+              type="button"
+              onClick={() => setShowWelcomeSecondChild(true)}
+              className="mt-3 text-sm text-gray-400 underline hover:text-gray-600"
+            >
+              + Añadir otro hijo/a
+            </button>
+          ) : null}
+          {showWelcomeSecondChild ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm font-semibold text-gray-900">Otro hijo/a</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label htmlFor="welcomeChild2FirstName" className="text-xs font-medium text-gray-600">
+                    Nombre
+                  </label>
+                  <input
+                    id="welcomeChild2FirstName"
+                    type="text"
+                    value={welcomeChild2FirstName}
+                    onChange={(e) => setWelcomeChild2FirstName(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="welcomeChild2LastName" className="text-xs font-medium text-gray-600">
+                    Apellido(s)
+                  </label>
+                  <input
+                    id="welcomeChild2LastName"
+                    type="text"
+                    value={welcomeChild2LastName}
+                    onChange={(e) => setWelcomeChild2LastName(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-900">Fecha de nacimiento</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <select
+                    value={welcomeChild2BirthDay}
+                    onChange={(e) => setWelcomeChild2BirthDay(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                    aria-label="Día"
+                  >
+                    <option value="">Día</option>
+                    {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((day) => (
+                      <option key={`child2-${day}`} value={day}>
+                        {day}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={welcomeChild2BirthMonth}
+                    onChange={(e) => setWelcomeChild2BirthMonth(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                    aria-label="Mes"
+                  >
+                    <option value="">Mes</option>
+                    {SPANISH_MONTHS.map((monthName, index) => {
+                      const monthValue = String(index + 1).padStart(2, '0')
+                      return (
+                        <option key={`child2-${monthValue}`} value={monthValue}>
+                          {monthName}
+                        </option>
+                      )
+                    })}
+                  </select>
+                  <select
+                    value={welcomeChild2BirthYear}
+                    onChange={(e) => setWelcomeChild2BirthYear(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                    aria-label="Año"
+                  >
+                    <option value="">Año</option>
+                    {welcomeBirthYears.map((year) => (
+                      <option key={`child2-${year}`} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="mt-1 text-xs text-gray-400">(importante para recordatorios)</p>
+              </div>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void handleSaveWelcomeProfile()}
+            className={`mt-4 w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
+          >
+            Completar mi perfil
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSkipWelcomeProfile()}
+            className="mt-3 w-full text-center text-sm text-gray-400 underline hover:text-gray-600"
+          >
+            Completaré mi perfil después
+          </button>
         </div>
       </div>
     )
   }
-
   return (
     <main className={`relative min-h-screen bg-gradient-to-b ${pageBg}`}>
       {rsvpTopNav}

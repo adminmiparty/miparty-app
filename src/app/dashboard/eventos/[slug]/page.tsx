@@ -588,7 +588,7 @@ export default function EventControlCenterPage() {
     <main className={`min-h-screen bg-gradient-to-b ${pageBg}`}>
       <AppNav backHref="/dashboard" backLabel="⬅️ Mi panel" />
 
-      <div className="mx-auto w-full max-w-7xl px-6 pt-10">
+      <div className="mx-auto w-full max-w-7xl px-6 pb-12 pt-10">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[360px_minmax(0,1fr)] md:gap-6">
           <aside className="space-y-4">
             <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl md:sticky md:top-6 md:self-start">
