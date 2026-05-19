@@ -7,7 +7,6 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useParams } from 'next/navigation'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
 import { getTheme } from '@/lib/themes'
 
@@ -246,7 +245,7 @@ export default function RsvpEditPage() {
   const supabase = createClient()
 
   const [loadState, setLoadState] = useState<'loading' | 'error' | 'ready' | 'notfound'>('loading')
-  const [themeKey, setThemeKey] = useState<string | null>('yellow')
+  const [themeKey, setThemeKey] = useState<string | null>(null)
   const [eventData, setEventData] = useState<LoadedEventForEdit | null>(null)
   const [baselinePayload, setBaselinePayload] = useState<NormalizedRsvpPayload | null>(null)
   const [foodOptions, setFoodOptions] = useState<{ label: string }[]>([])
@@ -662,22 +661,22 @@ export default function RsvpEditPage() {
     setLoading(false)
   }
 
-  const rsvpTopNav = <AppNav backHref="/" backLabel="⬅️ Inicio" />
+  const rsvpTopNav = <AppNav brandHref="/" />
+
+  const neutralPageBg = 'from-white to-white'
+  const pageBg = loadState === 'ready' ? getTheme(resolvedThemeKey).pageBg : neutralPageBg
 
   if (loadState === 'loading') {
     return (
-      <main className={`min-h-screen ${brand.pageBg}`}>
+      <main className={`min-h-screen bg-gradient-to-b ${neutralPageBg}`} aria-busy="true">
         {rsvpTopNav}
-        <div className="px-4 py-8">
-          <p className="text-center text-sm text-gray-600">Cargando...</p>
-        </div>
       </main>
     )
   }
 
   if (loadState === 'notfound') {
     return (
-      <main className={`min-h-screen ${brand.pageBg}`}>
+      <main className={`min-h-screen bg-gradient-to-b ${neutralPageBg}`}>
         {rsvpTopNav}
         <div className="px-4 py-10">
           <div className="mx-auto max-w-md rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
@@ -690,8 +689,6 @@ export default function RsvpEditPage() {
       </main>
     )
   }
-
-  const pageBg = getTheme(resolvedThemeKey).pageBg
 
   const invitationFitClass =
     eventData?.invitation_image_fit === 'cover' ? 'object-cover' : 'object-contain bg-gray-50'

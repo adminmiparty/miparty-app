@@ -117,7 +117,7 @@ export default function NewChildPage() {
 
   return (
     <main className={`min-h-screen ${brand.pageBg}`}>
-      <AppNav backHref="/dashboard" backLabel="⬅️ Mi espacio" />
+      <AppNav backHref="/dashboard" backLabel="⬅️ Mi panel" />
       <div className="mx-auto w-full max-w-sm px-4 py-8">
         <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
           <div className="mb-6">

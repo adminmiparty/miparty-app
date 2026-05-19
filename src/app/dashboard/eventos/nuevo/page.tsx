@@ -13,6 +13,7 @@ import {
   eventFormPageMainClass,
   eventFormSubmitButtonClass,
   resolveThemeOrBrand,
+  isInvitationThemeKey,
   themeForPersistence,
   type SelectedInvitationTheme,
 } from '@/lib/eventFormTheme'
@@ -271,6 +272,44 @@ function formatIsoToDisplayDate(isoDate: string) {
   return `${day}/${month}/${year}`
 }
 
+function parseInvitationPosition(position: string | null) {
+  if (!position || position.trim() === '') {
+    return { x: 50, y: 50 }
+  }
+  const parts = position.trim().split(/\s+/)
+  const x = Number.parseFloat((parts[0] ?? '50').replace('%', ''))
+  const y = Number.parseFloat((parts[1] ?? '50').replace('%', ''))
+  return {
+    x: Number.isFinite(x) ? x : 50,
+    y: Number.isFinite(y) ? y : 50,
+  }
+}
+
+type DuplicateSourceEventRow = {
+  id: string
+  user_id: string
+  child_name: string
+  child_birth_date: string | null
+  title: string
+  start_time: string
+  pickup_time: string | null
+  location_name: string | null
+  location_address: string | null
+  google_maps_url: string | null
+  gift_option: 'sin_regalo' | 'regalo_libre' | 'bizum_pool' | null
+  bizum_phone: string | null
+  rsvp_deadline_days: number | null
+  birthday_number: number | null
+  organizer_phone: string | null
+  enable_food_options: boolean | null
+  organizer_notes: string | null
+  invitation_theme: string | null
+  invitation_image_url: string | null
+  invitation_image_fit: 'contain' | 'cover' | null
+  invitation_image_position: string | null
+  invitation_image_zoom: number | null
+}
+
 function formatDisplayToIsoDate(displayDate: string) {
   const match = displayDate.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
   if (!match) {
@@ -520,8 +559,10 @@ function NewEventPageContent() {
   const locationNameParam = searchParams.get('locationName')
   const locationAddressParam = searchParams.get('locationAddress')
   const googleMapsUrlParam = searchParams.get('googleMapsUrl')
+  const fromEventParam = searchParams.get('fromEvent')
   const queryPrefsAppliedRef = useRef(false)
   const locationPrefsAppliedRef = useRef(false)
+  const duplicateAppliedRef = useRef(false)
   const supabase = createClient()
 
   const [children, setChildren] = useState<Child[]>([])
@@ -957,6 +998,182 @@ function NewEventPageContent() {
   }, [locationNameParam, locationAddressParam, googleMapsUrlParam])
 
   useEffect(() => {
+    if (!fromEventParam?.trim() || duplicateAppliedRef.current || childrenLoading) {
+      return
+    }
+
+    let cancelled = false
+
+    const loadDuplicate = async () => {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+
+      if (userError || !user) {
+        return
+      }
+
+      const { data: eventRow, error: eventError } = await supabase
+        .from('events')
+        .select(
+          'id, user_id, child_name, child_birth_date, title, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
+        )
+        .eq('public_slug', fromEventParam.trim())
+        .maybeSingle<DuplicateSourceEventRow>()
+
+      if (cancelled) {
+        return
+      }
+
+      if (eventError || !eventRow || eventRow.user_id !== user.id) {
+        router.replace('/dashboard')
+        return
+      }
+
+      const { data: foodOptionRows } = await supabase
+        .from('event_food_options')
+        .select('label')
+        .eq('event_id', eventRow.id)
+        .order('created_at', { ascending: true })
+
+      if (cancelled) {
+        return
+      }
+
+      duplicateAppliedRef.current = true
+      queryPrefsAppliedRef.current = true
+      locationPrefsAppliedRef.current = true
+
+      const matchedChild = children.find(
+        (child) => getChildDropdownDisplayName(child).trim() === eventRow.child_name.trim()
+      )
+
+      if (matchedChild) {
+        setSelectedChildId(matchedChild.id)
+        setChildName(getChildDropdownDisplayName(matchedChild))
+        setChildLastName('')
+        syncChildBirthDateFromDisplayValue(
+          matchedChild.birth_date ? formatIsoToDisplayDate(matchedChild.birth_date) : ''
+        )
+      } else {
+        setSelectedChildId(NEW_CHILD_VALUE)
+        const nameParts = eventRow.child_name.trim().split(/\s+/)
+        if (nameParts.length >= 2) {
+          setChildName(nameParts[0] ?? '')
+          setChildLastName(nameParts.slice(1).join(' '))
+        } else {
+          setChildName(eventRow.child_name.trim())
+          setChildLastName('')
+        }
+        syncChildBirthDateFromDisplayValue(
+          eventRow.child_birth_date ? formatIsoToDisplayDate(eventRow.child_birth_date) : ''
+        )
+      }
+
+      setEventTitle(eventRow.title)
+      setEventTitleManuallyEdited(true)
+
+      setStartTime(eventRow.start_time ? eventRow.start_time.slice(0, 5) : '')
+      setPickupTime(eventRow.pickup_time ? eventRow.pickup_time.slice(0, 5) : '')
+
+      const loc = parseStoredLocationAddress(eventRow.location_address ?? '')
+      setLocationName(eventRow.location_name ?? '')
+      setLocationStreet(loc.street)
+      setLocationCity(loc.city)
+      setLocationPostal(loc.postal)
+      setGoogleMapsUrl(eventRow.google_maps_url ?? '')
+
+      setRsvpDeadlineDays(
+        eventRow.rsvp_deadline_days != null && Number.isFinite(eventRow.rsvp_deadline_days)
+          ? String(eventRow.rsvp_deadline_days)
+          : '1'
+      )
+      setBirthdayNumber(eventRow.birthday_number != null ? String(eventRow.birthday_number) : '')
+      setBirthdayNumberUserEdited(true)
+
+      const organizerParts = splitDialPhone(eventRow.organizer_phone ?? '')
+      setOrganizerCountryCode(organizerParts.countryCode)
+      setOrganizerCustomCode(organizerParts.customCode)
+      setOrganizerPhoneNumber(organizerParts.number)
+
+      const gift = eventRow.gift_option
+      if (gift === 'bizum_pool') {
+        setShowGift(true)
+        setGiftOption('bizum_pool')
+        const bizum = splitDialPhone(eventRow.bizum_phone ?? '')
+        setBizumCountryCode(bizum.countryCode)
+        setBizumCustomCode(bizum.customCode)
+        setBizumPhoneNumber(bizum.number)
+      } else if (gift === 'sin_regalo') {
+        setShowGift(false)
+        setGiftOption('regalo_libre')
+        setBizumPhoneNumber('')
+        setBizumCountryCode('+34')
+        setBizumCustomCode('')
+      } else {
+        setShowGift(true)
+        setGiftOption('regalo_libre')
+        setBizumPhoneNumber('')
+        setBizumCountryCode('+34')
+        setBizumCustomCode('')
+      }
+
+      const foodLabels = (foodOptionRows ?? []).map((row) => String((row as { label: string }).label))
+      if (eventRow.enable_food_options && foodLabels.length > 0) {
+        setShowFood(true)
+        setFoodEnabled(true)
+        setFoodOptions(foodLabels)
+      } else if (eventRow.enable_food_options) {
+        setShowFood(true)
+        setFoodEnabled(true)
+        setFoodOptions([''])
+      } else {
+        setShowFood(false)
+        setFoodEnabled(false)
+        setFoodOptions([''])
+      }
+
+      if (eventRow.organizer_notes) {
+        setShowNotes(true)
+        setNotes(eventRow.organizer_notes)
+      } else {
+        setShowNotes(false)
+        setNotes('')
+      }
+
+      if (eventRow.invitation_image_url) {
+        setShowImage(true)
+        setInvitationImageUrl(eventRow.invitation_image_url)
+        setImageFit(eventRow.invitation_image_fit === 'cover' ? 'cover' : 'contain')
+        const pos = parseInvitationPosition(eventRow.invitation_image_position)
+        setImagePosX(pos.x)
+        setImagePosY(pos.y)
+        setImageZoom(
+          eventRow.invitation_image_zoom != null && Number.isFinite(Number(eventRow.invitation_image_zoom))
+            ? Number(eventRow.invitation_image_zoom)
+            : 1
+        )
+      } else {
+        setShowImage(false)
+        setInvitationImageUrl(null)
+      }
+
+      if (isInvitationThemeKey(eventRow.invitation_theme)) {
+        setInvitationTheme(eventRow.invitation_theme)
+      } else {
+        setInvitationTheme(null)
+      }
+    }
+
+    void loadDuplicate()
+
+    return () => {
+      cancelled = true
+    }
+  }, [fromEventParam, childrenLoading, children, router, supabase])
+
+  useEffect(() => {
     setBirthdayNumberUserEdited(false)
   }, [birthDay, birthMonth, birthYear, eventDate])
 
@@ -1345,7 +1562,7 @@ function NewEventPageContent() {
 
   return (
     <main className={pageMainClass}>
-      <AppNav backHref="/dashboard" backLabel="⬅️ Mi espacio" />
+      <AppNav backHref="/dashboard" backLabel="⬅️ Mi panel" />
       <div className="mx-auto w-full max-w-sm px-4 py-6 pb-8">
         <div className={`mb-4 rounded-xl border ${eventFormBrandUi.progressCardBorder} bg-white/80 p-3`}>
           <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">

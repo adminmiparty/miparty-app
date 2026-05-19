@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
@@ -217,6 +218,25 @@ function splitDialPhone(full: string): {
 
 function capitalizeFirst(str: string) {
   return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
+const calendarProviderLogos = {
+  google: { src: '/calendar/google.png', label: 'Google' },
+  apple: { src: '/calendar/apple.png', label: 'Apple' },
+  outlook: { src: '/calendar/outlook.png', label: 'Outlook' },
+} as const
+
+function CalendarProviderLogo({ src, label }: { src: string; label: string }) {
+  return (
+    <Image
+      src={src}
+      alt=""
+      width={20}
+      height={20}
+      className="h-5 w-5 shrink-0 object-contain"
+      aria-hidden
+    />
+  )
 }
 
 function normalizeTime(rawTime: string) {
@@ -1671,27 +1691,39 @@ END:VCALENDAR`
           Añadir al calendario
         </button>
         {showCalendarOptions ? (
-          <div className="mt-2 grid grid-cols-1 gap-2">
+          <div className="mt-2 grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={handleGoogleCalendar}
-              className="inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 transition hover:bg-gray-50"
+              aria-label="Añadir a Google Calendar"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2 py-2 transition hover:bg-gray-50"
             >
-              Google Calendar
+              <CalendarProviderLogo {...calendarProviderLogos.google} />
+              <span className="truncate text-[11px] font-medium text-gray-800">
+                {calendarProviderLogos.google.label}
+              </span>
             </button>
             <button
               type="button"
               onClick={() => downloadIcsFile('evento-apple.ics')}
-              className="inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 transition hover:bg-gray-50"
+              aria-label="Añadir a Apple Calendar"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2 py-2 transition hover:bg-gray-50"
             >
-              Apple Calendar
+              <CalendarProviderLogo {...calendarProviderLogos.apple} />
+              <span className="truncate text-[11px] font-medium text-gray-800">
+                {calendarProviderLogos.apple.label}
+              </span>
             </button>
             <button
               type="button"
               onClick={() => downloadIcsFile('evento-outlook.ics')}
-              className="inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 transition hover:bg-gray-50"
+              aria-label="Añadir a Outlook"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2 py-2 transition hover:bg-gray-50"
             >
-              Outlook
+              <CalendarProviderLogo {...calendarProviderLogos.outlook} />
+              <span className="truncate text-[11px] font-medium text-gray-800">
+                {calendarProviderLogos.outlook.label}
+              </span>
             </button>
           </div>
         ) : null}

@@ -49,6 +49,11 @@ function getInitials(name: string, lastName: string) {
   return first + last
 }
 
+function avatarStoragePathFromUrl(url: string): string | null {
+  const match = url.match(/\/avatars\/(.+?)(?:\?|$)/)
+  return match?.[1] ?? null
+}
+
 type ChildrenSectionProps = {
   userId: string
   initialChildren: DashboardChildRow[]
@@ -70,7 +75,9 @@ export function ChildrenSection({
   const supabase = createClient()
   const [children, setChildren] = useState<DashboardChildRow[]>(initialChildren)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [pickChildId, setPickChildId] = useState<string | null>(null)
+  const [photoActionChildId, setPhotoActionChildId] = useState<string | null>(null)
   const [showLimitModal, setShowLimitModal] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -110,10 +117,11 @@ export function ChildrenSection({
       const {
         data: { publicUrl },
       } = supabase.storage.from('avatars').getPublicUrl(path)
+      const publicUrlWithCache = `${publicUrl}?t=${Date.now()}`
 
       const { error: updateError } = await supabase
         .from('children')
-        .update({ avatar_url: publicUrl })
+        .update({ avatar_url: publicUrlWithCache })
         .eq('id', childId)
         .eq('user_id', userId)
 
@@ -122,7 +130,7 @@ export function ChildrenSection({
       }
 
       setChildren((prev) =>
-        prev.map((c) => (c.id === childId ? { ...c, avatar_url: publicUrl } : c))
+        prev.map((c) => (c.id === childId ? { ...c, avatar_url: publicUrlWithCache } : c))
       )
     } finally {
       setUploadingId(null)
@@ -135,6 +143,60 @@ export function ChildrenSection({
       fileInputRef.current?.click()
     })
   }
+
+  const handleAvatarPress = (child: DashboardChildRow, hasPhoto: boolean) => {
+    if (uploadingId === child.id || deletingId === child.id) {
+      return
+    }
+    if (hasPhoto) {
+      setPhotoActionChildId(child.id)
+      return
+    }
+    openPicker(child.id)
+  }
+
+  const handleDeletePhoto = async (childId: string) => {
+    const child = children.find((c) => c.id === childId)
+    const avatarUrl = child?.avatar_url?.trim()
+    if (!avatarUrl) {
+      setPhotoActionChildId(null)
+      return
+    }
+
+    setDeletingId(childId)
+    try {
+      const storagePath = avatarStoragePathFromUrl(avatarUrl)
+      if (storagePath) {
+        await supabase.storage.from('avatars').remove([storagePath])
+      }
+
+      const { error: updateError } = await supabase
+        .from('children')
+        .update({ avatar_url: null })
+        .eq('id', childId)
+        .eq('user_id', userId)
+
+      if (updateError) {
+        return
+      }
+
+      setChildren((prev) =>
+        prev.map((c) => (c.id === childId ? { ...c, avatar_url: null } : c))
+      )
+      setPhotoActionChildId(null)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleReplacePhoto = (childId: string) => {
+    setPhotoActionChildId(null)
+    openPicker(childId)
+  }
+
+  const photoActionChild = photoActionChildId
+    ? children.find((c) => c.id === photoActionChildId)
+    : null
 
   return (
     <section className="mb-6 sm:mb-8">
@@ -189,6 +251,7 @@ export function ChildrenSection({
             const age = birth ? computeAgeYears(birth, todayDate()) : null
             const birthFmt = birth ? formatBirthDdMmYyyy(birth) : ''
             const uploading = uploadingId === child.id
+            const deleting = deletingId === child.id
             const hasPhoto = Boolean(child.avatar_url?.trim())
             const initials = getInitials(child.name, child.last_name ?? '')
             const avatarColorClass = avatarColors[index % avatarColors.length]
@@ -216,11 +279,11 @@ export function ChildrenSection({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    openPicker(child.id)
+                    handleAvatarPress(child, hasPhoto)
                   }}
-                  disabled={uploading}
+                  disabled={uploading || deleting}
                   className="group/avatar relative h-16 w-16 shrink-0 cursor-pointer border-0 bg-transparent p-0 disabled:opacity-50"
-                  aria-label={hasPhoto ? 'Cambiar foto' : 'Añadir foto'}
+                  aria-label={hasPhoto ? 'Opciones de foto' : 'Añadir foto'}
                 >
                   {hasPhoto ? (
                     <img
@@ -237,10 +300,10 @@ export function ChildrenSection({
                   )}
                   <div
                     className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/30 transition-opacity ${
-                      uploading ? 'opacity-100' : 'opacity-0 group-hover/avatar:opacity-100'
+                      uploading || deleting ? 'opacity-100' : 'opacity-0 group-hover/avatar:opacity-100'
                     }`}
                   >
-                    {uploading ? (
+                    {uploading || deleting ? (
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
                     ) : (
                       <Camera className="h-3 w-3 text-white" strokeWidth={2} aria-hidden />
@@ -267,6 +330,55 @@ export function ChildrenSection({
           })}
         </div>
       )}
+
+      {photoActionChild ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => {
+            if (deletingId !== photoActionChild.id) {
+              setPhotoActionChildId(null)
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-[16rem] rounded-xl bg-white p-4 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="child-photo-action-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="child-photo-action-title" className="text-sm font-semibold text-gray-900">
+              Foto
+            </h3>
+            <div className="mt-3 flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={deletingId === photoActionChild.id}
+                onClick={() => void handleReplacePhoto(photoActionChild.id)}
+                className={`rounded-lg px-3 py-2 text-sm font-medium ${brand.buttonSecondary}`}
+              >
+                Cambiar foto
+              </button>
+              <button
+                type="button"
+                disabled={deletingId === photoActionChild.id}
+                onClick={() => void handleDeletePhoto(photoActionChild.id)}
+                className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+              >
+                {deletingId === photoActionChild.id ? 'Eliminando…' : 'Eliminar foto'}
+              </button>
+              <button
+                type="button"
+                disabled={deletingId === photoActionChild.id}
+                onClick={() => setPhotoActionChildId(null)}
+                className="rounded-lg px-3 py-2 text-sm text-gray-500 transition hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showLimitModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">

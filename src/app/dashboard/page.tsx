@@ -4,6 +4,7 @@
 // Route: /dashboard
 
 import AppNav from '@/components/AppNav'
+import GoogleGIcon from '@/components/GoogleGIcon'
 import { ChildrenSection, type DashboardChildRow } from '@/components/ChildrenSection'
 import { brand } from '@/lib/brand'
 import { formatEventDayMonthShort } from '@/lib/dates'
@@ -1693,7 +1694,7 @@ export default function DashboardHomePage() {
 
   return (
     <main className={`min-h-screen ${brand.pageBg} pb-12`}>
-      <AppNav />
+      <AppNav brandHref="/" />
       <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-8">
         <header className="mb-6 sm:mb-8">
           <div>
@@ -2197,12 +2198,7 @@ export default function DashboardHomePage() {
                         {profileEmail}
                       </div>
                       <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-400">
-                        <span
-                          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-bold text-blue-600 shadow-sm"
-                          aria-hidden
-                        >
-                          G
-                        </span>
+                        <GoogleGIcon size={16} className="h-4 w-4 shrink-0" />
                         Vinculado con Google
                       </p>
                     </div>

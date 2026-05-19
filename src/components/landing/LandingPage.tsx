@@ -1,6 +1,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import LandingFooter from '@/components/LandingFooter'
+import LandingHeader from '@/components/LandingHeader'
 import { brand } from '@/lib/brand'
 
 type FeatureItem = {
@@ -14,20 +16,30 @@ const features: FeatureItem[] = [
   {
     emoji: '👨‍👩‍👧‍👦',
     title: 'Perfiles familiares',
-    description: 'Hijos, alergias y fechas. Una vez y listo.',
+    description: 'Guardas una vez. Lo reutilizas siempre.',
     detail: (
-      <div className="mt-3 flex items-center gap-2">
-        {[
-          { initial: 'S', name: 'Sofía' },
-          { initial: 'M', name: 'Mateo' },
-        ].map((child) => (
-          <div key={child.name} className="flex items-center gap-1.5">
-            <span className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold ${brand.avatarBrand}`}>
-              {child.initial}
-            </span>
-            <span className="text-[11px] text-gray-500">{child.name}</span>
-          </div>
-        ))}
+      <div className="rounded-xl border border-[var(--brand-border-light)] bg-[var(--brand-primary-light)]/60 p-3">
+        <div className="flex items-center gap-2">
+          {[
+            { initial: 'S', name: 'Sofía', sub: '🌾 sin gluten' },
+            { initial: 'M', name: 'Mateo', sub: '6 años' },
+          ].map((child) => (
+            <div
+              key={child.name}
+              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-white/80 bg-white/90 px-2 py-1.5 shadow-[var(--shadow-card)]"
+            >
+              <span
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${brand.avatarBrand}`}
+              >
+                {child.initial}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-[11px] font-medium text-gray-900">{child.name}</p>
+                <p className="truncate text-[9px] text-gray-500">{child.sub}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     ),
   },
@@ -36,31 +48,55 @@ const features: FeatureItem[] = [
     title: 'Un solo enlace',
     description: 'Invitación lista para WhatsApp.',
     detail: (
-      <p className="mt-3 inline-block rounded-md bg-gray-100 px-2 py-0.5 font-mono text-[11px] text-gray-700">
-        miparty.app/e/sofia-7
-      </p>
+      <div className="rounded-xl bg-green-50/90 p-2.5 ring-1 ring-green-100/80">
+        <div className="rounded-lg rounded-tl-sm bg-[#dcf8c6] px-2.5 py-2 text-[10px] leading-snug text-gray-800 shadow-sm">
+          Cumple de Sofía 🎂{' '}
+          <span className="font-medium text-blue-600 underline decoration-blue-600/30">
+            miparty.app/e/sofia-7
+          </span>
+        </div>
+        <p className="mt-1.5 text-center text-[9px] font-medium text-green-700/80">Listo para enviar</p>
+      </div>
     ),
   },
   {
     emoji: '✅',
     title: 'Confirmaciones claras',
-    description: 'Quién viene y quién no, en tu panel.',
+    description: 'Todo claro, al instante.',
     detail: (
-      <p className="mt-3 text-[11px] text-gray-500">
-        <span className="text-green-600">✓ 8 confirmados</span>
-        {'  ·  '}
-        <span className="text-amber-600">⏳ 2 pendientes</span>
-      </p>
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-1.5">
+          <span className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700 ring-1 ring-green-100">
+            8 ✓
+          </span>
+          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-100">
+            2 ⏳
+          </span>
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">1 ✕</span>
+        </div>
+        <div className="rounded-lg border border-gray-100 bg-white px-2.5 py-1.5 shadow-[var(--shadow-card)]">
+          <p className="text-[10px] text-gray-500">
+            <span className="font-medium text-gray-800">Laura G.</span> · Voy 🎉
+          </p>
+        </div>
+      </div>
     ),
   },
   {
-    emoji: '🔔',
-    title: 'Menos persecución',
-    description: 'Pendientes y menú, sin ir pregunta por pregunta.',
+    emoji: '💬',
+    title: 'Menos mensajes',
+    description: 'Sin perseguir respuestas.',
     detail: (
-      <span className="mt-3 inline-block rounded-full bg-green-100 px-2.5 py-0.5 text-[11px] font-medium text-green-800">
-        ✓ Lista para imprimir
-      </span>
+      <div className="space-y-2">
+        <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/80 px-2.5 py-2">
+          <p className="text-[10px] text-gray-400 line-through decoration-gray-300">¿Vais a venir?</p>
+          <p className="text-[10px] text-gray-400 line-through decoration-gray-300">¿Alguna alergia?</p>
+        </div>
+        <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-primary-muted)] px-2.5 py-1 text-[10px] font-medium text-[var(--brand-accent-dark)]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-primary)]" aria-hidden />
+          Respuestas en tu panel
+        </span>
+      </div>
     ),
   },
 ]
@@ -71,64 +107,136 @@ const steps = [
     title: 'Crea tu familia',
     description: 'Añade hijos y alergias.',
     hint: (
-      <span className="mt-2 inline-block rounded-full border border-gray-100 bg-white px-2.5 py-0.5 text-[11px] text-gray-500 shadow-[var(--shadow-card)]">
-        Sofía · 6 años · 🌾 Sin gluten
-      </span>
+      <div className="mx-auto mt-1.5 max-w-[10rem] rounded-lg border border-[var(--brand-border-light)] bg-[var(--brand-primary-light)]/55 px-2.5 py-2 text-left">
+        <div className="flex items-center gap-1.5">
+          {['S', 'M'].map((initial) => (
+            <span
+              key={initial}
+              className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold ${brand.avatarBrand}`}
+            >
+              {initial}
+            </span>
+          ))}
+          <span className="text-[9px] text-gray-500">Sofía · Mateo</span>
+        </div>
+        <p className="mt-1 text-[9px] text-amber-700/90">🌾 Alergias guardadas</p>
+      </div>
     ),
   },
   {
     number: '2',
-    title: 'Comparte el enlace',
-    description: 'Envíalo por WhatsApp.',
+    title: 'Crea el evento',
+    description: 'Fecha, lugar y menú.',
     hint: (
-      <p className="mt-2 font-mono text-[11px] text-gray-500">miparty.app/e/sofia-7</p>
+      <div className="mx-auto mt-1.5 max-w-[10.5rem] rounded-lg border border-gray-100 bg-white px-2.5 py-2 text-left shadow-[var(--shadow-card)]">
+        <p className="text-[10px] font-semibold text-gray-900">Cumple 7 de Sofía</p>
+        <p className="mt-0.5 text-[9px] text-gray-500">18 mayo · 17:00</p>
+        <p className="mt-0.5 truncate text-[9px] text-gray-400">Casa de Laura</p>
+        <div className="mt-1.5 flex gap-1">
+          {['18', '19', '20'].map((day, i) => (
+            <span
+              key={day}
+              className={`flex h-5 w-5 items-center justify-center rounded text-[8px] font-medium ${
+                i === 0
+                  ? 'bg-[var(--brand-primary)] text-[var(--brand-on-primary)]'
+                  : 'bg-gray-100 text-gray-400'
+              }`}
+            >
+              {day}
+            </span>
+          ))}
+        </div>
+      </div>
     ),
   },
   {
     number: '3',
-    title: 'Mira las respuestas',
-    description: 'Confirmaciones y menú al día.',
+    title: 'Comparte la invitación',
+    description: 'Lista para WhatsApp.',
     hint: (
-      <p className="mt-2 text-[11px]">
-        <span className="text-green-600">✓ 8</span>
-        {'  ·  '}
-        <span className="text-amber-600">⏳ 2</span>
-        {'  ·  '}
-        <span className="text-red-500">❌ 1</span>
-      </p>
+      <div className="mx-auto mt-1.5 max-w-[11rem] rounded-lg bg-green-50/90 p-1.5 ring-1 ring-green-100/70">
+        <div className="rounded-md rounded-tl-sm bg-[#dcf8c6] px-2 py-1.5 text-left text-[9px] leading-snug text-gray-800">
+          ¡Nos vemos! 🎂{' '}
+          <span className="text-blue-600 underline decoration-blue-600/30">miparty.app/e/sofia-7</span>
+        </div>
+      </div>
+    ),
+  },
+  {
+    number: '4',
+    title: 'Todo en un solo lugar',
+    description: 'Sin 100 mensajes en el grupo.',
+    hint: (
+      <div className="mx-auto mt-1.5 max-w-[10.5rem] rounded-lg border border-gray-100 bg-white px-2 py-2 shadow-[var(--shadow-card)]">
+        <p className="truncate text-[9px] font-semibold text-gray-900">Cumple 7 de Sofía</p>
+        <dl className="mt-1.5 grid grid-cols-3 gap-1 border-t border-gray-100 pt-1.5 text-center">
+          <div>
+            <dd className="text-sm font-semibold tabular-nums leading-none text-gray-900">8</dd>
+            <dt className="mt-0.5 text-[8px] font-medium text-green-700">Confirm.</dt>
+          </div>
+          <div className="border-x border-gray-100">
+            <dd className="text-sm font-semibold tabular-nums leading-none text-gray-900">2</dd>
+            <dt className="mt-0.5 text-[8px] font-medium text-amber-700">Pend.</dt>
+          </div>
+          <div>
+            <dd className="text-sm font-semibold tabular-nums leading-none text-gray-900">2</dd>
+            <dt className="mt-0.5 text-[8px] font-medium text-amber-800/80">Alerg.</dt>
+          </div>
+        </dl>
+      </div>
     ),
   },
 ]
 
-const plans = [
+type PricingPlan = {
+  name: string
+  price?: string
+  priceSubtitle?: string
+  priceLabel?: string
+  description: string
+  features?: string[]
+  highlight: boolean
+  comingSoon: boolean
+  ctaLabel: string
+  ctaHref?: string
+}
+
+const plans: PricingPlan[] = [
   {
-    name: 'Un evento',
-    price: 'Gratis',
-    benefits: ['1 evento', 'Sin tarjeta'],
-    highlight: false,
+    name: 'Un cumpleaños',
+    price: '1,99 €',
+    priceSubtitle: 'Por evento',
+    description: 'Todo listo para organizar un cumpleaños sin perseguir mensajes.',
+    features: [
+      'Invitación compartible',
+      'Confirmaciones automáticas',
+      'Alergias y menú',
+      'Panel para organizar',
+    ],
+    highlight: true,
+    comingSoon: false,
+    ctaLabel: 'Crear evento',
+    ctaHref: '/registro',
   },
   {
-    name: 'Plan familia',
-    price: '9 €',
-    period: '/ mes',
-    benefits: ['Eventos ilimitados', 'Perfiles y recordatorios'],
-    highlight: true,
+    name: 'Pack familiar',
+    priceLabel: 'Próximamente',
+    description: 'Todos los cumpleaños de tu familia, en un solo lugar.',
+    highlight: false,
+    comingSoon: true,
+    ctaLabel: 'Muy pronto',
   },
   {
     name: 'De por vida',
-    price: '79 €',
-    benefits: ['Un solo pago', 'Toda la familia'],
+    priceLabel: 'Próximamente',
+    description: 'Guarda recuerdos, invitados y celebraciones para siempre.',
     highlight: false,
+    comingSoon: true,
+    ctaLabel: 'Muy pronto',
   },
 ]
 
 const previewCaptions = ['Panel', 'Invitación', 'Menú', 'WhatsApp'] as const
-
-const allergyPills = [
-  { label: '🌾 Sin gluten', className: brand.avatarBrand },
-  { label: '🥛 Sin lácteos', className: 'bg-blue-100 text-blue-800' },
-  { label: '🥜 Alergia frutos secos', className: 'bg-red-100 text-red-800' },
-]
 
 function PreviewDashboard() {
   return (
@@ -214,48 +322,26 @@ function PreviewWhatsApp() {
 export default function LandingPage() {
   return (
     <div className={`min-h-screen ${brand.pageBg}`}>
-      <header className={`${brand.navSticky} z-40`}>
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <Link href="/" className={`text-xl font-bold ${brand.navBrand}`}>
-            MiParty
-          </Link>
-          <nav className="hidden items-center gap-6 text-sm text-gray-600 sm:flex" aria-label="Principal">
-            <a href="#producto" className="transition hover:text-gray-900">
-              El producto
-            </a>
-            <a href="#como-funciona" className="transition hover:text-gray-900">
-              Cómo funciona
-            </a>
-            <a href="#precios" className="transition hover:text-gray-900">
-              Precios
-            </a>
-          </nav>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link
-              href="/login"
-              className="hidden rounded-full px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-white/80 hover:text-gray-900 sm:inline-block"
-            >
-              Iniciar sesión
-            </Link>
-            <Link href="/registro" className={brand.landingPrimaryPill}>
-              Crear cuenta
-            </Link>
-          </div>
-        </div>
-      </header>
+      <LandingHeader />
 
       <main>
         {/* Hero */}
-        <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-10 sm:px-6 sm:py-12 lg:grid-cols-2 lg:gap-12 lg:py-16">
-          <div className="max-w-xl">
-            <p className={`text-sm font-medium ${brand.textBrandDark}`}>Cumpleaños sin caos</p>
-            <h1 className="mt-3 font-display text-[2.1rem] font-semibold leading-[1.15] tracking-tight text-gray-900 sm:text-[2.65rem] lg:text-[3.5rem]">
-              Todos tus cumpleaños en un solo lugar.
+        <section className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 py-10 sm:px-6 sm:py-12 lg:grid-cols-2 lg:gap-14 lg:py-16">
+          <div
+            className="pointer-events-none absolute -left-24 top-8 hidden h-64 w-64 rounded-full bg-[var(--brand-primary-muted)]/50 blur-3xl lg:block"
+            aria-hidden
+          />
+          <div className="relative max-w-[30rem] lg:max-w-[28rem]">
+            <p className={`text-sm font-medium tracking-wide ${brand.textBrandDark}`}>Cumpleaños sin caos</p>
+            <h1 className="mt-3 font-display text-[2.1rem] font-semibold leading-[1.12] tracking-tight text-gray-900 sm:text-[2.5rem] lg:text-[3.15rem]">
+              Todos tus cumpleaños
+              <br />
+              en un solo lugar
             </h1>
-            <p className="mt-5 max-w-md text-base leading-snug text-gray-600 sm:text-lg">
-              Un enlace para invitar. Confirmaciones y alergias en tu panel.
+            <p className="mt-7 max-w-md text-base leading-relaxed text-gray-600 sm:text-lg lg:mt-8 lg:max-w-[21rem] lg:text-[1.125rem] lg:leading-snug">
+              Invita, recibe respuestas y organiza todo desde un solo lugar.
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center lg:mt-9">
               <Link href="/registro" className={brand.landingCtaPrimary}>
                 Crear mi primer evento
               </Link>
@@ -265,48 +351,49 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="relative mx-auto w-full max-w-lg lg:max-w-none">
-            <div className="relative aspect-[4/3] overflow-hidden rounded-[var(--radius-card)] shadow-[var(--shadow-card)]">
+          <div className="relative mx-auto w-full max-w-xl lg:max-w-none lg:pl-2">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-[var(--radius-card-lg)] shadow-[0_12px_40px_rgba(67,45,42,0.14)] ring-1 ring-[var(--brand-border-light)] sm:aspect-[5/4] lg:aspect-[4/3] lg:min-h-[22rem]">
               <Image
-                src="https://images.unsplash.com/photo-1530103862673-de7c9ed5a4ef?auto=format&fit=crop&w=1200&q=80"
-                alt="Familia celebrando un cumpleaños infantil"
+                src="/landing-hero.png"
+                alt="Padres organizando en casa mientras los niños disfrutan un cumpleaños en el jardín"
                 fill
-                className="object-cover"
+                className="object-cover object-[32%_center] scale-[1.03]"
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 priority
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-transparent" />
+              <div
+                className="absolute inset-0 bg-gradient-to-br from-amber-100/35 via-[var(--brand-primary-light)]/20 to-transparent"
+                aria-hidden
+              />
+              <div
+                className="absolute inset-0 bg-gradient-to-t from-[#3d2c28]/12 via-transparent to-white/5"
+                aria-hidden
+              />
             </div>
 
             <div
-              className="absolute right-2 top-3 z-10 flex items-center gap-2 rounded-full bg-white px-3.5 py-2 text-[13px] shadow-[var(--shadow-card)] sm:right-4 sm:top-4"
+              className="absolute -bottom-2 left-3 right-3 z-10 sm:-bottom-3 sm:left-5 sm:right-5 lg:-bottom-4 lg:left-6 lg:right-auto lg:w-[17.5rem]"
               aria-hidden
             >
-              <span className="h-2 w-2 shrink-0 rounded-full bg-green-500" aria-hidden />
-              <span className="font-medium text-gray-900">8 confirmadas ✓</span>
-            </div>
-
-            <div
-              className="absolute bottom-16 left-2 z-10 flex max-w-[calc(100%-1rem)] flex-wrap gap-1.5 sm:bottom-20 sm:left-3 lg:bottom-24"
-              aria-hidden
-            >
-              {allergyPills.map((pill) => (
-                <span
-                  key={pill.label}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${pill.className}`}
-                >
-                  {pill.label}
-                </span>
-              ))}
-            </div>
-
-            <div
-              className="absolute -bottom-3 left-3 right-3 z-10 sm:-bottom-4 sm:left-4 sm:right-auto sm:w-[min(100%,17.5rem)] lg:-bottom-5 lg:left-5"
-              aria-hidden
-            >
-              <div className="card-soft px-5 py-3">
-                <p className="text-[15px] font-semibold text-gray-900">Cumple 7 de Sofía</p>
-                <p className="mt-1 text-[12px] font-medium text-green-600">✓ 8 · ⏳ 2</p>
+              <div className="rounded-2xl border border-gray-100/90 bg-white/95 px-4 py-3.5 shadow-[0_8px_28px_rgba(67,45,42,0.1)] backdrop-blur-sm">
+                <p className="truncate text-[15px] font-semibold text-gray-900">Cumple 7 de Sofía</p>
+                <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
+                  <div>
+                    <dt className="sr-only">Confirmados</dt>
+                    <dd className="text-lg font-semibold tabular-nums leading-none text-gray-900">8</dd>
+                    <dd className="mt-1 text-[10px] font-medium leading-tight text-green-700">Confirmados</dd>
+                  </div>
+                  <div className="border-x border-gray-100 px-2">
+                    <dt className="sr-only">Alergias</dt>
+                    <dd className="text-lg font-semibold tabular-nums leading-none text-gray-900">2</dd>
+                    <dd className="mt-1 text-[10px] font-medium leading-tight text-amber-700">Alergias</dd>
+                  </div>
+                  <div>
+                    <dt className="sr-only">Pendientes</dt>
+                    <dd className="text-lg font-semibold tabular-nums leading-none text-gray-900">2</dd>
+                    <dd className="mt-1 text-[10px] font-medium leading-tight text-gray-500">Pendientes</dd>
+                  </div>
+                </dl>
               </div>
             </div>
           </div>
@@ -316,7 +403,7 @@ export default function LandingPage() {
         <section className="border-t border-gray-100 bg-white/60 py-10 sm:py-14">
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
             <h2 className="text-center font-display text-3xl font-semibold text-gray-900 sm:text-4xl">
-              Lo esencial
+              Menos caos. Más cumpleaños.
             </h2>
             <div className="mt-8 grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
               {features.map((feature) => (
@@ -327,10 +414,8 @@ export default function LandingPage() {
                   <h3 className="mt-2.5 text-base font-semibold leading-snug text-gray-900">
                     {feature.title}
                   </h3>
-                  <p className="mt-1.5 text-[13.5px] leading-relaxed text-gray-600">
-                    {feature.description}
-                  </p>
-                  {feature.detail}
+                  <p className="mt-1.5 text-[13.5px] leading-snug text-gray-600">{feature.description}</p>
+                  <div className="mt-auto">{feature.detail}</div>
                 </article>
               ))}
             </div>
@@ -366,24 +451,24 @@ export default function LandingPage() {
         {/* How it works */}
         <section
           id="como-funciona"
-          className={`scroll-mt-20 border-t border-gray-100 py-10 sm:py-14 ${brand.pageBg}`}
+          className={`scroll-mt-20 border-t border-gray-100 py-8 sm:py-10 ${brand.pageBg}`}
         >
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
             <h2 className="text-center font-display text-3xl font-semibold text-gray-900 sm:text-4xl">
-              Tres pasos
+              Así de simple.
             </h2>
-            <ol className="relative mt-8 grid gap-6 sm:mt-10 sm:grid-cols-3 sm:gap-4">
+            <ol className="relative mt-6 grid gap-5 sm:grid-cols-2 sm:gap-4 lg:mt-7 lg:grid-cols-4 lg:gap-3">
               <div
-                className="pointer-events-none absolute left-[16.666%] right-[16.666%] top-5 hidden h-px bg-gray-200 sm:block"
+                className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-4 hidden h-px bg-gray-300/20 lg:block"
                 aria-hidden
               />
               {steps.map((step) => (
                 <li key={step.number} className="relative z-[1] text-center">
-                  <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--brand-primary)] font-display text-lg font-bold text-[var(--brand-on-primary)]">
+                  <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--brand-primary)] font-display text-base font-bold text-[var(--brand-on-primary)]">
                     {step.number}
                   </span>
-                  <h3 className="mt-2.5 text-base font-semibold text-gray-900">{step.title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-gray-600">{step.description}</p>
+                  <h3 className="mt-1.5 text-[15px] font-semibold leading-snug text-gray-900">{step.title}</h3>
+                  <p className="mt-1 text-[13px] leading-snug text-gray-600">{step.description}</p>
                   {step.hint}
                 </li>
               ))}
@@ -401,71 +486,65 @@ export default function LandingPage() {
               {plans.map((plan) => (
                 <article
                   key={plan.name}
-                  className={`flex flex-col px-7 py-6 ${
-                    plan.highlight ? 'card-soft ring-2 ring-[var(--brand-primary)]' : 'card-soft'
-                  }`}
+                  className={`flex flex-col rounded-[var(--radius-card)] border px-7 py-6 ${
+                    plan.highlight
+                      ? 'border-[var(--brand-border-light)] bg-white shadow-[0_10px_36px_rgba(67,45,42,0.12)] ring-2 ring-[var(--brand-primary)]'
+                      : 'border-[var(--border-soft)] bg-white/95 shadow-[var(--shadow-card)]'
+                  } ${plan.comingSoon ? 'opacity-[0.97]' : ''}`}
                 >
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                    {plan.name}
-                  </p>
-                  <p className="mt-2 font-display text-5xl font-semibold leading-none text-gray-900">
-                    {plan.price}
-                    {plan.period ? (
-                      <span className="text-lg font-normal text-gray-500">{plan.period}</span>
-                    ) : null}
-                  </p>
-                  <ul className="mt-3 flex-1 space-y-1 text-sm text-gray-600">
-                    {plan.benefits.map((line) => (
-                      <li key={line}>· {line}</li>
-                    ))}
-                  </ul>
-                  <Link
-                    href="/registro"
-                    className={`mt-5 inline-flex justify-center rounded-full px-4 py-2.5 text-sm font-semibold transition ${
-                      plan.highlight
-                        ? `${brand.buttonPrimary} hover:bg-[var(--brand-primary-hover)]`
-                        : `${brand.buttonSecondary} rounded-full px-4 py-2.5`
-                    }`}
-                  >
-                    Empezar
-                  </Link>
+                  {plan.comingSoon ? (
+                    <span className="mb-3 inline-flex self-start rounded-full bg-[var(--brand-primary-muted)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--brand-accent-dark)]">
+                      Próximamente
+                    </span>
+                  ) : null}
+                  <h3 className="text-base font-semibold text-gray-900">{plan.name}</h3>
+                  {plan.price ? (
+                    <>
+                      <p className="mt-2 font-display text-5xl font-semibold leading-none text-gray-900">
+                        {plan.price}
+                      </p>
+                      {plan.priceSubtitle ? (
+                        <p className="mt-1 text-sm text-gray-500">{plan.priceSubtitle}</p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="mt-2 font-display text-3xl font-semibold leading-tight text-gray-700">
+                      {plan.priceLabel}
+                    </p>
+                  )}
+                  <p className="mt-3 text-sm leading-relaxed text-gray-600">{plan.description}</p>
+                  {plan.features ? (
+                    <ul className="mt-4 flex-1 space-y-1.5 text-sm text-gray-600">
+                      {plan.features.map((line) => (
+                        <li key={line}>· {line}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="flex-1" aria-hidden />
+                  )}
+                  {plan.ctaHref ? (
+                    <Link
+                      href={plan.ctaHref}
+                      className={`mt-5 inline-flex justify-center rounded-full px-4 py-2.5 text-sm font-semibold transition ${brand.buttonPrimary} hover:bg-[var(--brand-primary-hover)]`}
+                    >
+                      {plan.ctaLabel}
+                    </Link>
+                  ) : (
+                    <span
+                      className="mt-5 inline-flex cursor-not-allowed justify-center rounded-full border border-[var(--brand-border)] bg-white px-4 py-2.5 text-sm font-medium text-gray-500 opacity-80"
+                      aria-disabled
+                    >
+                      {plan.ctaLabel}
+                    </span>
+                  )}
                 </article>
               ))}
             </div>
           </div>
         </section>
-
-        {/* Final CTA */}
-        <section className="border-t border-gray-100 bg-white/60 py-10 sm:py-12">
-          <div className="mx-auto max-w-2xl px-4 text-center sm:px-6">
-            <h2 className="font-display text-3xl font-semibold text-gray-900">
-              Tu próximo cumple, sin perseguir.
-            </h2>
-            <Link href="/registro" className={`${brand.landingCtaPrimary} mt-7`}>
-              Crear mi primer evento
-            </Link>
-            <p className="mt-4 text-xs text-gray-500">
-              <span className="text-green-600">✓</span> Gratis · <span className="text-green-600">✓</span>{' '}
-              Sin tarjeta
-            </p>
-          </div>
-        </section>
       </main>
 
-      <footer className="border-t border-gray-100 py-10">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 text-center text-sm text-gray-500 sm:flex-row sm:px-6 sm:text-left">
-          <p className={`text-base font-bold ${brand.navBrand}`}>MiParty</p>
-          <p className="text-gray-500">Para familias.</p>
-          <div className="flex gap-4">
-            <Link href="/login" className="transition hover:text-gray-900">
-              Iniciar sesión
-            </Link>
-            <Link href="/registro" className="transition hover:text-gray-900">
-              Crear cuenta
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <LandingFooter />
     </div>
   )
 }

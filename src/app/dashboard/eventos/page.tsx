@@ -289,7 +289,7 @@ export default function EventosListPage() {
 
   return (
     <main className={`min-h-screen ${brand.pageBg} pb-12`}>
-      <AppNav backHref="/dashboard" backLabel="⬅️ Mi espacio" />
+      <AppNav backHref="/dashboard" backLabel="⬅️ Mi panel" />
 
       <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-8">
         <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">

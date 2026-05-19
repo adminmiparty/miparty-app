@@ -15,6 +15,14 @@ import { formatSpanishFullDate, formatSpanishWeekdayDayMonthYear, parseIsoDatePa
 import { createClient } from '@/lib/supabase/client'
 import ShareButton from '@/components/ShareButton'
 
+function localTodayIsoDate() {
+  const t = new Date()
+  const y = t.getFullYear()
+  const m = String(t.getMonth() + 1).padStart(2, '0')
+  const d = String(t.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 type EventDetails = {
   id: string
   user_id: string
@@ -291,6 +299,15 @@ export default function EventControlCenterPage() {
   const declinedCount = rsvps.filter((rsvp) => rsvp.attendance_status === 'declined').length
   const maybeCount = rsvps.filter((rsvp) => rsvp.attendance_status === 'maybe').length
   const pendingCount = 0
+
+  const todayIso = useMemo(() => localTodayIsoDate(), [])
+
+  const isEventPast = useMemo(() => {
+    if (!event?.event_date) {
+      return false
+    }
+    return event.event_date < todayIso
+  }, [event?.event_date, todayIso])
 
   const isEventUpcoming = useMemo(() => {
     if (!event?.event_date) {
@@ -569,7 +586,7 @@ export default function EventControlCenterPage() {
 
   return (
     <main className={`min-h-screen bg-gradient-to-b ${pageBg}`}>
-      <AppNav backHref="/dashboard" backLabel="⬅️ Mi espacio" />
+      <AppNav backHref="/dashboard" backLabel="⬅️ Mi panel" />
 
       <div className="mx-auto w-full max-w-7xl px-6 pt-10">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[360px_minmax(0,1fr)] md:gap-6">
@@ -580,7 +597,7 @@ export default function EventControlCenterPage() {
                   isEventUpcoming ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
                 }`}
               >
-                {isEventUpcoming ? '🟢 Próximo' : '⚫ Finalizado'}
+                {isEventPast ? '⚫ Pasado' : isEventUpcoming ? '🟢 Próximo' : '🟡 Hoy'}
               </span>
               <h1 className="mt-3 text-2xl font-bold text-gray-900">Resumen del evento</h1>
               <p className="mt-1 text-sm text-gray-600">{event.title}</p>
@@ -649,9 +666,20 @@ export default function EventControlCenterPage() {
                 </div>
               ) : null}
 
-              <div className="mt-4">
-                <Link
-                  href={`/dashboard/eventos/${event.public_slug}/editar?theme=${event.invitation_theme ?? 'yellow'}`}
+              {isEventPast ? (
+                <div className="mt-4">
+                  <Link
+                    href={`/dashboard/eventos/nuevo?fromEvent=${encodeURIComponent(event.public_slug)}`}
+                    className={`inline-flex w-full items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold transition ${primaryButtonClass}`}
+                  >
+                    Copiar y repetir
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <div className="mt-4">
+                    <Link
+                      href={`/dashboard/eventos/${event.public_slug}/editar?theme=${event.invitation_theme ?? 'yellow'}`}
                   className="inline-flex w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
                 >
                   Editar evento
@@ -709,6 +737,8 @@ export default function EventControlCenterPage() {
                   className={`inline-flex w-full items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold transition ${primaryButtonClass}`}
                 />
               </div>
+                </>
+              )}
             </section>
           </aside>
 
