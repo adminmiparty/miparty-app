@@ -8,6 +8,7 @@ import { es } from 'date-fns/locale'
 import { useParams } from 'next/navigation'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { brand } from '@/lib/brand'
 import { getTheme } from '@/lib/themes'
 
 type AttendanceStatus = 'confirmed' | 'declined' | 'maybe'
@@ -286,6 +287,8 @@ export default function RsvpEditPage() {
   const [signupPassword, setSignupPassword] = useState('')
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [signupToggle, setSignupToggle] = useState(false)
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false)
+  const [welcomeModalView, setWelcomeModalView] = useState<'welcome' | 'success'>('welcome')
 
   const resolvedThemeKey: ThemeKeyType =
     themeKey === 'yellow' || themeKey === 'pink' || themeKey === 'blue' || themeKey === 'green' || themeKey === 'purple'
@@ -300,7 +303,21 @@ export default function RsvpEditPage() {
       console.log('Auth user on rsvp page:', data.user)
       if (data.user) setIsLoggedIn(true)
     })
-  }, [])
+
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange(async (event, session) => {
+      if (event !== 'SIGNED_IN' || !session?.user) return
+      if (token) {
+        await sb.from('rsvps').update({ user_id: session.user.id }).eq('edit_token', token)
+      }
+      setIsLoggedIn(true)
+      setShowWelcomeModal(true)
+      setWelcomeModalView('welcome')
+    })
+
+    return () => subscription.unsubscribe()
+  }, [token])
 
   useEffect(() => {
     if (!parentDialOpen) return
@@ -613,6 +630,8 @@ export default function RsvpEditPage() {
     if (uid) {
       await supabase.from('rsvps').update({ user_id: uid }).eq('edit_token', token)
       setIsLoggedIn(true)
+      setShowWelcomeModal(true)
+      setWelcomeModalView('welcome')
     }
   }
 
@@ -814,9 +833,60 @@ export default function RsvpEditPage() {
     return 'border-amber-200 bg-amber-100 text-amber-950'
   }
 
+  const renderWelcomeModal = () => {
+    if (!showWelcomeModal || welcomeModalView !== 'welcome') return null
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+        <div className="mx-4 max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <h2 className="text-lg font-bold text-gray-900">¡Bienvenido/a a MiParty! 🎉</h2>
+            <button
+              type="button"
+              onClick={() => setShowWelcomeModal(false)}
+              className="shrink-0 text-2xl leading-none text-gray-400 hover:text-gray-700"
+              aria-label="Cerrar"
+            >
+              ×
+            </button>
+          </div>
+          <p className="text-sm text-gray-600">Tu cuenta ha sido creada. Ahora puedes:</p>
+          <ul className="mt-4 space-y-3">
+            <li className="flex gap-2 text-sm text-gray-800">
+              <span className="shrink-0 text-green-600" aria-hidden>
+                ✓
+              </span>
+              <span>Organizar cumpleaños desde un solo lugar</span>
+            </li>
+            <li className="flex gap-2 text-sm text-gray-800">
+              <span className="shrink-0 text-green-600" aria-hidden>
+                ✓
+              </span>
+              <span>Gestionar confirmaciones y alergias</span>
+            </li>
+            <li className="rounded-lg border border-yellow-200 bg-yellow-50 p-2">
+              <div className="flex gap-2 text-sm text-yellow-800">
+                <span className="shrink-0 text-green-600" aria-hidden>
+                  ✓
+                </span>
+                <span>Tu primer evento completamente gratis 🎁</span>
+              </div>
+            </li>
+          </ul>
+          <Link
+            href="/dashboard"
+            className={`mt-6 inline-flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
+          >
+            Ir a mi perfil →
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <main className={`relative min-h-screen bg-gradient-to-b ${pageBg}`}>
       {rsvpTopNav}
+      {renderWelcomeModal()}
       <div className="px-4 py-6 pb-10 sm:py-8">
       {saveToastVisible ? (
         <div
