@@ -281,12 +281,26 @@ export default function RsvpEditPage() {
   const parentDialRef = useRef<HTMLDivElement>(null)
   const messageRef = useRef<HTMLTextAreaElement>(null)
 
+  const [showEmailSignup, setShowEmailSignup] = useState(false)
+  const [signupEmail, setSignupEmail] = useState('')
+  const [signupPassword, setSignupPassword] = useState('')
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [signupToggle, setSignupToggle] = useState(false)
+
   const resolvedThemeKey: ThemeKeyType =
     themeKey === 'yellow' || themeKey === 'pink' || themeKey === 'blue' || themeKey === 'green' || themeKey === 'purple'
       ? themeKey
       : 'yellow'
   const activeTheme = getTheme(resolvedThemeKey)
   const inputFocusClass = inputFocusMap[resolvedThemeKey]
+
+  useEffect(() => {
+    const sb = createClient()
+    void sb.auth.getUser().then(({ data }) => {
+      console.log('Auth user on rsvp page:', data.user)
+      if (data.user) setIsLoggedIn(true)
+    })
+  }, [])
 
   useEffect(() => {
     if (!parentDialOpen) return
@@ -549,6 +563,106 @@ export default function RsvpEditPage() {
   function handleAttendancePickFromSummary(nextStatus: AttendanceStatus) {
     setAttendance(nextStatus)
     setDetailsFormVisible(true)
+  }
+
+  const handleGoogleSignup = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.href },
+    })
+  }
+
+  const renderGoogleSignupButton = () => (
+    <button
+      type="button"
+      onClick={() => void handleGoogleSignup()}
+      className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
+    >
+      <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden>
+        <path
+          fill="#4285F4"
+          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+        />
+        <path
+          fill="#34A853"
+          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        />
+        <path
+          fill="#FBBC05"
+          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
+        />
+        <path
+          fill="#EA4335"
+          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+        />
+      </svg>
+      Continuar con Google
+    </button>
+  )
+
+  const handleEmailSignup = async () => {
+    const { data, error } = await supabase.auth.signUp({
+      email: signupEmail,
+      password: signupPassword,
+    })
+    if (error) {
+      alert(error.message)
+      return
+    }
+    const uid = data.user?.id ?? data.session?.user?.id
+    if (uid) {
+      await supabase.from('rsvps').update({ user_id: uid }).eq('edit_token', token)
+      setIsLoggedIn(true)
+    }
+  }
+
+  const renderSignupBanner = () => {
+    if (isLoggedIn || signupToggle) return null
+    return (
+      <div className="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3">
+        <p className="mb-3 text-center text-sm text-gray-600">
+          ¿Tú también organizas fiestas? Regístrate y gestiona todo desde un solo lugar.
+        </p>
+        {renderGoogleSignupButton()}
+        <div className="my-2 flex items-center gap-2">
+          <div className="flex-1 border-t border-gray-200" />
+          <span className="text-xs text-gray-400">o</span>
+          <div className="flex-1 border-t border-gray-200" />
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowEmailSignup(!showEmailSignup)}
+          className="w-full text-sm text-gray-500 underline hover:text-gray-700"
+        >
+          Registrarse con email
+        </button>
+        {showEmailSignup ? (
+          <div className="mt-2 space-y-2">
+            <input
+              type="email"
+              placeholder="tu@email.com"
+              value={signupEmail}
+              onChange={(e) => setSignupEmail(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              type="password"
+              placeholder="Contraseña"
+              value={signupPassword}
+              onChange={(e) => setSignupPassword(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => void handleEmailSignup()}
+              className="w-full rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white"
+            >
+              Crear cuenta
+            </button>
+          </div>
+        ) : null}
+      </div>
+    )
   }
 
   const copySavedEditLink = async () => {
@@ -862,6 +976,7 @@ export default function RsvpEditPage() {
                 </p>
               ) : null}
             </div>
+            {renderSignupBanner()}
             <p className="mt-6 text-center text-xs text-gray-500">¿Quieres cambiar tu respuesta?</p>
             <div className="relative z-20 mt-3 flex gap-2">
               <button
@@ -1109,16 +1224,83 @@ export default function RsvpEditPage() {
                 <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
               ) : null}
 
+              {!isLoggedIn ? (
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-3">
+                  <p className="flex-1 text-sm text-gray-600">
+                    ¿Tú también organizas fiestas? Regístrate y gestiona todo desde un solo lugar.
+                  </p>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={signupToggle}
+                    onClick={() => setSignupToggle(!signupToggle)}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                      signupToggle ? 'bg-green-500' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
+                        signupToggle ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              ) : null}
+
+              {!isLoggedIn && signupToggle ? (
+                <div className="space-y-2">
+                  {renderGoogleSignupButton()}
+                  <p className="text-center text-xs text-gray-500">o</p>
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="Email"
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+                  />
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="Contraseña"
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleEmailSignup()}
+                    className="inline-flex w-full items-center justify-center rounded-lg border border-gray-900 bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"
+                  >
+                    Crear cuenta
+                  </button>
+                </div>
+              ) : null}
+
               <button
                 type="submit"
-                disabled={loading || !attendance || !detailsFormVisible || !hasFormChanges}
+                disabled={
+                  loading ||
+                  !attendance ||
+                  !detailsFormVisible ||
+                  !hasFormChanges ||
+                  (signupToggle && !isLoggedIn)
+                }
                 className={`inline-flex w-full items-center justify-center rounded-lg px-3 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed ${
-                  loading || !attendance || !detailsFormVisible || !hasFormChanges
+                  loading ||
+                  !attendance ||
+                  !detailsFormVisible ||
+                  !hasFormChanges ||
+                  (signupToggle && !isLoggedIn)
                     ? 'border border-gray-200 bg-gray-200 text-gray-500'
                     : `${activeTheme.button} text-gray-900 ${activeTheme.buttonHover}`
                 }`}
               >
-                {loading ? 'Guardando...' : 'Guardar respuesta'}
+                {loading
+                  ? 'Guardando...'
+                  : signupToggle && !isLoggedIn
+                    ? 'Termina de registrarte para guardar'
+                    : 'Guardar respuesta'}
               </button>
             </form>
           </section>
