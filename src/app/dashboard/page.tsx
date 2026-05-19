@@ -694,6 +694,9 @@ function EventRow({
                   aria-hidden
                 />
                 <span className="shrink-0 text-xs font-medium text-gray-600">{status}</span>
+                <span className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+                  Organizador
+                </span>
               </>
             )}
             <p className="min-w-0 text-sm font-semibold leading-snug text-gray-900 sm:flex-1 sm:truncate">
