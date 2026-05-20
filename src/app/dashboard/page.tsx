@@ -806,7 +806,7 @@ export default function DashboardHomePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showProximos, setShowProximos] = useState(true)
-  const [showPasados, setShowPasados] = useState(true)
+  const [showPasados, setShowPasados] = useState(false)
   const [avatarError, setAvatarError] = useState(false)
   const [partner, setPartner] = useState<FamilyMemberPartner | null>(null)
   const [showAddPartnerModal, setShowAddPartnerModal] = useState(false)
