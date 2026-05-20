@@ -377,6 +377,7 @@ function RsvpFormInner({
   const [welcomeChild2BirthMonth, setWelcomeChild2BirthMonth] = useState('')
   const [welcomeChild2BirthYear, setWelcomeChild2BirthYear] = useState('')
   const [welcomeChildBirthError, setWelcomeChildBirthError] = useState(false)
+  const [welcomePhoneError, setWelcomePhoneError] = useState('')
   const [submittedRsvpId, setSubmittedRsvpId] = useState<string | null>(null)
   const submittedRsvpIdRef = useRef<string | null>(null)
   const [inlineSignupEmail, setInlineSignupEmail] = useState('')
@@ -1013,6 +1014,12 @@ function RsvpFormInner({
     } = await supabase.auth.getUser()
     if (!user) return
 
+    const fullWelcomePhone = `${welcomePhoneCode}${welcomePhone}`.trim()
+    if (!welcomePhone.trim()) {
+      setWelcomePhoneError('El teléfono es obligatorio')
+      return
+    }
+
     const welcomeDial = resolveDialCode(welcomePhoneCode, welcomeCustomDialCode)
     const welcomeFullPhone =
       welcomePhone.trim().length > 0 ? `${welcomeDial}${welcomePhone.replace(/\s/g, '')}` : null
@@ -1082,12 +1089,22 @@ function RsvpFormInner({
 
   const handleSaveWelcomeProfile = async () => {
     if (!validateWelcomeChildBirthDate()) return
+    const fullWelcomePhone = `${welcomePhoneCode}${welcomePhone}`.trim()
+    if (!welcomePhone.trim()) {
+      setWelcomePhoneError('El teléfono es obligatorio')
+      return
+    }
     await persistWelcomeProfile()
     setModalView('welcome_success')
   }
 
   const handleSkipWelcomeProfile = async () => {
     if (!validateWelcomeChildBirthDate()) return
+    const fullWelcomePhone = `${welcomePhoneCode}${welcomePhone}`.trim()
+    if (!welcomePhone.trim()) {
+      setWelcomePhoneError('El teléfono es obligatorio')
+      return
+    }
     await persistWelcomeProfile()
     setModalView('welcome_success')
   }
@@ -1574,12 +1591,15 @@ END:VCALENDAR`
 
           <div>
             <label htmlFor="welcomePhone" className="mb-1.5 block text-sm font-medium text-gray-900">
-              Teléfono
+              Teléfono *
             </label>
             <div className="flex flex-wrap items-center gap-2">
               <select
                 value={welcomePhoneCode}
-                onChange={(e) => setWelcomePhoneCode(e.target.value)}
+                onChange={(e) => {
+                  setWelcomePhoneCode(e.target.value)
+                  setWelcomePhoneError('')
+                }}
                 className="rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
                 aria-label="Prefijo"
               >
@@ -1592,7 +1612,10 @@ END:VCALENDAR`
                   type="text"
                   inputMode="tel"
                   value={welcomeCustomDialCode}
-                  onChange={(e) => setWelcomeCustomDialCode(sanitizeDialPrefix(e.target.value))}
+                  onChange={(e) => {
+                    setWelcomeCustomDialCode(sanitizeDialPrefix(e.target.value))
+                    setWelcomePhoneError('')
+                  }}
                   maxLength={5}
                   placeholder="+00"
                   aria-label="Prefijo internacional"
@@ -1604,11 +1627,17 @@ END:VCALENDAR`
                 type="tel"
                 inputMode="tel"
                 value={welcomePhone}
-                onChange={(e) => setWelcomePhone(e.target.value)}
+                onChange={(e) => {
+                  setWelcomePhone(e.target.value)
+                  setWelcomePhoneError('')
+                }}
                 placeholder="Ej. 612345678"
                 className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
               />
             </div>
+            {welcomePhoneError && (
+              <p className="mt-1 text-xs text-red-500">{welcomePhoneError}</p>
+            )}
           </div>
 
           <div>
@@ -2147,7 +2176,7 @@ END:VCALENDAR`
         ) : null}
         {renderResponseSummary()}
         {renderJustSignedUpProfileCta()}
-        {!isPreview && submittedEditToken ? (
+        {!isPreview && !isLoggedIn && submittedEditToken ? (
           <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
             <p className="text-center text-xs leading-relaxed text-gray-600">
               {editLinkIntroCopy.confirmed}
@@ -2181,7 +2210,7 @@ END:VCALENDAR`
         </p>
         {renderResponseSummary()}
         {renderJustSignedUpProfileCta()}
-        {!isPreview && submittedEditToken ? (
+        {!isPreview && !isLoggedIn && submittedEditToken ? (
           <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
             <p className="text-center text-xs leading-relaxed text-gray-600">{editLinkIntroCopy.declined}</p>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-stretch sm:justify-between sm:gap-3">
@@ -2215,7 +2244,7 @@ END:VCALENDAR`
         </p>
         {renderResponseSummary()}
         {renderJustSignedUpProfileCta()}
-        {!isPreview && submittedEditToken ? (
+        {!isPreview && !isLoggedIn && submittedEditToken ? (
           <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
             <p className="text-center text-xs leading-relaxed text-gray-600">{editLinkIntroCopy.maybe}</p>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-stretch sm:justify-between sm:gap-3">
