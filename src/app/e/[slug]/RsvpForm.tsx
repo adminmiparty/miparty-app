@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import type { User } from '@supabase/supabase-js'
 import { brand } from '@/lib/brand'
 import { getTheme } from '@/lib/themes'
 
@@ -101,6 +102,24 @@ type PostRsvpPersist = {
   parentPhone: string
   childFirst: string
   childLast: string
+  childName?: string
+  phone?: string
+  foodPreference?: string
+  allergyNotes?: string
+  extraNotes?: string
+}
+
+function resolveProfileNameParts(
+  trimmedParentName: string,
+  googleFullName: string | null | undefined
+): { firstName: string; lastName: string } {
+  const nameParts = trimmedParentName
+    ? trimmedParentName.split(/\s+/).filter(Boolean)
+    : (googleFullName ?? '').split(/\s+/).filter(Boolean)
+  return {
+    firstName: nameParts[0] || '',
+    lastName: nameParts.slice(1).join(' ') || '',
+  }
 }
 
 async function linkRsvpAndProfile(
@@ -119,10 +138,12 @@ async function linkRsvpAndProfile(
   if (childErr && !childErr.message.includes('duplicate')) {
     console.warn('children insert:', childErr.message)
   }
-  const trimmedParentName = profile.parentName.trim()
-  const nameParts = trimmedParentName.split(/\s+/).filter(Boolean)
-  const firstName = nameParts[0] ?? ''
-  const lastName = nameParts.slice(1).join(' ')
+  const {
+    data: { user },
+  } = await sb.auth.getUser()
+  const googleFullName =
+    typeof user?.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : null
+  const { firstName, lastName } = resolveProfileNameParts(profile.parentName.trim(), googleFullName)
 
   await sb.from('users').upsert({
     id: userId,
@@ -461,6 +482,10 @@ function RsvpFormInner({
   }, [submittedRsvpId])
 
   useEffect(() => {
+    oauthLinkDoneRef.current = false
+  }, [])
+
+  useEffect(() => {
     const sb = createClient()
     void sb.auth.getUser().then(({ data: { user } }) => {
       if (user) {
@@ -470,14 +495,14 @@ function RsvpFormInner({
     })
 
     try {
-      const raw = sessionStorage.getItem(POST_RSVP_STORAGE_KEY)
-      if (raw) {
-        const p = JSON.parse(raw) as PostRsvpPersist
-        if (p?.rsvpId && p?.attendance) {
-          submittedRsvpIdRef.current = p.rsvpId
-          setSubmittedRsvpId(p.rsvpId)
-          setSubmittedStatus(p.attendance)
-          setSubmittedEditToken(p.editToken ?? null)
+      const stored = sessionStorage.getItem(POST_RSVP_STORAGE_KEY)
+      const parsed = stored ? (JSON.parse(stored) as PostRsvpPersist) : null
+      if (parsed?.rsvpId) {
+        submittedRsvpIdRef.current = parsed.rsvpId
+        setSubmittedRsvpId(parsed.rsvpId)
+        if (parsed.attendance) {
+          setSubmittedStatus(parsed.attendance)
+          setSubmittedEditToken(parsed.editToken ?? null)
         }
       }
     } catch {
@@ -487,38 +512,90 @@ function RsvpFormInner({
     const {
       data: { subscription },
     } = sb.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state change event:', event)
+      console.log('Session user:', session?.user?.email)
+      console.log('OAuth pending flag:', sessionStorage.getItem('miparty_oauth_pending'))
       if (!session?.user) return
       const pending = sessionStorage.getItem('miparty_oauth_pending')
       if (!pending) return
+      console.log('oauthLinkDoneRef:', oauthLinkDoneRef.current)
+      console.log('submittedRsvpId:', submittedRsvpId)
+      console.log('submittedRsvpIdRef:', submittedRsvpIdRef?.current)
       if (event !== 'SIGNED_IN' && event !== 'INITIAL_SESSION') return
       if (oauthLinkDoneRef.current) return
 
-      let stored: PostRsvpPersist | null = null
+      let parsed: PostRsvpPersist | null = null
       try {
-        const raw = sessionStorage.getItem(POST_RSVP_STORAGE_KEY)
-        if (raw) stored = JSON.parse(raw) as PostRsvpPersist
+        const stored = sessionStorage.getItem(POST_RSVP_STORAGE_KEY)
+        parsed = stored ? (JSON.parse(stored) as PostRsvpPersist) : null
       } catch {
         return
       }
-      if (!stored?.rsvpId) return
+      console.log('Stored RSVP data:', parsed)
 
       oauthLinkDoneRef.current = true
 
-      await linkRsvpAndProfile(sb, session.user.id, stored.rsvpId, {
-        parentName: stored.parentName,
-        parentPhone: stored.parentPhone,
-        childFirst: stored.childFirst,
-        childLast: stored.childLast,
-      })
+      if (parsed) {
+        if (parsed.parentName) setParentName(parsed.parentName)
+        if (parsed.childName) {
+          const childParts = parsed.childName.trim().split(/\s+/).filter(Boolean)
+          setChildName(childParts[0] ?? '')
+          setChildLastName(childParts.slice(1).join(' ') || '')
+        } else if (parsed.childFirst) {
+          setChildName(parsed.childFirst)
+          setChildLastName(parsed.childLast ?? '')
+        }
+        const phoneValue = parsed.phone ?? parsed.parentPhone
+        if (phoneValue) {
+          const phoneParts = splitDialPhone(phoneValue)
+          setParentCountryCode(phoneParts.countryCode)
+          setParentCustomCode(phoneParts.customCode)
+          setParentPhoneNumber(phoneParts.number)
+        }
+        if (parsed.attendance) setAttendance(parsed.attendance)
+        if (parsed.foodPreference) setFoodPreference(parsed.foodPreference)
+        if (parsed.allergyNotes) setAllergyNotes(parsed.allergyNotes)
+        if (parsed.extraNotes) setExtraNotes(parsed.extraNotes)
+      }
+
+      if (parsed?.rsvpId) {
+        setSubmittedRsvpId(parsed.rsvpId)
+        submittedRsvpIdRef.current = parsed.rsvpId
+        console.log('About to call linkRsvpAndProfile, rsvpId:', parsed.rsvpId)
+        await linkRsvpAndProfile(sb, session.user.id, parsed.rsvpId, {
+          parentName: parsed.parentName,
+          parentPhone: parsed.parentPhone,
+          childFirst: parsed.childFirst,
+          childLast: parsed.childLast,
+        })
+        console.log('linkRsvpAndProfile completed')
+      }
+
+      const storedParentName = parsed?.parentName || ''
+      const storedChildName = parsed?.childName || ''
+      const storedPhone = parsed?.phone || ''
+
+      try {
+        console.log('Calling prefillWelcomeForm...')
+        await prefillWelcomeForm(
+          session.user,
+          storedParentName,
+          storedChildName,
+          storedPhone,
+          parsed?.rsvpId || undefined
+        )
+        console.log('prefillWelcomeForm completed')
+        setModalView('welcome')
+        console.log('modalView set to welcome')
+        setShowSignupModal(true)
+        console.log('showSignupModal set to true')
+      } catch (err) {
+        console.error('Error in welcome flow:', err)
+      }
       setIsLoggedIn(true)
       setLoggedInUserId(session.user.id)
       setJustSignedUp(true)
-      setShowSignupModal(true)
-      const storedChildName = stored.childLast
-        ? `${stored.childFirst} ${stored.childLast}`.trim()
-        : stored.childFirst
-      await prefillWelcomeForm(stored.parentName, stored.parentPhone, storedChildName)
-      setModalView('welcome')
+      setSignupToggle(false)
       sessionStorage.removeItem('miparty_oauth_pending')
       sessionStorage.removeItem(POST_RSVP_STORAGE_KEY)
     })
@@ -586,10 +663,52 @@ function RsvpFormInner({
     }
   }
 
+  const persistCurrentFormToSession = () => {
+    const trimmedParentName = parentName.trim()
+    const trimmedChildName = childName.trim()
+    const trimmedChildLastName = childLastName.trim()
+    const combinedChildName =
+      trimmedChildLastName.length > 0
+        ? `${trimmedChildName} ${trimmedChildLastName}`.trim()
+        : trimmedChildName
+    const trimmedParentPhoneNumber = parentPhoneNumber.trim()
+    const finalParentDial = resolveDialCode(parentCountryCode, parentCustomCode)
+    const finalPhone =
+      trimmedParentPhoneNumber.length > 0 ? `${finalParentDial}${trimmedParentPhoneNumber}` : ''
+
+    let existing: Partial<PostRsvpPersist> = {}
+    try {
+      const raw = sessionStorage.getItem(POST_RSVP_STORAGE_KEY)
+      if (raw) existing = JSON.parse(raw) as PostRsvpPersist
+    } catch {
+      // ignore
+    }
+
+    const rsvpId = existing.rsvpId ?? submittedRsvpIdRef.current ?? submittedRsvpId ?? ''
+    const persistPayload: PostRsvpPersist = {
+      rsvpId,
+      attendance: attendance ?? existing.attendance ?? 'confirmed',
+      editToken: existing.editToken ?? submittedEditToken,
+      parentName: trimmedParentName,
+      parentPhone: finalPhone || existing.parentPhone || '',
+      childFirst: trimmedChildName,
+      childLast: trimmedChildLastName,
+      childName: combinedChildName,
+      phone: finalPhone,
+      foodPreference,
+      allergyNotes,
+      extraNotes,
+    }
+    sessionStorage.setItem(POST_RSVP_STORAGE_KEY, JSON.stringify(persistPayload))
+  }
+
   const handleGoogleSignup = async () => {
+    persistCurrentFormToSession()
     const sb = createClient()
     sessionStorage.setItem('miparty_oauth_pending', '1')
     oauthLinkDoneRef.current = false
+    console.log('Starting Google OAuth, saving to sessionStorage')
+    console.log('Stored data:', sessionStorage.getItem('miparty_post_rsvp_v1'))
     await sb.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -706,7 +825,13 @@ function RsvpFormInner({
     setIsLoggedIn(true)
     setLoggedInUserId(uid)
     setJustSignedUp(true)
-    await prefillWelcomeForm(trimmedParentName, trimmedParentPhone)
+    await prefillWelcomeForm(
+      undefined,
+      trimmedParentName,
+      undefined,
+      trimmedParentPhone,
+      submittedRsvpId
+    )
     setModalView('welcome')
   }
 
@@ -741,75 +866,117 @@ function RsvpFormInner({
     const finalParentDial = resolveDialCode(parentCountryCode, parentCustomCode)
     const trimmedParentPhone =
       trimmedParentPhoneNumber.length > 0 ? `${finalParentDial}${trimmedParentPhoneNumber}` : ''
-    await prefillWelcomeForm(trimmedParentName, trimmedParentPhone)
+    await prefillWelcomeForm(
+      undefined,
+      trimmedParentName,
+      undefined,
+      trimmedParentPhone,
+      submittedRsvpId
+    )
     setModalView('welcome')
   }
 
   const prefillWelcomeForm = async (
+    authUser?: User | null,
     nameSource?: string,
+    childNameSource?: string,
     phoneSource?: string,
-    childNameSource?: string
+    rsvpId?: string | null
   ) => {
-    const trimmedParentName = (nameSource ?? parentName).trim()
-    const parts = trimmedParentName.split(/\s+/).filter(Boolean)
-    setWelcomeFirstName(parts[0] ?? '')
-    setWelcomeLastName(parts.slice(1).join(' '))
+    console.log('prefillWelcomeForm started with:', {
+      nameSource,
+      childNameSource,
+      phoneSource,
+    })
+    try {
+      const trimmedParentName = (nameSource ?? parentName).trim()
+      let user = authUser ?? null
+      if (!user) {
+        const {
+          data: { user: fetchedUser },
+        } = await supabase.auth.getUser()
+        user = fetchedUser
+        console.log('Got user:', user?.email)
+      }
+      const googleFullName =
+        typeof user?.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : null
+      const { firstName, lastName } = resolveProfileNameParts(trimmedParentName, googleFullName)
+      setWelcomeFirstName(firstName)
+      setWelcomeLastName(lastName)
+      console.log('Name set, fetching child...')
 
-    let combinedChildName = childNameSource?.trim() ?? ''
-    if (!combinedChildName) {
-      const trimmedChildName = childName.trim()
-      const trimmedChildLastName = childLastName.trim()
-      combinedChildName =
-        trimmedChildLastName.length > 0
-          ? `${trimmedChildName} ${trimmedChildLastName}`
-          : trimmedChildName
-    }
-    const childParts = combinedChildName.split(/\s+/).filter(Boolean)
-    setWelcomeChildFirstName(childParts[0] ?? '')
-    setWelcomeChildLastName(childParts.slice(1).join(' '))
-    setWelcomeChildBirthDay('')
-    setWelcomeChildBirthMonth('')
-    setWelcomeChildBirthYear('')
-    setShowWelcomeSecondChild(false)
-    setWelcomeChild2FirstName('')
-    setWelcomeChild2LastName('')
-    setWelcomeChild2BirthDay('')
-    setWelcomeChild2BirthMonth('')
-    setWelcomeChild2BirthYear('')
-    setWelcomeChildBirthError(false)
+      let combinedChildName = childNameSource?.trim() ?? ''
+      if (!combinedChildName) {
+        const trimmedChildName = childName.trim()
+        const trimmedChildLastName = childLastName.trim()
+        combinedChildName =
+          trimmedChildLastName.length > 0
+            ? `${trimmedChildName} ${trimmedChildLastName}`
+            : trimmedChildName
+      }
+      const childParts = combinedChildName.split(/\s+/).filter(Boolean)
+      setWelcomeChildFirstName(childParts[0] ?? '')
+      setWelcomeChildLastName(childParts.slice(1).join(' '))
+      setWelcomeChildBirthDay('')
+      setWelcomeChildBirthMonth('')
+      setWelcomeChildBirthYear('')
+      setShowWelcomeSecondChild(false)
+      setWelcomeChild2FirstName('')
+      setWelcomeChild2LastName('')
+      setWelcomeChild2BirthDay('')
+      setWelcomeChild2BirthMonth('')
+      setWelcomeChild2BirthYear('')
+      setWelcomeChildBirthError(false)
 
-    let fullPhone = phoneSource?.trim() ?? ''
-    if (!fullPhone) {
-      const trimmedParentPhoneNumber = parentPhoneNumber.trim()
-      const finalParentDial = resolveDialCode(parentCountryCode, parentCustomCode)
-      fullPhone =
-        trimmedParentPhoneNumber.length > 0 ? `${finalParentDial}${trimmedParentPhoneNumber}` : ''
-    }
-    if (fullPhone) {
-      const phoneParts = splitDialPhone(fullPhone)
-      setWelcomePhoneCode(phoneParts.countryCode)
-      setWelcomeCustomDialCode(phoneParts.customCode)
-      setWelcomePhone(phoneParts.number)
-    } else {
-      setWelcomePhoneCode('+34')
-      setWelcomeCustomDialCode('')
-      setWelcomePhone('')
-    }
-    setWelcomeBirthDay('')
-    setWelcomeBirthMonth('')
-    setWelcomeBirthYear('')
+      let fullPhone = phoneSource?.trim() ?? ''
+      if (!fullPhone) {
+        const trimmedParentPhoneNumber = parentPhoneNumber.trim()
+        const finalParentDial = resolveDialCode(parentCountryCode, parentCustomCode)
+        fullPhone =
+          trimmedParentPhoneNumber.length > 0 ? `${finalParentDial}${trimmedParentPhoneNumber}` : ''
+      }
+      if (fullPhone) {
+        const phoneParts = splitDialPhone(fullPhone)
+        setWelcomePhoneCode(phoneParts.countryCode)
+        setWelcomeCustomDialCode(phoneParts.customCode)
+        setWelcomePhone(phoneParts.number)
+      } else {
+        setWelcomePhoneCode('+34')
+        setWelcomeCustomDialCode('')
+        setWelcomePhone('')
+      }
+      setWelcomeBirthDay('')
+      setWelcomeBirthMonth('')
+      setWelcomeBirthYear('')
+      console.log('All welcome fields set')
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (user) {
-      const { data: recentChild } = await supabase
-        .from('children')
-        .select('id, name, last_name, birth_date')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      const rsvpIdForPrefill = rsvpId
+      let recentChild: {
+        name?: string | null
+        last_name?: string | null
+        birth_date?: string | null
+      } | null = null
+      if (user?.id && rsvpIdForPrefill) {
+        try {
+          const childFetch = supabase
+            .from('children')
+            .select('id, name, last_name, birth_date')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('timeout')), 3000)
+          )
+
+          const result = await Promise.race([childFetch, timeoutPromise])
+          recentChild = (result as { data?: unknown })?.data || null
+        } catch (err) {
+          console.log('Child fetch skipped:', err)
+          recentChild = null
+        }
+      }
 
       if (recentChild) {
         setWelcomeChildFirstName(recentChild.name ?? '')
@@ -821,6 +988,9 @@ function RsvpFormInner({
           setWelcomeChildBirthDay(day ?? '')
         }
       }
+      console.log('prefillWelcomeForm finished')
+    } catch (err) {
+      console.error('prefillWelcomeForm error:', err)
     }
   }
 
@@ -1718,13 +1888,6 @@ END:VCALENDAR`
           className={`mt-4 w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
         >
           Volver a mi confirmación 🎉
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowSignupModal(false)}
-          className="mt-3 w-full text-center text-xs text-gray-400 underline hover:text-gray-600"
-        >
-          Volver a la invitación
         </button>
       </div>
     )
