@@ -2017,14 +2017,14 @@ export default function DashboardHomePage() {
 
           {!error ? (
             <div>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 sm:mt-2">
-                <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900 sm:text-lg">
+              <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:mt-2">
+                <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold text-gray-900 sm:text-lg">
                   <CalendarDays className="h-4 w-4 shrink-0 text-gray-600" strokeWidth={2} aria-hidden />
-                  Eventos
+                  <span className="truncate">Eventos</span>
                 </h2>
                 <Link
                   href="/dashboard/eventos/nuevo"
-                  className={brand.dashboardPrimaryPill}
+                  className={`${brand.dashboardPrimaryPill} w-max justify-self-end`}
                 >
                   Crear evento
                 </Link>
@@ -2140,15 +2140,17 @@ export default function DashboardHomePage() {
 
         <section className="card-soft mt-6 p-4 sm:mt-8 sm:p-6">
           <div>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 sm:mt-2">
-              <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900 sm:text-lg">
-                <span aria-hidden>📍</span>
-                Lugares
+            <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:mt-2">
+              <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold text-gray-900 sm:text-lg">
+                <span className="shrink-0" aria-hidden>
+                  📍
+                </span>
+                <span className="truncate">Lugares</span>
               </h2>
               <button
                 type="button"
                 onClick={openAddPlaceModal}
-                className={brand.dashboardPrimaryPill}
+                className={`${brand.dashboardPrimaryPill} w-max justify-self-end`}
               >
                 Añadir lugar
               </button>
