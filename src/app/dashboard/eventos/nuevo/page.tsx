@@ -26,9 +26,10 @@ import {
   eventFormSubmitButtonClass,
   resolveThemeOrBrand,
   isInvitationThemeKey,
-  themeForDraftPersistence,
   themeForPersistence,
   themeFromDraftRow,
+  themeFromDraftStorage,
+  themeToDraftStorage,
   type SelectedInvitationTheme,
 } from '@/lib/eventFormTheme'
 import { X } from 'lucide-react'
@@ -1413,12 +1414,19 @@ function NewEventPageContent() {
         setInvitationImageUrl(null)
       }
 
-      const draftTheme = themeFromDraftRow(eventRow.invitation_theme, {
-        treatLegacyDefaultYellowAsUnset:
-          !eventRow.invitation_image_url && !(eventRow.organizer_notes?.trim() ?? ''),
-      })
+      const draftTheme = themeFromDraftStorage(eventRow.invitation_theme)
       invitationThemeUserPickedRef.current = draftTheme !== null
       setInvitationTheme(draftTheme)
+
+      const storedTheme = eventRow.invitation_theme?.trim() ?? ''
+      if (storedTheme && !storedTheme.startsWith('u:')) {
+        void supabase
+          .from('events')
+          .update({ invitation_theme: null })
+          .eq('id', eventRow.id)
+          .eq('user_id', user.id)
+          .eq('status', EVENT_STATUS_DRAFT)
+      }
 
       setDraftEventId(eventRow.id)
       setFormHydrationEpoch((e) => e + 1)
@@ -1887,9 +1895,10 @@ function NewEventPageContent() {
         organizer_phone: organizerPhonePersist,
         enable_food_options: isFoodActive ? foodEnabled : false,
         organizer_notes: showNotes ? notes.trim() || null : null,
-        invitation_theme: invitationThemeUserPickedRef.current
-          ? themeForDraftPersistence(invitationTheme)
-          : null,
+        invitation_theme: themeToDraftStorage(
+          invitationTheme,
+          invitationThemeUserPickedRef.current
+        ),
         invitation_image_url: showImage ? (invitationImageUrl ?? null) : null,
         invitation_image_fit: showImage ? imageFit : null,
         invitation_image_position: showImage ? `${imagePosX}% ${imagePosY}%` : null,

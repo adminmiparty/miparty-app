@@ -19,25 +19,34 @@ export function themeForPersistence(selected: SelectedInvitationTheme): ThemeKey
   return selected ?? DB_DEFAULT_INVITATION_THEME
 }
 
-/** Draft rows: only persist a theme when the user picked a swatch (null otherwise). */
-export function themeForDraftPersistence(selected: SelectedInvitationTheme): string | null {
-  return selected
+const DRAFT_THEME_USER_PREFIX = 'u:'
+
+/**
+ * Draft rows: persist only when the user picked a swatch.
+ * Uses a `u:` prefix so legacy auto-`yellow` values (saved without a pick) stay unset on resume.
+ */
+export function themeToDraftStorage(
+  selected: SelectedInvitationTheme,
+  userPicked: boolean
+): string | null {
+  if (!userPicked || !selected) return null
+  return `${DRAFT_THEME_USER_PREFIX}${selected}`
 }
 
-/** Restore theme from a draft row; returns null when unset or not a known swatch key. */
-export function themeFromDraftRow(
-  stored: string | null | undefined,
-  options?: { treatLegacyDefaultYellowAsUnset?: boolean }
-): SelectedInvitationTheme {
-  const parsed = parseInvitationThemeParam(stored)
-  if (!parsed) return null
-  if (
-    options?.treatLegacyDefaultYellowAsUnset &&
-    parsed === DB_DEFAULT_INVITATION_THEME
-  ) {
-    return null
+/** Restore theme from a draft row (handles `u:yellow` etc.; bare `yellow` is treated as unset). */
+export function themeFromDraftStorage(stored: string | null | undefined): SelectedInvitationTheme {
+  if (!stored?.trim()) return null
+  if (stored.startsWith(DRAFT_THEME_USER_PREFIX)) {
+    const key = stored.slice(DRAFT_THEME_USER_PREFIX.length)
+    return isInvitationThemeKey(key) ? key : null
   }
-  return parsed
+  // Legacy draft rows stored themeForPersistence() defaults without a user swatch.
+  return null
+}
+
+/** Restore theme from a published/duplicate source row (normal theme keys). */
+export function themeFromDraftRow(stored: string | null | undefined): SelectedInvitationTheme {
+  return parseInvitationThemeParam(stored)
 }
 
 export function resolveThemeOrBrand<T>(
