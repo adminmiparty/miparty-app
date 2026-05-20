@@ -657,6 +657,7 @@ function NewEventPageContent() {
   const [formBaselineVersion, setFormBaselineVersion] = useState(0)
   const [formHydrationEpoch, setFormHydrationEpoch] = useState(0)
   const formBaselineSerializedRef = useRef<string | null>(null)
+  const serializeFormSnapshotRef = useRef<() => string>(() => '')
   const leaveAfterDraftSaveRef = useRef(false)
   const [showChildLimitModal, setShowChildLimitModal] = useState(false)
   const [showSiblingsModal, setShowSiblingsModal] = useState(false)
@@ -1013,6 +1014,7 @@ function NewEventPageContent() {
     if (modeParam === 'birthday') {
       setShowGift(true)
     }
+    setFormHydrationEpoch((e) => e + 1)
   }, [childrenLoading, children, childIdParam, modeParam, titleParam])
 
   useEffect(() => {
@@ -1035,6 +1037,7 @@ function NewEventPageContent() {
     if (googleMapsUrlParam?.trim()) {
       setGoogleMapsUrl(decodeURIComponent(googleMapsUrlParam))
     }
+    setFormHydrationEpoch((e) => e + 1)
   }, [locationNameParam, locationAddressParam, googleMapsUrlParam])
 
   useEffect(() => {
@@ -1658,6 +1661,8 @@ function NewEventPageContent() {
     savePhoneForFuture,
   ])
 
+  serializeFormSnapshotRef.current = serializeFormSnapshot
+
   const isFormDirty = useMemo(() => {
     if (draftHydrating || !formBaselineSerializedRef.current) {
       return false
@@ -1671,7 +1676,7 @@ function NewEventPageContent() {
     if (draftIdParam?.trim() && !draftEventId) return
 
     const handle = window.setTimeout(() => {
-      formBaselineSerializedRef.current = serializeFormSnapshot()
+      formBaselineSerializedRef.current = serializeFormSnapshotRef.current()
       setFormBaselineVersion((v) => v + 1)
     }, 120)
     return () => window.clearTimeout(handle)
@@ -1682,7 +1687,6 @@ function NewEventPageContent() {
     draftIdParam,
     fromEventParam,
     formHydrationEpoch,
-    serializeFormSnapshot,
   ])
 
   useEffect(() => {
