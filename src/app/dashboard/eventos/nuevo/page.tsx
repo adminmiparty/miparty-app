@@ -2,7 +2,17 @@
 
 import { useRouter } from 'next/navigation'
 import AppNav from '@/components/AppNav'
-import { Suspense, type ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Suspense,
+  type ChangeEvent,
+  type FormEvent,
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useSearchParams } from 'next/navigation'
 import { DayPicker, type Matcher } from 'react-day-picker'
 import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
@@ -23,6 +33,9 @@ import { X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { themes, type ThemeKey } from '@/lib/themes'
 import 'react-day-picker/style.css'
+
+/** Stored in pendingLeaveHrefRef when the user triggered browser/history back. */
+const LEAVE_BACK_SENTINEL = '__back__'
 
 type Child = {
   id: string
@@ -652,13 +665,14 @@ function NewEventPageContent() {
   const [draftHydrating, setDraftHydrating] = useState(Boolean(draftIdParam?.trim()))
   const [showLeaveDraftModal, setShowLeaveDraftModal] = useState(false)
   const [showDraftLimitModal, setShowDraftLimitModal] = useState(false)
-  const [pendingLeaveAction, setPendingLeaveAction] = useState<'dashboard' | 'back' | null>(null)
   const [draftSaveBusy, setDraftSaveBusy] = useState(false)
+  const pendingLeaveHrefRef = useRef<string>(LEAVE_BACK_SENTINEL)
+  const allowUnsavedLeaveRef = useRef(false)
+  const historyTrapPushedRef = useRef(false)
   const [formBaselineVersion, setFormBaselineVersion] = useState(0)
   const [formHydrationEpoch, setFormHydrationEpoch] = useState(0)
   const formBaselineSerializedRef = useRef<string | null>(null)
   const serializeFormSnapshotRef = useRef<() => string>(() => '')
-  const leaveAfterDraftSaveRef = useRef(false)
   const [showChildLimitModal, setShowChildLimitModal] = useState(false)
   const [showSiblingsModal, setShowSiblingsModal] = useState(false)
   const [selectedSiblings, setSelectedSiblings] = useState<string[]>([])
@@ -1670,6 +1684,60 @@ function NewEventPageContent() {
     return serializeFormSnapshot() !== formBaselineSerializedRef.current
   }, [serializeFormSnapshot, draftHydrating, formBaselineVersion])
 
+  const clearDirtyBaseline = useCallback(() => {
+    formBaselineSerializedRef.current = serializeFormSnapshotRef.current()
+    setFormBaselineVersion((v) => v + 1)
+  }, [])
+
+  const completePendingLeaveNavigation = useCallback(() => {
+    const dest = pendingLeaveHrefRef.current
+    allowUnsavedLeaveRef.current = true
+    clearDirtyBaseline()
+    setShowLeaveDraftModal(false)
+
+    if (dest === LEAVE_BACK_SENTINEL) {
+      window.history.go(-2)
+      return
+    }
+    router.push(dest || '/dashboard')
+  }, [clearDirtyBaseline, router])
+
+  const requestLeaveNavigation = useCallback(
+    (href: string) => {
+      if (draftHydrating || !isFormDirty || allowUnsavedLeaveRef.current) {
+        if (href === LEAVE_BACK_SENTINEL) {
+          window.history.back()
+        } else {
+          router.push(href)
+        }
+        return
+      }
+      pendingLeaveHrefRef.current = href
+      setShowLeaveDraftModal(true)
+    },
+    [draftHydrating, isFormDirty, router]
+  )
+
+  const handleNavLinkClick = useCallback(
+    (href: string, event: MouseEvent<HTMLAnchorElement>) => {
+      if (draftHydrating || !isFormDirty || allowUnsavedLeaveRef.current) {
+        return
+      }
+      event.preventDefault()
+      requestLeaveNavigation(href)
+    },
+    [draftHydrating, isFormDirty, requestLeaveNavigation]
+  )
+
+  const closeLeaveModal = useCallback(() => {
+    setShowLeaveDraftModal(false)
+    pendingLeaveHrefRef.current = LEAVE_BACK_SENTINEL
+  }, [])
+
+  const discardLeaveAndNavigate = useCallback(() => {
+    completePendingLeaveNavigation()
+  }, [completePendingLeaveNavigation])
+
   useEffect(() => {
     if (childrenLoading || draftHydrating) return
     if (fromEventParam?.trim() && !duplicateAppliedRef.current) return
@@ -1690,28 +1758,38 @@ function NewEventPageContent() {
   ])
 
   useEffect(() => {
-    if (!isFormDirty) return
+    if (!isFormDirty || draftHydrating) return
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowUnsavedLeaveRef.current) return
       event.preventDefault()
       event.returnValue = ''
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [isFormDirty])
+  }, [isFormDirty, draftHydrating])
 
   useEffect(() => {
-    if (!isFormDirty) return
-    const onPopState = () => {
-      window.history.pushState(null, '', window.location.href)
-      setPendingLeaveAction('back')
-      setShowLeaveDraftModal(true)
+    if (!isFormDirty || draftHydrating) {
+      historyTrapPushedRef.current = false
+      return
     }
-    window.history.pushState(null, '', window.location.href)
+
+    const onPopState = () => {
+      pendingLeaveHrefRef.current = LEAVE_BACK_SENTINEL
+      setShowLeaveDraftModal(true)
+      window.history.pushState(null, '', window.location.href)
+    }
+
+    if (!historyTrapPushedRef.current) {
+      window.history.pushState(null, '', window.location.href)
+      historyTrapPushedRef.current = true
+    }
+
     window.addEventListener('popstate', onPopState)
     return () => {
       window.removeEventListener('popstate', onPopState)
     }
-  }, [isFormDirty])
+  }, [isFormDirty, draftHydrating])
 
   const saveDraftFromModal = async (navigateAfter: boolean) => {
     setDraftSaveBusy(true)
@@ -1831,14 +1909,11 @@ function NewEventPageContent() {
       setDraftEventId(result.eventId)
     }
 
-    formBaselineSerializedRef.current = serializeFormSnapshot()
-    setFormBaselineVersion((v) => v + 1)
+    clearDirtyBaseline()
     setShowLeaveDraftModal(false)
-    setPendingLeaveAction(null)
 
-    if (navigateAfter || leaveAfterDraftSaveRef.current) {
-      leaveAfterDraftSaveRef.current = false
-      router.push('/dashboard')
+    if (navigateAfter) {
+      completePendingLeaveNavigation()
     }
   }
 
@@ -2185,6 +2260,8 @@ function NewEventPageContent() {
     if (invitationTheme) {
       localStorage.setItem('lastEventTheme', invitationTheme)
     }
+    allowUnsavedLeaveRef.current = true
+    clearDirtyBaseline()
     const shareThemeQuery = invitationTheme ? `?theme=${invitationTheme}` : ''
     router.push(`/dashboard/eventos/${insertedEvent.public_slug}/compartir${shareThemeQuery}`)
   }
@@ -2271,18 +2348,14 @@ function NewEventPageContent() {
       <AppNav
         backHref="/dashboard"
         backLabel="⬅️ Mi panel"
-        onBackClick={(e) => {
-          if (!isFormDirty || draftHydrating) return
-          e.preventDefault()
-          setPendingLeaveAction('dashboard')
-          setShowLeaveDraftModal(true)
-        }}
+        onBackClick={(e) => handleNavLinkClick('/dashboard', e)}
+        onInternalNavigate={handleNavLinkClick}
       />
 
       {showLeaveDraftModal ? (
         <div
           className="fixed inset-0 z-[55] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
-          onClick={() => setShowLeaveDraftModal(false)}
+          onClick={closeLeaveModal}
           role="presentation"
         >
           <div
@@ -2302,28 +2375,21 @@ function NewEventPageContent() {
               <button
                 type="button"
                 disabled={draftSaveBusy}
-                onClick={() => {
-                  leaveAfterDraftSaveRef.current = true
-                  void saveDraftFromModal(true)
-                }}
+                onClick={() => void saveDraftFromModal(true)}
                 className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:opacity-60 ${brand.buttonPrimary}`}
               >
                 {draftSaveBusy ? 'Guardando…' : 'Guardar borrador'}
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setShowLeaveDraftModal(false)
-                  formBaselineSerializedRef.current = null
-                  router.push('/dashboard')
-                }}
+                onClick={discardLeaveAndNavigate}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
               >
                 Salir sin guardar
               </button>
               <button
                 type="button"
-                onClick={() => setShowLeaveDraftModal(false)}
+                onClick={closeLeaveModal}
                 className="w-full rounded-lg border border-transparent px-4 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
               >
                 Seguir editando

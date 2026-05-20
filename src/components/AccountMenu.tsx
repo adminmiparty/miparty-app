@@ -2,13 +2,15 @@
 
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { brand } from '@/lib/brand'
 
 type AccountMenuProps = {
   signedOut: ReactNode
+  /** When set, called for in-app menu links before navigation. Call `preventDefault()` to block. */
+  onInternalNavigate?: (href: string, event: ReactMouseEvent<HTMLAnchorElement>) => void
 }
 
 function isGoogleLinked(user: User) {
@@ -56,7 +58,7 @@ function AccountAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | 
   )
 }
 
-export default function AccountMenu({ signedOut }: AccountMenuProps) {
+export default function AccountMenu({ signedOut, onInternalNavigate }: AccountMenuProps) {
   const [displayName, setDisplayName] = useState<string | null>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
@@ -156,7 +158,10 @@ export default function AccountMenu({ signedOut }: AccountMenuProps) {
           <Link
             href="/dashboard"
             role="menuitem"
-            onClick={() => setShowDropdown(false)}
+            onClick={(e) => {
+              setShowDropdown(false)
+              onInternalNavigate?.('/dashboard', e)
+            }}
             className="block rounded-lg px-3 py-2.5 text-sm text-gray-700 transition hover:bg-[var(--brand-primary-light)]"
           >
             MiPanel

@@ -12,6 +12,8 @@ export type AppNavProps = {
   brandHref?: string
   /** If set, called before navigating to `backHref`. Call `preventDefault()` to cancel navigation. */
   onBackClick?: (event: MouseEvent<HTMLAnchorElement>) => void
+  /** Intercept in-app nav links (e.g. account menu). Call `preventDefault()` to cancel navigation. */
+  onInternalNavigate?: (href: string, event: MouseEvent<HTMLAnchorElement>) => void
 }
 
 const DEFAULT_BACK_LABEL = '⬅️ Atrás'
@@ -21,6 +23,7 @@ export default function AppNav({
   backLabel = DEFAULT_BACK_LABEL,
   brandHref,
   onBackClick,
+  onInternalNavigate,
 }: AppNavProps) {
   return (
     <header className={brand.navSticky}>
@@ -33,7 +36,12 @@ export default function AppNav({
           ) : backHref ? (
             <Link
               href={backHref}
-              onClick={onBackClick}
+              onClick={(e) => {
+                onBackClick?.(e)
+                if (!e.defaultPrevented && onInternalNavigate) {
+                  onInternalNavigate(backHref, e)
+                }
+              }}
               className="text-sm text-gray-600 transition hover:text-gray-900"
             >
               {backLabel}
@@ -41,6 +49,7 @@ export default function AppNav({
           ) : null}
         </div>
         <AccountMenu
+          onInternalNavigate={onInternalNavigate}
           signedOut={
             brandHref ? null : (
               <Link href="/dashboard" className={`text-sm font-bold ${brand.textBrand} no-underline`}>
