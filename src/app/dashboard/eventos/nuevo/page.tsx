@@ -26,7 +26,9 @@ import {
   eventFormSubmitButtonClass,
   resolveThemeOrBrand,
   isInvitationThemeKey,
+  themeForDraftPersistence,
   themeForPersistence,
+  themeFromDraftRow,
   type SelectedInvitationTheme,
 } from '@/lib/eventFormTheme'
 import { X } from 'lucide-react'
@@ -602,6 +604,7 @@ function NewEventPageContent() {
   const queryPrefsAppliedRef = useRef(false)
   const locationPrefsAppliedRef = useRef(false)
   const duplicateAppliedRef = useRef(false)
+  const invitationThemeUserPickedRef = useRef(false)
   const supabase = createClient()
 
   const [children, setChildren] = useState<Child[]>([])
@@ -1219,11 +1222,9 @@ function NewEventPageContent() {
         setInvitationImageUrl(null)
       }
 
-      if (isInvitationThemeKey(eventRow.invitation_theme)) {
-        setInvitationTheme(eventRow.invitation_theme)
-      } else {
-        setInvitationTheme(null)
-      }
+      const duplicateTheme = themeFromDraftRow(eventRow.invitation_theme)
+      invitationThemeUserPickedRef.current = duplicateTheme !== null
+      setInvitationTheme(duplicateTheme)
 
       if (!cancelled) {
         setFormHydrationEpoch((e) => e + 1)
@@ -1412,11 +1413,12 @@ function NewEventPageContent() {
         setInvitationImageUrl(null)
       }
 
-      if (isInvitationThemeKey(eventRow.invitation_theme)) {
-        setInvitationTheme(eventRow.invitation_theme)
-      } else {
-        setInvitationTheme(null)
-      }
+      const draftTheme = themeFromDraftRow(eventRow.invitation_theme, {
+        treatLegacyDefaultYellowAsUnset:
+          !eventRow.invitation_image_url && !(eventRow.organizer_notes?.trim() ?? ''),
+      })
+      invitationThemeUserPickedRef.current = draftTheme !== null
+      setInvitationTheme(draftTheme)
 
       setDraftEventId(eventRow.id)
       setFormHydrationEpoch((e) => e + 1)
@@ -1885,7 +1887,9 @@ function NewEventPageContent() {
         organizer_phone: organizerPhonePersist,
         enable_food_options: isFoodActive ? foodEnabled : false,
         organizer_notes: showNotes ? notes.trim() || null : null,
-        invitation_theme: themeForPersistence(invitationTheme),
+        invitation_theme: invitationThemeUserPickedRef.current
+          ? themeForDraftPersistence(invitationTheme)
+          : null,
         invitation_image_url: showImage ? (invitationImageUrl ?? null) : null,
         invitation_image_fit: showImage ? imageFit : null,
         invitation_image_position: showImage ? `${imagePosX}% ${imagePosY}%` : null,
@@ -2334,6 +2338,13 @@ function NewEventPageContent() {
     void completeEventCreation({ ...buildSubmitParams(), siblingIds: [] })
   }
 
+  const handleInvitationThemeSelect = (key: ThemeKey) => {
+    invitationThemeUserPickedRef.current = true
+    setInvitationTheme(key)
+  }
+
+  const formContentReady = !childrenLoading && !draftHydrating
+
   const siblingsForModal = useMemo(() => {
     const trimmedNombre = childName.trim()
     const trimmedApellido = childLastName.trim()
@@ -2430,6 +2441,13 @@ function NewEventPageContent() {
       ) : null}
 
       <div className="mx-auto w-full max-w-sm px-4 py-6 pb-8">
+        {!formContentReady ? (
+          <p className="py-12 text-center text-sm text-gray-500" aria-busy="true">
+            Cargando…
+          </p>
+        ) : null}
+        {formContentReady ? (
+        <>
         <div className={`mb-4 rounded-xl border ${eventFormBrandUi.progressCardBorder} bg-white/80 p-3`}>
           <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
             <span>Paso 1 de 2 — Crear evento</span>
@@ -3440,7 +3458,7 @@ function NewEventPageContent() {
                     type="button"
                     aria-label={theme.label}
                     title={theme.label}
-                    onClick={() => setInvitationTheme(key)}
+                    onClick={() => handleInvitationThemeSelect(key)}
                     className={`w-7 h-7 rounded-full cursor-pointer transition ${theme.swatch} ${
                       invitationTheme === key
                         ? 'ring-2 ring-offset-2 ring-gray-800'
@@ -3464,6 +3482,8 @@ function NewEventPageContent() {
             </button>
           </form>
         </section>
+        </>
+        ) : null}
       </div>
 
       {showSiblingsModal ? (

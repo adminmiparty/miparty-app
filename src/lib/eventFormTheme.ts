@@ -19,6 +19,27 @@ export function themeForPersistence(selected: SelectedInvitationTheme): ThemeKey
   return selected ?? DB_DEFAULT_INVITATION_THEME
 }
 
+/** Draft rows: only persist a theme when the user picked a swatch (null otherwise). */
+export function themeForDraftPersistence(selected: SelectedInvitationTheme): string | null {
+  return selected
+}
+
+/** Restore theme from a draft row; returns null when unset or not a known swatch key. */
+export function themeFromDraftRow(
+  stored: string | null | undefined,
+  options?: { treatLegacyDefaultYellowAsUnset?: boolean }
+): SelectedInvitationTheme {
+  const parsed = parseInvitationThemeParam(stored)
+  if (!parsed) return null
+  if (
+    options?.treatLegacyDefaultYellowAsUnset &&
+    parsed === DB_DEFAULT_INVITATION_THEME
+  ) {
+    return null
+  }
+  return parsed
+}
+
 export function resolveThemeOrBrand<T>(
   map: Record<ThemeKey, T>,
   selected: SelectedInvitationTheme,
