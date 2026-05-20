@@ -2140,14 +2140,15 @@ export default function DashboardHomePage() {
 
         <section className="card-soft mt-6 p-4 sm:mt-8 sm:p-6">
           <div>
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-              <h2 className="text-base font-semibold text-gray-900 sm:mt-2 sm:text-lg">
-                📍 Lugares
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 sm:mt-2">
+              <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900 sm:text-lg">
+                <span aria-hidden>📍</span>
+                Lugares
               </h2>
               <button
                 type="button"
                 onClick={openAddPlaceModal}
-                className={`${brand.dashboardPrimaryPill} w-full sm:w-auto`}
+                className={brand.dashboardPrimaryPill}
               >
                 Añadir lugar
               </button>
