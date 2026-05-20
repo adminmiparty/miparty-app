@@ -2,12 +2,14 @@
 
 import { useRouter } from 'next/navigation'
 import AppNav from '@/components/AppNav'
-import { Suspense, type ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, type ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { DayPicker, type Matcher } from 'react-day-picker'
 import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { brand } from '@/lib/brand'
+import { defaultDraftEventDateIso, upsertDraftEvent } from '@/lib/draftEventPersistence'
+import { EVENT_STATUS_ACTIVE, EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
 import {
   eventFormBrandUi,
   eventFormPageMainClass,
@@ -310,6 +312,7 @@ function parseInvitationPosition(position: string | null) {
 type DuplicateSourceEventRow = {
   id: string
   user_id: string
+  event_date: string
   child_name: string
   child_birth_date: string | null
   title: string
@@ -582,6 +585,7 @@ function NewEventPageContent() {
   const locationAddressParam = searchParams.get('locationAddress')
   const googleMapsUrlParam = searchParams.get('googleMapsUrl')
   const fromEventParam = searchParams.get('fromEvent')
+  const draftIdParam = searchParams.get('draftId')
   const queryPrefsAppliedRef = useRef(false)
   const locationPrefsAppliedRef = useRef(false)
   const duplicateAppliedRef = useRef(false)
@@ -644,6 +648,16 @@ function NewEventPageContent() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [draftEventId, setDraftEventId] = useState<string | null>(null)
+  const [draftHydrating, setDraftHydrating] = useState(Boolean(draftIdParam?.trim()))
+  const [showLeaveDraftModal, setShowLeaveDraftModal] = useState(false)
+  const [showDraftLimitModal, setShowDraftLimitModal] = useState(false)
+  const [pendingLeaveAction, setPendingLeaveAction] = useState<'dashboard' | 'back' | null>(null)
+  const [draftSaveBusy, setDraftSaveBusy] = useState(false)
+  const [formBaselineVersion, setFormBaselineVersion] = useState(0)
+  const [formHydrationEpoch, setFormHydrationEpoch] = useState(0)
+  const formBaselineSerializedRef = useRef<string | null>(null)
+  const leaveAfterDraftSaveRef = useRef(false)
   const [showChildLimitModal, setShowChildLimitModal] = useState(false)
   const [showSiblingsModal, setShowSiblingsModal] = useState(false)
   const [selectedSiblings, setSelectedSiblings] = useState<string[]>([])
@@ -1043,9 +1057,10 @@ function NewEventPageContent() {
       const { data: eventRow, error: eventError } = await supabase
         .from('events')
         .select(
-          'id, user_id, child_name, child_birth_date, title, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
+          'id, user_id, event_date, child_name, child_birth_date, title, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
         )
         .eq('public_slug', fromEventParam.trim())
+        .eq('status', EVENT_STATUS_ACTIVE)
         .maybeSingle<DuplicateSourceEventRow>()
 
       if (cancelled) {
@@ -1099,6 +1114,8 @@ function NewEventPageContent() {
 
       setEventTitle(eventRow.title)
       setEventTitleManuallyEdited(true)
+
+      setEventDate(formatIsoToDisplayDate(eventRow.event_date))
 
       setStartTime(eventRow.start_time ? eventRow.start_time.slice(0, 5) : '')
       setPickupTime(eventRow.pickup_time ? eventRow.pickup_time.slice(0, 5) : '')
@@ -1190,6 +1207,10 @@ function NewEventPageContent() {
       } else {
         setInvitationTheme(null)
       }
+
+      if (!cancelled) {
+        setFormHydrationEpoch((e) => e + 1)
+      }
     }
 
     void loadDuplicate()
@@ -1198,6 +1219,206 @@ function NewEventPageContent() {
       cancelled = true
     }
   }, [fromEventParam, childrenLoading, children, router, supabase])
+
+  useEffect(() => {
+    if (!draftIdParam?.trim() || childrenLoading) {
+      if (!draftIdParam?.trim()) {
+        setDraftHydrating(false)
+      }
+      return
+    }
+    if (fromEventParam?.trim()) {
+      setDraftHydrating(false)
+      return
+    }
+
+    let cancelled = false
+
+    const loadDraft = async () => {
+      setDraftHydrating(true)
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+
+      if (userError || !user) {
+        if (!cancelled) {
+          setDraftHydrating(false)
+          router.replace('/login')
+        }
+        return
+      }
+
+      const { data: eventRow, error: eventError } = await supabase
+        .from('events')
+        .select(
+          'id, user_id, event_date, child_name, child_birth_date, title, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, status, public_slug'
+        )
+        .eq('id', draftIdParam.trim())
+        .eq('user_id', user.id)
+        .maybeSingle<DuplicateSourceEventRow & { status: string | null; public_slug: string }>()
+
+      if (cancelled) {
+        return
+      }
+
+      if (eventError || !eventRow || eventRow.status !== EVENT_STATUS_DRAFT) {
+        router.replace('/dashboard/eventos/nuevo')
+        setDraftHydrating(false)
+        return
+      }
+
+      const { data: foodOptionRows } = await supabase
+        .from('event_food_options')
+        .select('label')
+        .eq('event_id', eventRow.id)
+        .order('created_at', { ascending: true })
+
+      if (cancelled) {
+        return
+      }
+
+      queryPrefsAppliedRef.current = true
+      locationPrefsAppliedRef.current = true
+
+      const matchedChild = children.find(
+        (child) => getChildDropdownDisplayName(child).trim() === eventRow.child_name.trim()
+      )
+
+      if (matchedChild) {
+        setSelectedChildId(matchedChild.id)
+        setChildName(getChildDropdownDisplayName(matchedChild))
+        setChildLastName('')
+        syncChildBirthDateFromDisplayValue(
+          matchedChild.birth_date ? formatIsoToDisplayDate(matchedChild.birth_date) : ''
+        )
+      } else {
+        setSelectedChildId(NEW_CHILD_VALUE)
+        const nameParts = eventRow.child_name.trim().split(/\s+/)
+        if (nameParts.length >= 2) {
+          setChildName(nameParts[0] ?? '')
+          setChildLastName(nameParts.slice(1).join(' '))
+        } else {
+          setChildName(eventRow.child_name.trim())
+          setChildLastName('')
+        }
+        syncChildBirthDateFromDisplayValue(
+          eventRow.child_birth_date ? formatIsoToDisplayDate(eventRow.child_birth_date) : ''
+        )
+      }
+
+      setEventTitle(eventRow.title)
+      setEventTitleManuallyEdited(true)
+      setEventDate(formatIsoToDisplayDate(eventRow.event_date))
+      setStartTime(eventRow.start_time ? eventRow.start_time.slice(0, 5) : '')
+      setPickupTime(eventRow.pickup_time ? eventRow.pickup_time.slice(0, 5) : '')
+
+      const loc = parseStoredLocationAddress(eventRow.location_address ?? '')
+      setLocationName(eventRow.location_name ?? '')
+      setLocationStreet(loc.street)
+      setLocationCity(loc.city)
+      setLocationPostal(loc.postal)
+      setGoogleMapsUrl(eventRow.google_maps_url ?? '')
+
+      setRsvpDeadlineDays(
+        eventRow.rsvp_deadline_days != null && Number.isFinite(eventRow.rsvp_deadline_days)
+          ? String(eventRow.rsvp_deadline_days)
+          : '1'
+      )
+      setBirthdayNumber(eventRow.birthday_number != null ? String(eventRow.birthday_number) : '')
+      setBirthdayNumberUserEdited(true)
+
+      const organizerParts = splitDialPhone(eventRow.organizer_phone ?? '')
+      setOrganizerCountryCode(organizerParts.countryCode)
+      setOrganizerCustomCode(organizerParts.customCode)
+      setOrganizerPhoneNumber(organizerParts.number)
+
+      const gift = eventRow.gift_option
+      if (gift === 'bizum_pool') {
+        setShowGift(true)
+        setGiftOption('bizum_pool')
+        const bizum = splitDialPhone(eventRow.bizum_phone ?? '')
+        setBizumCountryCode(bizum.countryCode)
+        setBizumCustomCode(bizum.customCode)
+        setBizumPhoneNumber(bizum.number)
+      } else if (gift === 'sin_regalo') {
+        setShowGift(false)
+        setGiftOption('regalo_libre')
+        setBizumPhoneNumber('')
+        setBizumCountryCode('+34')
+        setBizumCustomCode('')
+      } else {
+        setShowGift(true)
+        setGiftOption('regalo_libre')
+        setBizumPhoneNumber('')
+        setBizumCountryCode('+34')
+        setBizumCustomCode('')
+      }
+
+      const foodLabels = (foodOptionRows ?? []).map((row) => String((row as { label: string }).label))
+      if (eventRow.enable_food_options && foodLabels.length > 0) {
+        setShowFood(true)
+        setFoodEnabled(true)
+        setFoodOptions(foodLabels)
+      } else if (eventRow.enable_food_options) {
+        setShowFood(true)
+        setFoodEnabled(true)
+        setFoodOptions([''])
+      } else {
+        setShowFood(false)
+        setFoodEnabled(false)
+        setFoodOptions([''])
+      }
+
+      if (eventRow.organizer_notes) {
+        setShowNotes(true)
+        setNotes(eventRow.organizer_notes)
+      } else {
+        setShowNotes(false)
+        setNotes('')
+      }
+
+      if (eventRow.invitation_image_url) {
+        setShowImage(true)
+        setInvitationImageUrl(eventRow.invitation_image_url)
+        setImageFit(eventRow.invitation_image_fit === 'cover' ? 'cover' : 'contain')
+        const pos = parseInvitationPosition(eventRow.invitation_image_position)
+        setImagePosX(pos.x)
+        setImagePosY(pos.y)
+        setImageZoom(
+          eventRow.invitation_image_zoom != null && Number.isFinite(Number(eventRow.invitation_image_zoom))
+            ? Number(eventRow.invitation_image_zoom)
+            : 1
+        )
+      } else {
+        setShowImage(false)
+        setInvitationImageUrl(null)
+      }
+
+      if (isInvitationThemeKey(eventRow.invitation_theme)) {
+        setInvitationTheme(eventRow.invitation_theme)
+      } else {
+        setInvitationTheme(null)
+      }
+
+      setDraftEventId(eventRow.id)
+      setFormHydrationEpoch((e) => e + 1)
+      setDraftHydrating(false)
+    }
+
+    void loadDraft()
+
+    return () => {
+      cancelled = true
+    }
+  }, [draftIdParam, fromEventParam, childrenLoading, children, router, supabase])
+
+  useEffect(() => {
+    if (childrenLoading || draftHydrating) return
+    if (fromEventParam?.trim()) return
+    if (draftIdParam?.trim()) return
+    setFormHydrationEpoch((e) => e + 1)
+  }, [childrenLoading, draftHydrating, fromEventParam, draftIdParam])
 
   useEffect(() => {
     setBirthdayNumberUserEdited(false)
@@ -1346,6 +1567,276 @@ function NewEventPageContent() {
     event.target.value = ''
   }
   const handleImageUpload = handleInvitationImageChange
+
+  const serializeFormSnapshot = useCallback(() => {
+    return JSON.stringify({
+      selectedChildId,
+      childName,
+      childLastName,
+      childBirthDate,
+      birthDay,
+      birthMonth,
+      birthYear,
+      eventTitle,
+      eventTitleManuallyEdited,
+      eventDate,
+      startTime,
+      pickupTime,
+      locationName,
+      locationStreet,
+      locationCity,
+      locationPostal,
+      googleMapsUrl,
+      organizerCountryCode,
+      organizerCustomCode,
+      organizerPhoneNumber,
+      rsvpDeadlineDays,
+      birthdayNumber,
+      birthdayNumberUserEdited,
+      giftOption,
+      bizumCountryCode,
+      bizumCustomCode,
+      bizumPhoneNumber,
+      showGift,
+      foodEnabled,
+      foodOptions: [...foodOptions],
+      showFood,
+      invitationImageUrl,
+      imageFit,
+      imagePosX,
+      imagePosY,
+      imageZoom,
+      showImage,
+      notes,
+      showNotes,
+      invitationTheme,
+      selectedSiblings: [...selectedSiblings].sort(),
+      savePhoneForFuture,
+    })
+  }, [
+    selectedChildId,
+    childName,
+    childLastName,
+    childBirthDate,
+    birthDay,
+    birthMonth,
+    birthYear,
+    eventTitle,
+    eventTitleManuallyEdited,
+    eventDate,
+    startTime,
+    pickupTime,
+    locationName,
+    locationStreet,
+    locationCity,
+    locationPostal,
+    googleMapsUrl,
+    organizerCountryCode,
+    organizerCustomCode,
+    organizerPhoneNumber,
+    rsvpDeadlineDays,
+    birthdayNumber,
+    birthdayNumberUserEdited,
+    giftOption,
+    bizumCountryCode,
+    bizumCustomCode,
+    bizumPhoneNumber,
+    showGift,
+    foodEnabled,
+    foodOptions,
+    showFood,
+    invitationImageUrl,
+    imageFit,
+    imagePosX,
+    imagePosY,
+    imageZoom,
+    showImage,
+    notes,
+    showNotes,
+    invitationTheme,
+    selectedSiblings,
+    savePhoneForFuture,
+  ])
+
+  const isFormDirty = useMemo(() => {
+    if (draftHydrating || !formBaselineSerializedRef.current) {
+      return false
+    }
+    return serializeFormSnapshot() !== formBaselineSerializedRef.current
+  }, [serializeFormSnapshot, draftHydrating, formBaselineVersion])
+
+  useEffect(() => {
+    if (childrenLoading || draftHydrating) return
+    if (fromEventParam?.trim() && !duplicateAppliedRef.current) return
+    if (draftIdParam?.trim() && !draftEventId) return
+
+    const handle = window.setTimeout(() => {
+      formBaselineSerializedRef.current = serializeFormSnapshot()
+      setFormBaselineVersion((v) => v + 1)
+    }, 120)
+    return () => window.clearTimeout(handle)
+  }, [
+    childrenLoading,
+    draftHydrating,
+    draftEventId,
+    draftIdParam,
+    fromEventParam,
+    formHydrationEpoch,
+    serializeFormSnapshot,
+  ])
+
+  useEffect(() => {
+    if (!isFormDirty) return
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isFormDirty])
+
+  useEffect(() => {
+    if (!isFormDirty) return
+    const onPopState = () => {
+      window.history.pushState(null, '', window.location.href)
+      setPendingLeaveAction('back')
+      setShowLeaveDraftModal(true)
+    }
+    window.history.pushState(null, '', window.location.href)
+    window.addEventListener('popstate', onPopState)
+    return () => {
+      window.removeEventListener('popstate', onPopState)
+    }
+  }, [isFormDirty])
+
+  const saveDraftFromModal = async (navigateAfter: boolean) => {
+    setDraftSaveBusy(true)
+    setError(null)
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+    if (userError || !user) {
+      setDraftSaveBusy(false)
+      setError(userError?.message ?? 'No se pudo obtener tu sesión.')
+      return
+    }
+
+    const trimmedNombre = childName.trim()
+    const trimmedApellido = childLastName.trim()
+    const trimmedChildName = isNewChildSelection ? `${trimmedNombre} ${trimmedApellido}`.trim() : trimmedNombre
+    const trimmedTitle = eventTitle.trim()
+    const trimmedLocationName = locationName.trim()
+    const trimmedStreet = locationStreet.trim()
+    const trimmedCity = locationCity.trim()
+    const trimmedPostal = locationPostal.trim()
+    const parsedEventIso = formatDisplayToIsoDate(eventDate)
+    const eventDateIso = parsedEventIso ?? defaultDraftEventDateIso()
+    const startTimeValue = (startTime.trim() || '12:00').slice(0, 5)
+    const pickupVal = pickupTime.trim() ? pickupTime.slice(0, 5) : null
+    const parsedChildBirth = formatDisplayToIsoDate(childBirthDate)
+
+    const organizerFull = `${resolveDialCode(organizerCountryCode, organizerCustomCode)}${organizerPhoneNumber.replace(/\s/g, '')}`
+    const organizerPhonePersist =
+      organizerFull.trim() !== '' ? organizerFull : '+34600000000'
+
+    const query = encodeURIComponent(
+      `${trimmedStreet || '\u2014'}, ${trimmedPostal || '\u2014'} ${trimmedCity || '\u2014'}, Spain`
+    )
+    const generatedMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`
+    const mapsUrlPersist = googleMapsUrl.trim() || generatedMapsUrl
+
+    const rsvpTrimmed = rsvpDeadlineDays.trim()
+    let rsvpDeadlineDaysValue: number | null = null
+    if (rsvpTrimmed !== '') {
+      const parsed = Number.parseInt(rsvpTrimmed, 10)
+      if (!Number.isNaN(parsed) && parsed >= 0) {
+        rsvpDeadlineDaysValue = parsed
+      }
+    }
+
+    let birthdayNumberValue: number | null = null
+    const birthdayTrimmed = birthdayNumber.trim()
+    if (birthdayTrimmed !== '') {
+      const parsed = Number.parseInt(birthdayTrimmed, 10)
+      if (!Number.isNaN(parsed) && parsed >= 1) {
+        birthdayNumberValue = parsed
+      }
+    }
+
+    const isGiftActive = showGift
+    const isFoodActive = showFood
+    const trimmedBizum = bizumPhoneNumber.trim()
+    const giftPersist = isGiftActive ? giftOption : 'regalo_libre'
+
+    const combinedAddress =
+      trimmedStreet && trimmedCity && trimmedPostal
+        ? `${trimmedStreet}, ${trimmedPostal} ${trimmedCity}`
+        : '\u2014, \u2014 \u2014'
+
+    const normalizedFood =
+      isFoodActive && foodEnabled
+        ? foodOptions.map((option) => option.trim()).filter((option) => option.length > 0)
+        : []
+
+    const result = await upsertDraftEvent(supabase, {
+      userId: user.id,
+      draftEventId,
+      enforceNewDraftLimit: !draftEventId,
+      row: {
+        child_name: trimmedChildName.trim() !== '' ? trimmedChildName : '\u2014',
+        child_birth_date: parsedChildBirth || null,
+        title: trimmedTitle !== '' ? trimmedTitle : '(Borrador sin título)',
+        event_date: eventDateIso,
+        start_time: startTimeValue,
+        pickup_time: pickupVal,
+        location_name: trimmedLocationName !== '' ? trimmedLocationName : '\u2014',
+        location_address: combinedAddress,
+        google_maps_url: mapsUrlPersist,
+        gift_option: giftPersist,
+        bizum_phone:
+          isGiftActive && giftOption === 'bizum_pool'
+            ? `${resolveDialCode(bizumCountryCode, bizumCustomCode)}${trimmedBizum}`
+            : null,
+        rsvp_deadline_days: rsvpDeadlineDaysValue,
+        birthday_number: birthdayNumberValue,
+        organizer_phone: organizerPhonePersist,
+        enable_food_options: isFoodActive ? foodEnabled : false,
+        organizer_notes: showNotes ? notes.trim() || null : null,
+        invitation_theme: themeForPersistence(invitationTheme),
+        invitation_image_url: showImage ? (invitationImageUrl ?? null) : null,
+        invitation_image_fit: showImage ? imageFit : null,
+        invitation_image_position: showImage ? `${imagePosX}% ${imagePosY}%` : null,
+        invitation_image_zoom: showImage ? imageZoom : null,
+      },
+      foodLabels: normalizedFood,
+    })
+
+    setDraftSaveBusy(false)
+
+    if (!result.ok) {
+      if (result.reason === 'limit') {
+        setShowDraftLimitModal(true)
+        return
+      }
+      setError(result.error)
+      return
+    }
+
+    if (!draftEventId) {
+      setDraftEventId(result.eventId)
+    }
+
+    formBaselineSerializedRef.current = serializeFormSnapshot()
+    setFormBaselineVersion((v) => v + 1)
+    setShowLeaveDraftModal(false)
+    setPendingLeaveAction(null)
+
+    if (navigateAfter || leaveAfterDraftSaveRef.current) {
+      leaveAfterDraftSaveRef.current = false
+      router.push('/dashboard')
+    }
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1546,44 +2037,71 @@ function NewEventPageContent() {
     const generatedMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`
     const finalGoogleMapsUrl = params.trimmedGoogleMapsUrl || generatedMapsUrl
 
-    const { data: insertedEvent, error: eventError } = await supabase
-      .from('events')
-      .insert({
-        user_id: user.id,
-        child_name: params.trimmedChildName,
-        child_birth_date: params.parsedChildBirthDate || null,
-        title: params.trimmedEventTitle,
-        event_date: params.parsedEventDate,
-        start_time: startTime,
-        pickup_time: pickupTime || null,
-        location_name: params.trimmedLocationName,
-        location_address: params.combinedAddress,
-        google_maps_url: finalGoogleMapsUrl,
-        gift_option: params.isGiftActive ? giftOption : 'regalo_libre',
-        bizum_phone:
-          params.isGiftActive && giftOption === 'bizum_pool'
-            ? `${resolveDialCode(bizumCountryCode, bizumCustomCode)}${params.trimmedBizumPhoneNumber}`
-            : null,
-        rsvp_deadline_days: params.rsvpDeadlineDaysValue,
-        birthday_number: params.birthdayNumberValue,
-        organizer_phone: fullOrganizerPhone,
-        enable_food_options: params.isFoodActive ? foodEnabled : false,
-        organizer_notes: showNotes ? notes.trim() || null : null,
-        invitation_theme: themeForPersistence(invitationTheme),
-        invitation_image_url: showImage ? (invitationImageUrl ?? null) : null,
-        invitation_image_fit: showImage ? imageFit : null,
-        invitation_image_position: showImage ? `${imagePosX}% ${imagePosY}%` : null,
-        invitation_image_zoom: showImage ? imageZoom : null,
-        public_slug: publicSlug,
-      })
-      .select('id, public_slug')
-      .single()
+    const eventPayload = {
+      user_id: user.id,
+      child_name: params.trimmedChildName,
+      child_birth_date: params.parsedChildBirthDate || null,
+      title: params.trimmedEventTitle,
+      event_date: params.parsedEventDate,
+      start_time: startTime,
+      pickup_time: pickupTime || null,
+      location_name: params.trimmedLocationName,
+      location_address: params.combinedAddress,
+      google_maps_url: finalGoogleMapsUrl,
+      gift_option: params.isGiftActive ? giftOption : 'regalo_libre',
+      bizum_phone:
+        params.isGiftActive && giftOption === 'bizum_pool'
+          ? `${resolveDialCode(bizumCountryCode, bizumCustomCode)}${params.trimmedBizumPhoneNumber}`
+          : null,
+      rsvp_deadline_days: params.rsvpDeadlineDaysValue,
+      birthday_number: params.birthdayNumberValue,
+      organizer_phone: fullOrganizerPhone,
+      enable_food_options: params.isFoodActive ? foodEnabled : false,
+      organizer_notes: showNotes ? notes.trim() || null : null,
+      invitation_theme: themeForPersistence(invitationTheme),
+      invitation_image_url: showImage ? (invitationImageUrl ?? null) : null,
+      invitation_image_fit: showImage ? imageFit : null,
+      invitation_image_position: showImage ? `${imagePosX}% ${imagePosY}%` : null,
+      invitation_image_zoom: showImage ? imageZoom : null,
+      public_slug: publicSlug,
+    }
 
-    if (eventError || !insertedEvent) {
-      setError(eventError?.message ?? 'No se pudo crear el evento.')
+    let insertedEvent: { id: string; public_slug: string } | null = null
+    let eventErrorMsg: string | null = null
+
+    if (draftEventId) {
+      const res = await supabase
+        .from('events')
+        .update({
+          ...eventPayload,
+          status: EVENT_STATUS_ACTIVE,
+        })
+        .eq('id', draftEventId)
+        .eq('user_id', user.id)
+        .select('id, public_slug')
+        .single()
+      insertedEvent = res.data
+      eventErrorMsg = res.error?.message ?? null
+    } else {
+      const res = await supabase
+        .from('events')
+        .insert({
+          ...eventPayload,
+          status: EVENT_STATUS_ACTIVE,
+        })
+        .select('id, public_slug')
+        .single()
+      insertedEvent = res.data
+      eventErrorMsg = res.error?.message ?? null
+    }
+
+    if (eventErrorMsg || !insertedEvent) {
+      setError(eventErrorMsg ?? 'No se pudo crear el evento.')
       setLoading(false)
       return
     }
+
+    await supabase.from('event_food_options').delete().eq('event_id', insertedEvent.id)
 
     if (params.isFoodActive && foodEnabled && params.normalizedFoodOptions.length > 0) {
       const optionRows = params.normalizedFoodOptions.map((option) => ({
@@ -1618,38 +2136,45 @@ function NewEventPageContent() {
     const parentNameForRsvp = organizerFirstName.trim() || 'Organizador'
     const birthdayChild = findBirthdayChildProfile(children, params.trimmedChildName)
 
-    const { error: birthdayRsvpError } = await supabase.from('rsvps').insert({
-      event_id: insertedEvent.id,
-      child_name: params.trimmedChildName,
-      guest_parent_name: parentNameForRsvp,
-      attendance_status: 'confirmed',
-      is_family: true,
-      allergy_notes: birthdayChild?.allergies || null,
-    })
+    const { count: existingRsvpHead } = await supabase
+      .from('rsvps')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', insertedEvent.id)
 
-    if (birthdayRsvpError) {
-      setError(birthdayRsvpError.message)
-      setLoading(false)
-      return
-    }
-
-    for (const siblingId of params.siblingIds) {
-      const sibling = children.find((child) => child.id === siblingId)
-      if (!sibling) continue
-
-      const { error: siblingRsvpError } = await supabase.from('rsvps').insert({
+    if ((existingRsvpHead ?? 0) === 0) {
+      const { error: birthdayRsvpError } = await supabase.from('rsvps').insert({
         event_id: insertedEvent.id,
-        child_name: `${sibling.name} ${sibling.last_name || ''}`.trim(),
+        child_name: params.trimmedChildName,
         guest_parent_name: parentNameForRsvp,
         attendance_status: 'confirmed',
         is_family: true,
-        allergy_notes: sibling.allergies || null,
+        allergy_notes: birthdayChild?.allergies || null,
       })
 
-      if (siblingRsvpError) {
-        setError(siblingRsvpError.message)
+      if (birthdayRsvpError) {
+        setError(birthdayRsvpError.message)
         setLoading(false)
         return
+      }
+
+      for (const siblingId of params.siblingIds) {
+        const sibling = children.find((child) => child.id === siblingId)
+        if (!sibling) continue
+
+        const { error: siblingRsvpError } = await supabase.from('rsvps').insert({
+          event_id: insertedEvent.id,
+          child_name: `${sibling.name} ${sibling.last_name || ''}`.trim(),
+          guest_parent_name: parentNameForRsvp,
+          attendance_status: 'confirmed',
+          is_family: true,
+          allergy_notes: sibling.allergies || null,
+        })
+
+        if (siblingRsvpError) {
+          setError(siblingRsvpError.message)
+          setLoading(false)
+          return
+        }
       }
     }
 
@@ -1739,7 +2264,101 @@ function NewEventPageContent() {
 
   return (
     <main className={pageMainClass}>
-      <AppNav backHref="/dashboard" backLabel="⬅️ Mi panel" />
+      <AppNav
+        backHref="/dashboard"
+        backLabel="⬅️ Mi panel"
+        onBackClick={(e) => {
+          if (!isFormDirty || draftHydrating) return
+          e.preventDefault()
+          setPendingLeaveAction('dashboard')
+          setShowLeaveDraftModal(true)
+        }}
+      />
+
+      {showLeaveDraftModal ? (
+        <div
+          className="fixed inset-0 z-[55] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setShowLeaveDraftModal(false)}
+          role="presentation"
+        >
+          <div
+            className="relative mx-4 max-h-[min(90vh,calc(100dvh-2rem))] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="leave-draft-title"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <h2 id="leave-draft-title" className="text-lg font-semibold text-gray-900">
+              ¿Quieres guardar este evento?
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-gray-600">
+              Todavía no has creado el evento. Puedes guardarlo como borrador y terminarlo más tarde.
+            </p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={draftSaveBusy}
+                onClick={() => {
+                  leaveAfterDraftSaveRef.current = true
+                  void saveDraftFromModal(true)
+                }}
+                className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:opacity-60 ${brand.buttonPrimary}`}
+              >
+                {draftSaveBusy ? 'Guardando…' : 'Guardar borrador'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLeaveDraftModal(false)
+                  formBaselineSerializedRef.current = null
+                  router.push('/dashboard')
+                }}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                Salir sin guardar
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowLeaveDraftModal(false)}
+                className="w-full rounded-lg border border-transparent px-4 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+              >
+                Seguir editando
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showDraftLimitModal ? (
+        <div
+          className="fixed inset-0 z-[55] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setShowDraftLimitModal(false)}
+          role="presentation"
+        >
+          <div
+            className="relative mx-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="draft-limit-title"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <h2 id="draft-limit-title" className="text-lg font-semibold text-gray-900">
+              Máximo de borradores alcanzado
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-gray-600">
+              Puedes tener hasta 2 eventos en borrador. Termina o elimina uno antes de guardar otro.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowDraftLimitModal(false)}
+              className={`mt-5 w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mx-auto w-full max-w-sm px-4 py-6 pb-8">
         <div className={`mb-4 rounded-xl border ${eventFormBrandUi.progressCardBorder} bg-white/80 p-3`}>
           <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">

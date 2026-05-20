@@ -8,6 +8,7 @@ import { DayPicker, type Matcher } from 'react-day-picker'
 import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { brand } from '@/lib/brand'
+import { EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
 import {
   eventFormBrandUi,
   eventFormPageMainClass,
@@ -272,6 +273,7 @@ function InlineTimePicker({ value, onChange, optional = false, minHour = 1 }: In
 type EventRow = {
   id: string
   user_id: string
+  status?: string | null
   child_name: string
   child_birth_date: string | null
   title: string
@@ -877,7 +879,7 @@ export default function EditEventPage() {
       const { data: eventRow, error: eventError } = await supabase
         .from('events')
         .select(
-          'id, user_id, child_name, child_birth_date, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, public_slug'
+          'id, user_id, status, child_name, child_birth_date, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, public_slug'
         )
         .eq('public_slug', slug)
         .maybeSingle<EventRow>()
@@ -889,6 +891,11 @@ export default function EditEventPage() {
 
       if (eventRow.user_id !== user.id) {
         router.replace('/dashboard')
+        return
+      }
+
+      if (eventRow.status === EVENT_STATUS_DRAFT) {
+        router.replace(`/dashboard/eventos/nuevo?draftId=${eventRow.id}`)
         return
       }
 

@@ -10,6 +10,7 @@ import {
   parseIsoDateParts,
 } from '@/lib/dates'
 import { brand } from '@/lib/brand'
+import { EVENT_STATUS_ACTIVE } from '@/lib/eventLifecycle'
 import { createClient } from '@/lib/supabase/server'
 import { getTheme, type ThemeKey } from '@/lib/themes'
 import EventRecap from './EventRecap'
@@ -104,6 +105,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     .from('events')
     .select('title, event_date, location_name, invitation_image_url')
     .eq('public_slug', slug)
+    .eq('status', EVENT_STATUS_ACTIVE)
     .maybeSingle<MetadataEventDetails>()
 
   if (!event) {
@@ -157,6 +159,7 @@ export default async function PublicEventPage({
       'id, child_name, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, enable_food_options, organizer_notes, rsvp_deadline_days, organizer_phone, birthday_number, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
     )
     .eq('public_slug', slug)
+    .eq('status', EVENT_STATUS_ACTIVE)
     .maybeSingle<EventDetails>()
 
   if (!event) {

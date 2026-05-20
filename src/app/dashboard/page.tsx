@@ -24,6 +24,7 @@ import { useRouter } from 'next/navigation'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
+import { EVENT_STATUS_DRAFT, isActiveEventStatus } from '@/lib/eventLifecycle'
 
 const themeCardBorder: Record<string, string> = {
   yellow: 'border-l-yellow-400',
@@ -61,6 +62,17 @@ type EventListItem = {
   google_maps_url: string | null
   invitation_theme: string | null
   invitation_image_url: string | null
+  /** Present when loaded from API; filtered client-side for active-only lists. */
+  status?: string | null
+}
+
+type DraftEventRow = {
+  id: string
+  public_slug: string
+  title: string
+  child_name: string
+  event_date: string
+  start_time: string | null
 }
 
 type RsvpCounts = {
@@ -779,6 +791,12 @@ export default function DashboardHomePage() {
   const router = useRouter()
   const supabase = createClient()
   const [events, setEvents] = useState<EventListItem[]>([])
+  const [draftEvents, setDraftEvents] = useState<DraftEventRow[]>([])
+  const [showCreateEventDraftModal, setShowCreateEventDraftModal] = useState(false)
+  const [createEventNextHref, setCreateEventNextHref] = useState('/dashboard/eventos/nuevo')
+  const [draftDeleteTarget, setDraftDeleteTarget] = useState<DraftEventRow | null>(null)
+  const [draftDeleteBusy, setDraftDeleteBusy] = useState(false)
+  const [draftDeletedToast, setDraftDeletedToast] = useState(false)
   const [rsvpCountsByEventId, setRsvpCountsByEventId] = useState<Record<string, RsvpCounts>>({})
   const [children, setChildren] = useState<DashboardChildRow[]>([])
   const [invitedItems, setInvitedItems] = useState<InvitedListItem[]>([])
@@ -1038,6 +1056,37 @@ export default function DashboardHomePage() {
 
   const hasAnyEvents = events.length > 0 || invitedItems.length > 0
 
+  const requestCreateEvent = useCallback(
+    (href: string) => {
+      if (draftEvents.length >= 1) {
+        setCreateEventNextHref(href)
+        setShowCreateEventDraftModal(true)
+      } else {
+        router.push(href)
+      }
+    },
+    [draftEvents.length, router]
+  )
+
+  const confirmDeleteDraft = useCallback(async () => {
+    if (!draftDeleteTarget || !userId) return
+    const id = draftDeleteTarget.id
+    setDraftDeleteBusy(true)
+    const { error } = await supabase
+      .from('events')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId)
+      .eq('status', EVENT_STATUS_DRAFT)
+    setDraftDeleteBusy(false)
+    setDraftDeleteTarget(null)
+    if (!error) {
+      setDraftEvents((prev) => prev.filter((d) => d.id !== id))
+      setDraftDeletedToast(true)
+      window.setTimeout(() => setDraftDeletedToast(false), 2500)
+    }
+  }, [draftDeleteTarget, userId, supabase])
+
   const organizedEventIds = useMemo(() => new Set(events.map((e) => e.id)), [events])
 
   const invitedAttendanceByEventId = useMemo(() => {
@@ -1219,7 +1268,7 @@ export default function DashboardHomePage() {
         supabase
           .from('events')
           .select(
-            'id, public_slug, title, child_name, event_date, start_time, location_name, location_address, google_maps_url, invitation_theme, invitation_image_url'
+            'id, public_slug, title, child_name, event_date, start_time, location_name, location_address, google_maps_url, invitation_theme, invitation_image_url, status'
           )
           .eq('user_id', user.id),
         supabase
@@ -1252,16 +1301,30 @@ export default function DashboardHomePage() {
       if (eventsRes.error) {
         setError(eventsRes.error.message)
         setEvents([])
+        setDraftEvents([])
         setRsvpCountsByEventId({})
         setInvitedItems([])
         setLoading(false)
         return
       }
 
-      const list = [...((eventsRes.data ?? []) as EventListItem[])].sort((a, b) =>
-        b.event_date.localeCompare(a.event_date)
-      )
+      const rawList = (eventsRes.data ?? []) as EventListItem[]
+      const activeList = rawList.filter((e) => isActiveEventStatus(e.status))
+      const draftList: DraftEventRow[] = rawList
+        .filter((e) => (e.status ?? '') === EVENT_STATUS_DRAFT)
+        .map((e) => ({
+          id: e.id,
+          public_slug: e.public_slug,
+          title: e.title,
+          child_name: e.child_name,
+          event_date: e.event_date,
+          start_time: e.start_time,
+        }))
+        .sort((a, b) => b.event_date.localeCompare(a.event_date))
+
+      const list = [...activeList].sort((a, b) => b.event_date.localeCompare(a.event_date))
       setEvents(list)
+      setDraftEvents(draftList)
 
       const organizedIds = new Set(list.map((e) => e.id))
 
@@ -2030,6 +2093,45 @@ export default function DashboardHomePage() {
           />
         ) : null}
 
+        {!loading && draftEvents.length > 0 ? (
+          <section className="card-soft mb-6 border border-dashed border-gray-200 bg-gray-50/90 p-4 sm:p-6">
+            <h2 className="mb-3 text-base font-semibold text-gray-700">Borradores</h2>
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {draftEvents.map((d) => (
+                <li
+                  key={d.id}
+                  className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-3 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="inline-block rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">
+                        Borrador
+                      </span>
+                      <p className="mt-1 truncate text-sm font-semibold text-gray-900">{d.title}</p>
+                      <p className="truncate text-xs text-gray-500">{d.child_name}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDraftDeleteTarget(d)}
+                      className="shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-rose-50 hover:text-rose-700"
+                      aria-label="Eliminar borrador"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/dashboard/eventos/nuevo?draftId=${d.id}`)}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-50"
+                  >
+                    Continuar editando
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <section className="card-soft p-4 sm:p-6">
           {error ? (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
@@ -2042,12 +2144,13 @@ export default function DashboardHomePage() {
                   <CalendarDays className="h-4 w-4 shrink-0 text-gray-600" strokeWidth={2} aria-hidden />
                   <span className="truncate">Eventos</span>
                 </h2>
-                <Link
-                  href="/dashboard/eventos/nuevo"
+                <button
+                  type="button"
+                  onClick={() => requestCreateEvent('/dashboard/eventos/nuevo')}
                   className={`${brand.dashboardPrimaryPill} w-max justify-self-end`}
                 >
                   Crear evento
-                </Link>
+                </button>
               </div>
 
               {loading ? (
@@ -2058,7 +2161,7 @@ export default function DashboardHomePage() {
                   </div>
                   <div className="h-[4.5rem] animate-pulse rounded-xl border border-gray-100 bg-gray-100" />
                 </div>
-              ) : !hasAnyEvents ? (
+              ) : !hasAnyEvents && draftEvents.length === 0 ? (
                 <p className="py-6 text-center text-sm text-gray-500">🎉 Todos tus eventos aparecerán aquí.</p>
               ) : (
                 <>
@@ -2284,6 +2387,145 @@ export default function DashboardHomePage() {
         >
           ✓ Lugar añadido
         </p>
+      ) : null}
+
+      {draftDeletedToast ? (
+        <p
+          className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[60] -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
+          role="status"
+        >
+          Borrador eliminado
+        </p>
+      ) : null}
+
+      {showCreateEventDraftModal ? (
+        <div
+          className="fixed inset-0 z-[58] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setShowCreateEventDraftModal(false)}
+          role="presentation"
+        >
+          <div
+            className="relative mx-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-event-draft-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowCreateEventDraftModal(false)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </button>
+            <h2 id="create-event-draft-modal-title" className="pr-8 text-lg font-semibold text-gray-900">
+              {draftEvents.length > 1 ? 'Tienes borradores pendientes' : 'Tienes un evento en borrador'}
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-gray-600">
+              Puedes seguir donde lo dejaste o crear un evento nuevo.
+            </p>
+            {draftEvents.length > 1 ? (
+              <div className="mt-4 flex flex-col gap-2">
+                {draftEvents.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => {
+                      setShowCreateEventDraftModal(false)
+                      router.push(`/dashboard/eventos/nuevo?draftId=${d.id}`)
+                    }}
+                    className={brand.modalActionPrimary}
+                  >
+                    <span className="text-sm font-medium text-gray-700">
+                      Continuar: <span className="line-clamp-1">{d.title}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : draftEvents[0] ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateEventDraftModal(false)
+                  router.push(`/dashboard/eventos/nuevo?draftId=${draftEvents[0].id}`)
+                }}
+                className={`${brand.modalActionPrimary} mt-4 w-full`}
+              >
+                <span className="text-sm font-medium text-gray-700">Continuar borrador</span>
+              </button>
+            ) : null}
+            <div className="mt-3 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateEventDraftModal(false)
+                  router.push(createEventNextHref)
+                }}
+                className="flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-800 transition hover:bg-gray-50"
+              >
+                Crear evento nuevo
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCreateEventDraftModal(false)}
+                className="w-full rounded-lg py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {draftDeleteTarget ? (
+        <div
+          className="fixed inset-0 z-[58] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => !draftDeleteBusy && setDraftDeleteTarget(null)}
+          role="presentation"
+        >
+          <div
+            className="relative mx-4 w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-draft-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              disabled={draftDeleteBusy}
+              onClick={() => setDraftDeleteTarget(null)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </button>
+            <h2 id="delete-draft-modal-title" className="pr-8 text-lg font-semibold text-gray-900">
+              ¿Eliminar borrador?
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-gray-600">
+              Este borrador se eliminará de tu perfil.
+            </p>
+            <div className="mt-5 flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={draftDeleteBusy}
+                onClick={() => setDraftDeleteTarget(null)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:w-auto sm:min-w-[7.5rem]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={draftDeleteBusy}
+                onClick={() => void confirmDeleteDraft()}
+                className="w-full rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-rose-700 disabled:opacity-60 sm:w-auto sm:min-w-[7.5rem]"
+              >
+                {draftDeleteBusy ? 'Eliminando…' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {profileSuccessToast ? (
@@ -3002,7 +3244,7 @@ export default function DashboardHomePage() {
                     ? `Cumple ${age + 1} de ${displayName}`
                     : `Cumple de ${displayName}`
                   setChildActionTarget(null)
-                  router.push(
+                  requestCreateEvent(
                     `/dashboard/eventos/nuevo?childId=${childActionTarget.id}&mode=birthday&title=${encodeURIComponent(title)}`
                   )
                 }}
@@ -3184,7 +3426,7 @@ export default function DashboardHomePage() {
               <button
                 type="button"
                 onClick={() => {
-                  router.push(
+                  requestCreateEvent(
                     `/dashboard/eventos/nuevo?locationName=${encodeURIComponent(locationActionTarget.location_name)}&locationAddress=${encodeURIComponent(locationActionTarget.location_address || '')}${locationActionTarget.google_maps_url ? `&googleMapsUrl=${encodeURIComponent(locationActionTarget.google_maps_url)}` : ''}`
                   )
                   setLocationActionTarget(null)

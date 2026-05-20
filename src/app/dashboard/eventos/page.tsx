@@ -6,9 +6,12 @@
 import AppNav from '@/components/AppNav'
 import { brand } from '@/lib/brand'
 import { formatSpanishDateMedium } from '@/lib/dates'
+import { X } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { EVENT_STATUS_DRAFT, isActiveEventStatus } from '@/lib/eventLifecycle'
 
 const themeCardBorder: Record<string, string> = {
   yellow: 'border-l-yellow-400',
@@ -35,6 +38,16 @@ type EventListItem = {
   start_time: string | null
   location_name: string | null
   invitation_theme: string | null
+  status?: string | null
+}
+
+type DraftEventRow = {
+  id: string
+  public_slug: string
+  title: string
+  child_name: string
+  event_date: string
+  start_time: string | null
 }
 
 type RsvpCounts = {
@@ -110,8 +123,16 @@ function EventListCard({
 }
 
 export default function EventosListPage() {
+  const router = useRouter()
   const supabase = createClient()
   const [events, setEvents] = useState<EventListItem[]>([])
+  const [draftEvents, setDraftEvents] = useState<DraftEventRow[]>([])
+  const [userId, setUserId] = useState('')
+  const [showCreateEventDraftModal, setShowCreateEventDraftModal] = useState(false)
+  const [createEventNextHref, setCreateEventNextHref] = useState('/dashboard/eventos/nuevo')
+  const [draftDeleteTarget, setDraftDeleteTarget] = useState<DraftEventRow | null>(null)
+  const [draftDeleteBusy, setDraftDeleteBusy] = useState(false)
+  const [draftDeletedToast, setDraftDeletedToast] = useState(false)
   const [rsvpCountsByEventId, setRsvpCountsByEventId] = useState<Record<string, RsvpCounts>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -123,6 +144,37 @@ export default function EventosListPage() {
   const [invitedDetailsPastOpen, setInvitedDetailsPastOpen] = useState(false)
 
   const todayStr = useMemo(() => todayLocalIso(), [])
+
+  const requestCreateEvent = useCallback(
+    (href: string) => {
+      if (draftEvents.length >= 1) {
+        setCreateEventNextHref(href)
+        setShowCreateEventDraftModal(true)
+      } else {
+        router.push(href)
+      }
+    },
+    [draftEvents.length, router]
+  )
+
+  const confirmDeleteDraft = useCallback(async () => {
+    if (!draftDeleteTarget || !userId) return
+    const id = draftDeleteTarget.id
+    setDraftDeleteBusy(true)
+    const { error: delError } = await supabase
+      .from('events')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId)
+      .eq('status', EVENT_STATUS_DRAFT)
+    setDraftDeleteBusy(false)
+    setDraftDeleteTarget(null)
+    if (!delError) {
+      setDraftEvents((prev) => prev.filter((d) => d.id !== id))
+      setDraftDeletedToast(true)
+      window.setTimeout(() => setDraftDeletedToast(false), 2500)
+    }
+  }, [draftDeleteTarget, userId, supabase])
 
   const { invitedUpcoming, invitedPast, invitedTotal } = useMemo(() => {
     const invitedEvents: EventListItem[] = []
@@ -177,16 +229,22 @@ export default function EventosListPage() {
         if (isMounted) {
           setError(userError?.message ?? 'No se pudo obtener tu sesión.')
           setEvents([])
+          setDraftEvents([])
+          setUserId('')
           setRsvpCountsByEventId({})
           setLoading(false)
         }
         return
       }
 
+      if (isMounted) {
+        setUserId(user.id)
+      }
+
       const { data, error: eventsError } = await supabase
         .from('events')
         .select(
-          'id, public_slug, title, child_name, event_date, start_time, location_name, invitation_theme'
+          'id, public_slug, title, child_name, event_date, start_time, location_name, invitation_theme, status'
         )
         .eq('user_id', user.id)
 
@@ -195,13 +253,30 @@ export default function EventosListPage() {
       if (eventsError) {
         setError(eventsError.message)
         setEvents([])
+        setDraftEvents([])
         setRsvpCountsByEventId({})
         setLoading(false)
         return
       }
 
-      const list = (data ?? []) as EventListItem[]
-      setEvents(list)
+      const rawList = (data ?? []) as EventListItem[]
+      const activeList = rawList.filter((e) => isActiveEventStatus(e.status))
+      const draftList: DraftEventRow[] = rawList
+        .filter((e) => (e.status ?? '') === EVENT_STATUS_DRAFT)
+        .map((e) => ({
+          id: e.id,
+          public_slug: e.public_slug,
+          title: e.title,
+          child_name: e.child_name,
+          event_date: e.event_date,
+          start_time: e.start_time,
+        }))
+        .sort((a, b) => b.event_date.localeCompare(a.event_date))
+
+      setEvents(activeList)
+      setDraftEvents(draftList)
+
+      const list = activeList
 
       const emptyRsvpCounts = (): RsvpCounts => ({ confirmed: 0, declined: 0, maybe: 0 })
       const byEvent: Record<string, RsvpCounts> = {}
@@ -297,13 +372,53 @@ export default function EventosListPage() {
             <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Eventos</h1>
             <p className="mt-1 text-sm text-gray-600 sm:text-base">Todas tus fiestas organizadas</p>
           </div>
-          <Link
-            href="/dashboard/eventos/nuevo"
+          <button
+            type="button"
+            onClick={() => requestCreateEvent('/dashboard/eventos/nuevo')}
             className={`inline-flex shrink-0 items-center justify-center rounded-lg ${brand.buttonPrimary} px-4 py-2.5 text-center text-sm font-semibold shadow-sm transition sm:self-start`}
           >
             + Crear nueva fiesta
-          </Link>
+          </button>
         </header>
+
+        {!loading && !error && draftEvents.length > 0 ? (
+          <section className="card-soft mb-6 border border-dashed border-gray-200 bg-gray-50/90 p-4 sm:p-6">
+            <h2 className="mb-3 text-base font-semibold text-gray-700">Borradores</h2>
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {draftEvents.map((d) => (
+                <li
+                  key={d.id}
+                  className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-3 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="inline-block rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">
+                        Borrador
+                      </span>
+                      <p className="mt-1 truncate text-sm font-semibold text-gray-900">{d.title}</p>
+                      <p className="truncate text-xs text-gray-500">{d.child_name}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDraftDeleteTarget(d)}
+                      className="shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-rose-50 hover:text-rose-700"
+                      aria-label="Eliminar borrador"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/dashboard/eventos/nuevo?draftId=${d.id}`)}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-50"
+                  >
+                    Continuar editando
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         <section className="card-soft p-4 sm:p-6">
           {loading ? <p className="text-sm text-gray-500">Cargando eventos...</p> : null}
@@ -315,18 +430,25 @@ export default function EventosListPage() {
             <>
               <h2 className="mb-4 px-4 text-lg font-semibold text-gray-800 sm:px-6">Mis eventos</h2>
 
-              {total === 0 ? (
+              {total === 0 && draftEvents.length > 0 ? (
+                <p className="mb-4 px-4 text-sm text-gray-600 sm:px-6">
+                  Tus borradores están arriba. Aún no tienes fiestas publicadas.
+                </p>
+              ) : null}
+
+              {total === 0 && draftEvents.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-10 text-center">
               <p className="text-3xl" aria-hidden>
                 🎉
               </p>
               <p className="mt-3 text-sm font-medium text-gray-700">Aún no has creado ninguna fiesta.</p>
-              <Link
-                href="/dashboard/eventos/nuevo"
+              <button
+                type="button"
+                onClick={() => requestCreateEvent('/dashboard/eventos/nuevo')}
                 className={`mt-4 inline-block text-sm font-semibold underline ${brand.accentText} ${brand.textBrandHover}`}
               >
                 Crea tu primera fiesta →
-              </Link>
+              </button>
             </div>
               ) : null}
 
@@ -543,6 +665,146 @@ export default function EventosListPage() {
           </section>
         ) : null}
       </div>
+
+      {draftDeletedToast ? (
+        <p
+          className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[60] -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
+          role="status"
+        >
+          Borrador eliminado
+        </p>
+      ) : null}
+
+      {showCreateEventDraftModal ? (
+        <div
+          className="fixed inset-0 z-[58] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setShowCreateEventDraftModal(false)}
+          role="presentation"
+        >
+          <div
+            className="relative mx-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="eventos-create-draft-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowCreateEventDraftModal(false)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </button>
+            <h2 id="eventos-create-draft-modal-title" className="pr-8 text-lg font-semibold text-gray-900">
+              {draftEvents.length > 1 ? 'Tienes borradores pendientes' : 'Tienes un evento en borrador'}
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-gray-600">
+              Puedes seguir donde lo dejaste o crear un evento nuevo.
+            </p>
+            {draftEvents.length > 1 ? (
+              <div className="mt-4 flex flex-col gap-2">
+                {draftEvents.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => {
+                      setShowCreateEventDraftModal(false)
+                      router.push(`/dashboard/eventos/nuevo?draftId=${d.id}`)
+                    }}
+                    className={brand.modalActionPrimary}
+                  >
+                    <span className="text-sm font-medium text-gray-700">
+                      Continuar: <span className="line-clamp-1">{d.title}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : draftEvents[0] ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateEventDraftModal(false)
+                  router.push(`/dashboard/eventos/nuevo?draftId=${draftEvents[0].id}`)
+                }}
+                className={`${brand.modalActionPrimary} mt-4 w-full`}
+              >
+                <span className="text-sm font-medium text-gray-700">Continuar borrador</span>
+              </button>
+            ) : null}
+            <div className="mt-3 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateEventDraftModal(false)
+                  router.push(createEventNextHref)
+                }}
+                className="flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-800 transition hover:bg-gray-50"
+              >
+                Crear evento nuevo
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCreateEventDraftModal(false)}
+                className="w-full rounded-lg py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {draftDeleteTarget ? (
+        <div
+          className="fixed inset-0 z-[58] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => !draftDeleteBusy && setDraftDeleteTarget(null)}
+          role="presentation"
+        >
+          <div
+            className="relative mx-4 w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="eventos-delete-draft-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              disabled={draftDeleteBusy}
+              onClick={() => setDraftDeleteTarget(null)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </button>
+            <h2 id="eventos-delete-draft-modal-title" className="pr-8 text-lg font-semibold text-gray-900">
+              ¿Eliminar borrador?
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-gray-600">
+              Este borrador se eliminará de tu perfil.
+            </p>
+            <div className="mt-5 flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={draftDeleteBusy}
+                onClick={() => setDraftDeleteTarget(null)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:w-auto sm:min-w-[7.5rem]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={draftDeleteBusy}
+                onClick={() => void confirmDeleteDraft()}
+                className="w-full rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-rose-700 disabled:opacity-60 sm:w-auto sm:min-w-[7.5rem]"
+              >
+                {draftDeleteBusy ? 'Eliminando…' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     </main>
   )
 }

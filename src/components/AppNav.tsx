@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import type { MouseEvent } from 'react'
 import AccountMenu from '@/components/AccountMenu'
 import { brand } from '@/lib/brand'
 
@@ -9,6 +10,8 @@ export type AppNavProps = {
   backLabel?: string
   /** Public / dashboard home: MiParty on the left linking home (no back link) */
   brandHref?: string
+  /** If set, called before navigating to `backHref`. Call `preventDefault()` to cancel navigation. */
+  onBackClick?: (event: MouseEvent<HTMLAnchorElement>) => void
 }
 
 const DEFAULT_BACK_LABEL = '⬅️ Atrás'
@@ -17,6 +20,7 @@ export default function AppNav({
   backHref,
   backLabel = DEFAULT_BACK_LABEL,
   brandHref,
+  onBackClick,
 }: AppNavProps) {
   return (
     <header className={brand.navSticky}>
@@ -27,7 +31,11 @@ export default function AppNav({
               MiParty
             </Link>
           ) : backHref ? (
-            <Link href={backHref} className="text-sm text-gray-600 transition hover:text-gray-900">
+            <Link
+              href={backHref}
+              onClick={onBackClick}
+              className="text-sm text-gray-600 transition hover:text-gray-900"
+            >
               {backLabel}
             </Link>
           ) : null}

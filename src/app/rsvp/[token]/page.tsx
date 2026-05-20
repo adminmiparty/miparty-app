@@ -9,6 +9,7 @@ import { useParams } from 'next/navigation'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { brand } from '@/lib/brand'
+import { isActiveEventStatus } from '@/lib/eventLifecycle'
 import { getTheme } from '@/lib/themes'
 
 type AttendanceStatus = 'confirmed' | 'declined' | 'maybe'
@@ -36,6 +37,7 @@ type LoadedEventForEdit = {
   invitation_image_position: string | null
   invitation_image_zoom: number | null
   organizer_phone: string | null
+  status?: string | null
 }
 
 type NormalizedRsvpPayload = {
@@ -659,7 +661,7 @@ export default function RsvpEditPage() {
       const { data: eventRow } = await supabase
         .from('events')
         .select(
-          'id, title, child_name, birthday_number, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_phone, invitation_theme, enable_food_options, organizer_notes, rsvp_deadline_days, public_slug, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
+          'id, title, child_name, birthday_number, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_phone, invitation_theme, enable_food_options, organizer_notes, rsvp_deadline_days, public_slug, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, status'
         )
         .eq('id', rsvpData.event_id)
         .maybeSingle()
@@ -667,6 +669,11 @@ export default function RsvpEditPage() {
       if (cancelled) return
 
       if (!eventRow?.id) {
+        setLoadState('notfound')
+        return
+      }
+
+      if (!isActiveEventStatus((eventRow as LoadedEventForEdit).status)) {
         setLoadState('notfound')
         return
       }

@@ -11,6 +11,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { subDays } from 'date-fns'
 import { brand } from '@/lib/brand'
+import { EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
 import { formatSpanishDateMedium, formatSpanishFullDate, parseIsoDateParts } from '@/lib/dates'
 import { createClient } from '@/lib/supabase/client'
 import ShareButton from '@/components/ShareButton'
@@ -27,6 +28,7 @@ type EventDetails = {
   id: string
   user_id: string
   public_slug: string
+  status?: string | null
   title: string
   child_name: string
   event_date: string
@@ -253,7 +255,7 @@ export default function EventControlCenterPage() {
       const { data: eventRow, error: eventError } = await supabase
         .from('events')
         .select(
-          'id, user_id, public_slug, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, enable_food_options, organizer_notes, rsvp_deadline_days, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
+          'id, user_id, public_slug, status, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, enable_food_options, organizer_notes, rsvp_deadline_days, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
         )
         .eq('public_slug', slug)
         .eq('user_id', user.id)
@@ -268,6 +270,11 @@ export default function EventControlCenterPage() {
           setLoadError(true)
           setLoading(false)
         }
+        return
+      }
+
+      if (eventRow.status === EVENT_STATUS_DRAFT) {
+        router.replace(`/dashboard/eventos/nuevo?draftId=${eventRow.id}`)
         return
       }
 

@@ -14,6 +14,7 @@ import {
   sharePageThemeFromUrl,
 } from '@/lib/eventFormTheme'
 import { createClient } from '@/lib/supabase/client'
+import { isActiveEventStatus } from '@/lib/eventLifecycle'
 import { themes, type ThemeKey } from '@/lib/themes'
 
 type EventShareRow = {
@@ -40,6 +41,7 @@ type EventShareRow = {
   enable_food_options: boolean | null
   organizer_phone: string | null
   invitation_theme: string | null
+  status?: string | null
 }
 
 function parseInvitationPosition(position: string | null) {
@@ -266,7 +268,7 @@ export default function EventSharePage() {
         supabase
           .from('events')
           .select(
-            'id, user_id, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_notes, organizer_phone, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, public_slug, birthday_number, rsvp_deadline_days, enable_food_options, invitation_theme'
+            'id, user_id, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_notes, organizer_phone, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, public_slug, birthday_number, rsvp_deadline_days, enable_food_options, invitation_theme, status'
           )
           .eq('public_slug', slug)
           .maybeSingle<EventShareRow>(),
@@ -279,6 +281,11 @@ export default function EventSharePage() {
 
       if (eventError || !row || row.user_id !== user.id) {
         router.replace('/dashboard')
+        return
+      }
+
+      if (!isActiveEventStatus(row.status)) {
+        router.replace(`/dashboard/eventos/nuevo?draftId=${row.id}`)
         return
       }
 
