@@ -40,7 +40,7 @@ export default function SignupPage() {
     setError(null)
     setLoadingSignup(true)
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -54,6 +54,17 @@ export default function SignupPage() {
       setError(signUpError.message)
       setLoadingSignup(false)
       return
+    }
+
+    const uid = data.user?.id ?? data.session?.user?.id
+    if (uid) {
+      const nameParts = fullName.trim().split(/\s+/).filter(Boolean)
+      await supabase.from('users').upsert({
+        id: uid,
+        first_name: nameParts[0] || null,
+        last_name: nameParts.slice(1).join(' ') || null,
+        signup_source: 'direct_registro',
+      })
     }
 
     setSignupSuccess(true)

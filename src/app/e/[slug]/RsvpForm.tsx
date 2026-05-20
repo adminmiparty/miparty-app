@@ -126,7 +126,8 @@ async function linkRsvpAndProfile(
   sb: ReturnType<typeof createClient>,
   userId: string,
   rsvpId: string,
-  profile: { parentName: string; parentPhone: string; childFirst: string; childLast: string }
+  profile: { parentName: string; parentPhone: string; childFirst: string; childLast: string },
+  signupSource: string
 ) {
   await sb.from('rsvps').update({ user_id: userId }).eq('id', rsvpId)
   const { error: childErr } = await sb.from('children').insert({
@@ -150,6 +151,7 @@ async function linkRsvpAndProfile(
     first_name: firstName,
     last_name: lastName || null,
     phone: profile.parentPhone || null,
+    signup_source: signupSource,
   })
 }
 
@@ -563,13 +565,28 @@ function RsvpFormInner({
         setSubmittedRsvpId(parsed.rsvpId)
         submittedRsvpIdRef.current = parsed.rsvpId
         console.log('About to call linkRsvpAndProfile, rsvpId:', parsed.rsvpId)
-        await linkRsvpAndProfile(sb, session.user.id, parsed.rsvpId, {
-          parentName: parsed.parentName,
-          parentPhone: parsed.parentPhone,
-          childFirst: parsed.childFirst,
-          childLast: parsed.childLast,
-        })
+        const oauthSignupSource = sessionStorage.getItem('miparty_signup_source') ?? 'rsvp_modal'
+        await linkRsvpAndProfile(
+          sb,
+          session.user.id,
+          parsed.rsvpId,
+          {
+            parentName: parsed.parentName,
+            parentPhone: parsed.parentPhone,
+            childFirst: parsed.childFirst,
+            childLast: parsed.childLast,
+          },
+          oauthSignupSource
+        )
         console.log('linkRsvpAndProfile completed')
+      } else {
+        const oauthSignupSource = sessionStorage.getItem('miparty_signup_source')
+        if (oauthSignupSource) {
+          await sb.from('users').upsert({
+            id: session.user.id,
+            signup_source: oauthSignupSource,
+          })
+        }
       }
 
       const storedParentName = parsed?.parentName || ''
@@ -598,6 +615,7 @@ function RsvpFormInner({
       setJustSignedUp(true)
       setSignupToggle(false)
       sessionStorage.removeItem('miparty_oauth_pending')
+      sessionStorage.removeItem('miparty_signup_source')
       sessionStorage.removeItem(POST_RSVP_STORAGE_KEY)
     })
 
@@ -707,6 +725,7 @@ function RsvpFormInner({
     persistCurrentFormToSession()
     const sb = createClient()
     sessionStorage.setItem('miparty_oauth_pending', '1')
+    sessionStorage.setItem('miparty_signup_source', signupToggle ? 'rsvp_toggle' : 'rsvp_modal')
     oauthLinkDoneRef.current = false
     console.log('Starting Google OAuth, saving to sessionStorage')
     console.log('Stored data:', sessionStorage.getItem('miparty_post_rsvp_v1'))
@@ -771,6 +790,13 @@ function RsvpFormInner({
     }
     const uid = data.user?.id ?? data.session?.user?.id
     if (uid) {
+      const { firstName, lastName } = resolveProfileNameParts(parentName.trim(), null)
+      await sb.from('users').upsert({
+        id: uid,
+        first_name: firstName || null,
+        last_name: lastName || null,
+        signup_source: 'rsvp_toggle',
+      })
       setIsLoggedIn(true)
       setLoggedInUserId(uid)
     } else {
@@ -817,12 +843,18 @@ function RsvpFormInner({
       setSignupFlowError('Revisa tu correo para confirmar la cuenta, si es necesario.')
       return
     }
-    await linkRsvpAndProfile(sb, uid, submittedRsvpId, {
-      parentName: trimmedParentName,
-      parentPhone: trimmedParentPhone,
-      childFirst: trimmedChildName,
-      childLast: trimmedChildLastName,
-    })
+    await linkRsvpAndProfile(
+      sb,
+      uid,
+      submittedRsvpId,
+      {
+        parentName: trimmedParentName,
+        parentPhone: trimmedParentPhone,
+        childFirst: trimmedChildName,
+        childLast: trimmedChildLastName,
+      },
+      'rsvp_modal'
+    )
     setIsLoggedIn(true)
     setLoggedInUserId(uid)
     setJustSignedUp(true)

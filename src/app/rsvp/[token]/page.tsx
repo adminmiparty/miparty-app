@@ -455,6 +455,7 @@ export default function RsvpEditPage() {
       last_name: welcomeLastName.trim() || null,
       phone: welcomeFullPhone,
       birth_date: welcomeBirthDate,
+      signup_source: 'rsvp_edit_page',
     })
 
     const childBirthDate =
@@ -536,6 +537,17 @@ export default function RsvpEditPage() {
       if (token) {
         await sb.from('rsvps').update({ user_id: session.user.id }).eq('edit_token', token)
       }
+      const googleFullName =
+        typeof session.user.user_metadata?.full_name === 'string'
+          ? session.user.user_metadata.full_name
+          : null
+      const nameParts = googleFullName?.split(/\s+/).filter(Boolean) ?? []
+      await sb.from('users').upsert({
+        id: session.user.id,
+        first_name: nameParts[0] || null,
+        last_name: nameParts.slice(1).join(' ') || null,
+        signup_source: 'rsvp_edit_page',
+      })
       setIsLoggedIn(true)
       void prefillAndOpenWelcomeModal()
     })
@@ -852,6 +864,14 @@ export default function RsvpEditPage() {
     }
     const uid = data.user?.id ?? data.session?.user?.id
     if (uid) {
+      const trimmedParentName = parentName.trim()
+      const nameParts = trimmedParentName.split(/\s+/).filter(Boolean)
+      await supabase.from('users').upsert({
+        id: uid,
+        first_name: nameParts[0] || null,
+        last_name: nameParts.slice(1).join(' ') || null,
+        signup_source: 'rsvp_edit_page',
+      })
       await supabase.from('rsvps').update({ user_id: uid }).eq('edit_token', token)
       setIsLoggedIn(true)
       await prefillAndOpenWelcomeModal()
