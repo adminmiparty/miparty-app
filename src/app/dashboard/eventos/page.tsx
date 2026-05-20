@@ -702,51 +702,50 @@ export default function EventosListPage() {
             <p className="mt-3 text-sm leading-relaxed text-gray-600">
               Puedes seguir donde lo dejaste o crear un evento nuevo.
             </p>
-            {draftEvents.length > 1 ? (
-              <div className="mt-4 flex flex-col gap-2">
-                {draftEvents.map((d) => (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => {
-                      setShowCreateEventDraftModal(false)
-                      router.push(`/dashboard/eventos/nuevo?draftId=${d.id}`)
-                    }}
-                    className={brand.modalActionPrimary}
-                  >
-                    <span className="text-sm font-medium text-gray-700">
-                      Continuar: <span className="line-clamp-1">{d.title}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : draftEvents[0] ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCreateEventDraftModal(false)
-                  router.push(`/dashboard/eventos/nuevo?draftId=${draftEvents[0].id}`)
-                }}
-                className={`${brand.modalActionPrimary} mt-4 w-full`}
-              >
-                <span className="text-sm font-medium text-gray-700">Continuar borrador</span>
-              </button>
-            ) : null}
-            <div className="mt-3 flex flex-col gap-2">
+            <div className="mt-5 flex w-full flex-col gap-2">
+              {draftEvents.length > 1
+                ? draftEvents.map((d) => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => {
+                        setShowCreateEventDraftModal(false)
+                        router.push(`/dashboard/eventos/nuevo?draftId=${d.id}`)
+                      }}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left transition hover:bg-[var(--brand-primary-light)]"
+                    >
+                      <span className="text-xs font-medium text-gray-500">Continuar borrador</span>
+                      <span className="mt-0.5 block line-clamp-2 text-sm font-semibold text-gray-900">
+                        {d.title}
+                      </span>
+                    </button>
+                  ))
+                : draftEvents[0] ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCreateEventDraftModal(false)
+                        router.push(`/dashboard/eventos/nuevo?draftId=${draftEvents[0].id}`)
+                      }}
+                      className={`w-full rounded-lg px-4 py-2.5 text-center text-sm font-semibold ${brand.buttonPrimary}`}
+                    >
+                      Continuar borrador
+                    </button>
+                  ) : null}
               <button
                 type="button"
                 onClick={() => {
                   setShowCreateEventDraftModal(false)
                   router.push(createEventNextHref)
                 }}
-                className="flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-800 transition hover:bg-gray-50"
+                className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-center text-sm font-medium text-gray-800 transition hover:bg-gray-50"
               >
                 Crear evento nuevo
               </button>
               <button
                 type="button"
                 onClick={() => setShowCreateEventDraftModal(false)}
-                className="w-full rounded-lg py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+                className="w-full rounded-lg px-4 py-2.5 text-center text-sm font-medium text-gray-600 transition hover:bg-gray-50"
               >
                 Cancelar
               </button>
