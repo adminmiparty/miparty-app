@@ -53,17 +53,24 @@ export default function BugReportWidget() {
 
     try {
       if (screenshot) {
-        const path = `screenshots/${Date.now()}-${screenshot.name}`
-        const { error: uploadError } = await supabase.storage
+        const cleanFileName = screenshot.name
+          .replace(/\s+/g, '-')
+          .replace(/[^a-zA-Z0-9.\-_]/g, '')
+        const { data: uploadData, error: uploadError } = await supabase.storage
           .from('bug-reports')
-          .upload(path, screenshot, {
-            contentType: screenshot.type,
-          })
-        if (uploadError) throw uploadError
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from('bug-reports').getPublicUrl(path)
-        screenshotUrl = publicUrl
+          .upload(`screenshots/${Date.now()}-${cleanFileName}`, screenshot)
+
+        console.log('Upload error:', uploadError)
+        console.log('Upload data:', uploadData)
+
+        if (uploadError) {
+          screenshotUrl = null
+        } else if (uploadData?.path) {
+          const {
+            data: { publicUrl },
+          } = supabase.storage.from('bug-reports').getPublicUrl(uploadData.path)
+          screenshotUrl = publicUrl
+        }
       }
 
       const pageUrl = typeof window !== 'undefined' ? window.location.href : ''
