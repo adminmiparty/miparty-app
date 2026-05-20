@@ -14,6 +14,8 @@ import {
   loadSavedPlaces,
   mergeEventAndSavedLocations,
   persistSavedPlaces,
+  tryDeleteSavedPlaceRemote,
+  type DashboardLocationCard,
   type SavedPlace,
 } from '@/lib/savedPlaces'
 import { CalendarDays, Map as MapIcon, Pencil, X } from 'lucide-react'
@@ -818,10 +820,10 @@ export default function DashboardHomePage() {
   const [childAddSuccessToast, setChildAddSuccessToast] = useState(false)
   const [viewingChild, setViewingChild] = useState<DashboardChildRow | null>(null)
   const [childActionTarget, setChildActionTarget] = useState<DashboardChildRow | null>(null)
-  const [locationActionTarget, setLocationActionTarget] = useState<{
-    location_name: string
-    location_address: string | null
-    google_maps_url: string | null
+  const [locationActionTarget, setLocationActionTarget] = useState<DashboardLocationCard | null>(null)
+  const [pendingDeleteSavedPlace, setPendingDeleteSavedPlace] = useState<{
+    savedPlaceId: string
+    locationName: string
   } | null>(null)
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([])
   const [showAddPlaceModal, setShowAddPlaceModal] = useState(false)
@@ -833,6 +835,7 @@ export default function DashboardHomePage() {
   const [placeModalError, setPlaceModalError] = useState<string | null>(null)
   const [placeSaving, setPlaceSaving] = useState(false)
   const [placeAddSuccessToast, setPlaceAddSuccessToast] = useState(false)
+  const [placeDeleteSuccessToast, setPlaceDeleteSuccessToast] = useState(false)
   const [viewChildFirstName, setViewChildFirstName] = useState('')
   const [viewChildLastName, setViewChildLastName] = useState('')
   const [viewChildShortName, setViewChildShortName] = useState('')
@@ -1128,6 +1131,23 @@ export default function DashboardHomePage() {
     setShowAddPlaceModal(false)
     setPlaceAddSuccessToast(true)
     window.setTimeout(() => setPlaceAddSuccessToast(false), 2500)
+  }
+
+  const handleConfirmDeleteSavedPlace = async () => {
+    if (!pendingDeleteSavedPlace || !userId) {
+      return
+    }
+    const { savedPlaceId } = pendingDeleteSavedPlace
+    setPendingDeleteSavedPlace(null)
+    const supabase = createClient()
+    await tryDeleteSavedPlaceRemote(supabase, userId, savedPlaceId)
+    setSavedPlaces((prev) => {
+      const next = prev.filter((p) => p.id !== savedPlaceId)
+      persistSavedPlaces(userId, next)
+      return next
+    })
+    setPlaceDeleteSuccessToast(true)
+    window.setTimeout(() => setPlaceDeleteSuccessToast(false), 2500)
   }
 
   useEffect(() => {
@@ -2182,7 +2202,7 @@ export default function DashboardHomePage() {
               <div className="-mx-1 flex gap-3 overflow-x-auto pb-1 scroll-px-1 snap-x snap-mandatory sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 md:grid-cols-3">
                 {dashboardLocations.map((location) => (
                   <div
-                    key={location.location_name}
+                    key={location.saved_place_id ?? `event:${location.location_name}`}
                     role="button"
                     tabIndex={0}
                     onClick={() => setLocationActionTarget(location)}
@@ -2245,6 +2265,15 @@ export default function DashboardHomePage() {
           role="status"
         >
           ✓ Perfil actualizado
+        </p>
+      ) : null}
+
+      {placeDeleteSuccessToast ? (
+        <p
+          className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
+          role="status"
+        >
+          ✓ Lugar eliminado
         </p>
       ) : null}
 
@@ -3188,6 +3217,78 @@ export default function DashboardHomePage() {
                   <span className="text-sm font-medium text-gray-700">Ver en Google Maps</span>
                 </button>
               ) : null}
+              {locationActionTarget.saved_place_id ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = locationActionTarget.saved_place_id
+                    if (!id) return
+                    setPendingDeleteSavedPlace({
+                      savedPlaceId: id,
+                      locationName: locationActionTarget.location_name,
+                    })
+                    setLocationActionTarget(null)
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl border border-rose-100/90 bg-rose-50 px-4 py-3 text-left transition hover:bg-rose-100/80"
+                >
+                  <span
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100/90 text-lg"
+                    aria-hidden
+                  >
+                    🗑️
+                  </span>
+                  <span className="text-sm font-medium text-rose-800/90">
+                    Eliminar lugar de mi perfil
+                  </span>
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingDeleteSavedPlace ? (
+        <div
+          className="fixed inset-0 z-[55] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setPendingDeleteSavedPlace(null)}
+          role="presentation"
+        >
+          <div
+            className="relative mx-4 max-h-[min(85vh,calc(100dvh-2rem))] w-full max-w-xs overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-place-confirm-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPendingDeleteSavedPlace(null)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </button>
+            <h2 id="delete-place-confirm-title" className="pr-8 text-lg font-semibold text-gray-900">
+              ¿Eliminar lugar?
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-gray-600">
+              Este lugar desaparecerá de tu perfil, pero no afectará a eventos ya creados.
+            </p>
+            <div className="mt-5 flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteSavedPlace(null)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:w-auto sm:min-w-[7.5rem]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmDeleteSavedPlace()}
+                className="w-full rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-900 transition hover:bg-rose-100 sm:w-auto sm:min-w-[7.5rem]"
+              >
+                Eliminar
+              </button>
             </div>
           </div>
         </div>

@@ -1,3 +1,5 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
 export type SavedPlace = {
   id: string
   location_name: string
@@ -13,6 +15,10 @@ export type DashboardLocationCard = {
   location_name: string
   location_address: string | null
   google_maps_url: string | null
+  /** Set when this row includes a manually saved place (localStorage / future DB). */
+  saved_place_id: string | null
+  /** True if at least one event uses this location name. */
+  from_events: boolean
 }
 
 const STORAGE_PREFIX = 'miparty_saved_places_'
@@ -91,7 +97,13 @@ export function mergeEventAndSavedLocations(
     const mapsUrl = e.google_maps_url?.trim() || null
     const existing = m.get(n)
     if (!existing) {
-      m.set(n, { location_name: n, location_address: address, google_maps_url: mapsUrl })
+      m.set(n, {
+        location_name: n,
+        location_address: address,
+        google_maps_url: mapsUrl,
+        saved_place_id: null,
+        from_events: true,
+      })
       continue
     }
     if (!existing.location_address && address) {
@@ -105,12 +117,55 @@ export function mergeEventAndSavedLocations(
   for (const place of savedPlaces) {
     const n = place.location_name.trim()
     if (!n) continue
-    m.set(n, {
-      location_name: n,
-      location_address: place.location_address,
-      google_maps_url: place.google_maps_url,
-    })
+    const existing = m.get(n)
+    if (existing) {
+      m.set(n, {
+        location_name: n,
+        location_address: place.location_address,
+        google_maps_url: place.google_maps_url,
+        saved_place_id: place.id,
+        from_events: existing.from_events,
+      })
+    } else {
+      m.set(n, {
+        location_name: n,
+        location_address: place.location_address,
+        google_maps_url: place.google_maps_url,
+        saved_place_id: place.id,
+        from_events: false,
+      })
+    }
   }
 
   return [...m.values()]
+}
+
+/**
+ * Deletes a row from `saved_places` when that table exists (ignored otherwise).
+ * Local state should still be updated after calling this.
+ */
+export async function tryDeleteSavedPlaceRemote(
+  supabase: SupabaseClient,
+  userId: string,
+  placeId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('saved_places')
+    .delete()
+    .eq('user_id', userId)
+    .eq('id', placeId)
+  if (!error) {
+    return
+  }
+  const msg = (error.message ?? '').toLowerCase()
+  const ignorable =
+    msg.includes('does not exist') ||
+    msg.includes('schema cache') ||
+    msg.includes('not found') ||
+    error.code === '42P01' ||
+    error.code === 'PGRST116' ||
+    error.code === 'PGRST205'
+  if (!ignorable && process.env.NODE_ENV === 'development') {
+    console.warn('[saved_places] remote delete skipped:', error.message)
+  }
 }
