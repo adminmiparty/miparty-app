@@ -103,7 +103,8 @@ export default function LoginPage() {
               {forgotError ? <p className="text-xs text-red-500">{forgotError}</p> : null}
               {forgotSent ? (
                 <p className="text-center text-sm text-green-600">
-                  ✅ Enlace enviado. Revisa tu bandeja de entrada.
+                  ✅ Si tienes una cuenta registrada con este email, recibirás un enlace en breve. Si
+                  usaste Google para registrarte, inicia sesión con el botón de Google.
                 </p>
               ) : (
                 <button
