@@ -73,7 +73,7 @@ export function decidePublishBilling(
       requiresPayment: false,
       qualifiesForFree: true,
       activeOrganizedCount,
-      message: 'Tu primer evento es gratis',
+      message: '¡Estás a un click de crear tu primer evento gratis!',
     }
   }
 
@@ -82,7 +82,7 @@ export function decidePublishBilling(
       requiresPayment: true,
       qualifiesForFree: false,
       activeOrganizedCount,
-      message: `Para publicar este evento, realiza el pago de ${config.priceLabel}.`,
+      message: 'Para publicar este evento, realiza el pago de',
     }
   }
 
@@ -90,7 +90,7 @@ export function decidePublishBilling(
     requiresPayment: true,
     qualifiesForFree: false,
     activeOrganizedCount,
-    message: `Para publicar tu evento, realiza el pago de ${config.priceLabel}.`,
+    message: 'Para publicar tu evento, realiza el pago de',
   }
 }
 

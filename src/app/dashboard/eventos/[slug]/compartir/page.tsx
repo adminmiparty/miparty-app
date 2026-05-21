@@ -467,7 +467,11 @@ export default function EventSharePage() {
   return (
     <main className={pageMainClass}>
       <AppNav
-        backHref={`/dashboard/eventos/${slug}/editar${editShareQuery}`}
+        backHref={
+          isDraft && event
+            ? `/dashboard/eventos/nuevo?draftId=${event.id}`
+            : `/dashboard/eventos/${slug}/editar${editShareQuery}`
+        }
         backLabel="⬅️ Volver al Paso 1"
       />
 
@@ -650,8 +654,8 @@ export default function EventSharePage() {
                     {publishing
                       ? 'Publicando...'
                       : publishRequiresPayment
-                        ? `Quiero enviar la invitación — ${billingConfig.priceLabel}`
-                        : 'Quiero enviar la invitación'}
+                        ? `Quiero generar la invitación — ${billingConfig.priceLabel}`
+                        : 'Quiero generar la invitación'}
                   </button>
                   {publishError ? (
                     <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -698,13 +702,9 @@ export default function EventSharePage() {
             >
               ×
             </button>
-            <p className="text-sm text-gray-500 text-center">✨ Ya casi está listo</p>
-            <h2 id="payment-modal-title" className="mt-2 text-xl font-bold text-center text-gray-900">
+            <h2 id="payment-modal-title" className="text-xl font-bold text-center text-gray-900">
               Tu invitación ya está lista 🎉
             </h2>
-            <p className="mt-2 text-sm text-gray-500 text-center">
-              Comparte tu invitación y empieza a recibir respuestas en tu plataforma de eventos MiParty.
-            </p>
             <p className="mt-4 text-center text-sm text-gray-700">{publishMessage}</p>
             {publishRequiresPayment ? (
               <>
@@ -731,13 +731,14 @@ export default function EventSharePage() {
                 className={`w-full rounded-lg px-4 py-3 text-sm font-semibold transition ring-offset-2 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${focusRingClass} ${primaryButtonClass}`}
               >
                 {publishing
-                  ? 'Activando...'
+                  ? 'Un momento…'
                   : publishRequiresPayment
-                    ? `Activar mi evento · ${billingConfig.priceLabel}`
-                    : 'Activar mi evento gratis'}
+                    ? `Ver y compartir mi evento · ${billingConfig.priceLabel}`
+                    : 'Ver y compartir mi primer evento!'}
               </button>
-              <p className="mt-2 text-center text-xs text-gray-400">
-                Podrás compartir el enlace y ver las respuestas al instante.
+              <p className="text-center text-sm text-gray-500">
+                Comparte tu invitación y empieza a recibir respuestas en tu plataforma de eventos
+                MiParty.
               </p>
             </div>
           </div>

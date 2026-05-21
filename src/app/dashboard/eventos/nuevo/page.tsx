@@ -1457,13 +1457,6 @@ function NewEventPageContent() {
   }, [draftIdParam, fromEventParam, childrenLoading, children, router, supabase])
 
   useEffect(() => {
-    if (childrenLoading || draftHydrating) return
-    if (fromEventParam?.trim()) return
-    if (draftIdParam?.trim()) return
-    setFormHydrationEpoch((e) => e + 1)
-  }, [childrenLoading, draftHydrating, fromEventParam, draftIdParam])
-
-  useEffect(() => {
     setBirthdayNumberUserEdited(false)
   }, [birthDay, birthMonth, birthYear, eventDate])
 
@@ -1703,12 +1696,44 @@ function NewEventPageContent() {
 
   serializeFormSnapshotRef.current = serializeFormSnapshot
 
-  const isFormDirty = useMemo(() => {
-    if (draftHydrating || !formBaselineSerializedRef.current) {
-      return false
+  const hasMeaningfulDraftContent = useMemo(() => {
+    if (selectedChildId !== '') return true
+    if (childName.trim() || childLastName.trim()) return true
+    if (eventTitle.trim()) return true
+    if (locationName.trim() || locationStreet.trim() || locationCity.trim()) return true
+    if (notes.trim()) return true
+    if (invitationImageUrl) return true
+    if (showGift || showFood || showImage || showNotes) return true
+    return false
+  }, [
+    selectedChildId,
+    childName,
+    childLastName,
+    eventTitle,
+    locationName,
+    locationStreet,
+    locationCity,
+    notes,
+    invitationImageUrl,
+    showGift,
+    showFood,
+    showImage,
+    showNotes,
+  ])
+
+  const shouldConfirmLeave = useMemo(() => {
+    if (draftHydrating) return false
+    const baseline = formBaselineSerializedRef.current
+    if (!baseline) {
+      return hasMeaningfulDraftContent
     }
-    return serializeFormSnapshot() !== formBaselineSerializedRef.current
-  }, [serializeFormSnapshot, draftHydrating, formBaselineVersion])
+    return serializeFormSnapshot() !== baseline
+  }, [
+    serializeFormSnapshot,
+    draftHydrating,
+    formBaselineVersion,
+    hasMeaningfulDraftContent,
+  ])
 
   const clearDirtyBaseline = useCallback(() => {
     formBaselineSerializedRef.current = serializeFormSnapshotRef.current()
@@ -1730,7 +1755,7 @@ function NewEventPageContent() {
 
   const requestLeaveNavigation = useCallback(
     (href: string) => {
-      if (draftHydrating || !isFormDirty || allowUnsavedLeaveRef.current) {
+      if (draftHydrating || !shouldConfirmLeave || allowUnsavedLeaveRef.current) {
         if (href === LEAVE_BACK_SENTINEL) {
           window.history.back()
         } else {
@@ -1741,18 +1766,23 @@ function NewEventPageContent() {
       pendingLeaveHrefRef.current = href
       setShowLeaveDraftModal(true)
     },
-    [draftHydrating, isFormDirty, router]
+    [draftHydrating, shouldConfirmLeave, router]
   )
 
   const handleNavLinkClick = useCallback(
     (href: string, event: MouseEvent<HTMLAnchorElement>) => {
-      if (draftHydrating || !isFormDirty || allowUnsavedLeaveRef.current) {
-        return
-      }
       event.preventDefault()
       requestLeaveNavigation(href)
     },
-    [draftHydrating, isFormDirty, requestLeaveNavigation]
+    [requestLeaveNavigation]
+  )
+
+  const handleBackNavigation = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      event.preventDefault()
+      requestLeaveNavigation('/dashboard')
+    },
+    [requestLeaveNavigation]
   )
 
   const closeLeaveModal = useCallback(() => {
@@ -1772,7 +1802,7 @@ function NewEventPageContent() {
     const handle = window.setTimeout(() => {
       formBaselineSerializedRef.current = serializeFormSnapshotRef.current()
       setFormBaselineVersion((v) => v + 1)
-    }, 120)
+    }, 350)
     return () => window.clearTimeout(handle)
   }, [
     childrenLoading,
@@ -1784,7 +1814,7 @@ function NewEventPageContent() {
   ])
 
   useEffect(() => {
-    if (!isFormDirty || draftHydrating) return
+    if (!shouldConfirmLeave || draftHydrating) return
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       if (allowUnsavedLeaveRef.current) return
       event.preventDefault()
@@ -1792,10 +1822,10 @@ function NewEventPageContent() {
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [isFormDirty, draftHydrating])
+  }, [shouldConfirmLeave, draftHydrating])
 
   useEffect(() => {
-    if (!isFormDirty || draftHydrating) {
+    if (!shouldConfirmLeave || draftHydrating) {
       historyTrapPushedRef.current = false
       return
     }
@@ -1815,7 +1845,7 @@ function NewEventPageContent() {
     return () => {
       window.removeEventListener('popstate', onPopState)
     }
-  }, [isFormDirty, draftHydrating])
+  }, [shouldConfirmLeave, draftHydrating])
 
   const saveDraftFromModal = async (navigateAfter: boolean) => {
     setDraftSaveBusy(true)
@@ -2384,7 +2414,7 @@ function NewEventPageContent() {
       <AppNav
         backHref="/dashboard"
         backLabel="⬅️ Mi panel"
-        onBackClick={(e) => handleNavLinkClick('/dashboard', e)}
+        onBackClick={handleBackNavigation}
         onInternalNavigate={handleNavLinkClick}
       />
 
@@ -2405,7 +2435,9 @@ function NewEventPageContent() {
               ¿Quieres guardar este evento?
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-gray-600">
-              Todavía no has creado el evento. Puedes guardarlo como borrador y terminarlo más tarde.
+              {draftEventId
+                ? 'Puedes guardar los cambios en tu borrador y terminarlo más tarde.'
+                : 'Todavía no has terminado el evento. Puedes guardarlo como borrador y terminarlo más tarde.'}
             </p>
             <div className="mt-5 flex flex-col gap-2">
               <button
