@@ -15,6 +15,7 @@ import {
   sharePageThemeFromUrl,
 } from '@/lib/eventFormTheme'
 import { createClient } from '@/lib/supabase/client'
+import { postStripeCheckout } from '@/lib/stripe/checkoutClient'
 import {
   decidePublishBilling,
   getOrganizerBillingConfig,
@@ -418,24 +419,45 @@ export default function EventSharePage() {
     }
   }
 
-  const handlePaidPublish = async () => {
-    if (!event) return
+  const startPaidCheckout = async (source: 'main-cta' | 'modal-cta') => {
+    if (!event?.id) {
+      console.warn('[publish/checkout] skipped: no event loaded', { source })
+      setPublishError('No se encontró el evento. Recarga la página.')
+      return
+    }
+
+    console.info('[publish/checkout] click', { source, eventId: event.id })
     setPublishError(null)
     setPublishing(true)
+
     try {
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId: event.id }),
+      const checkoutUrl =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/api/stripe/checkout`
+          : '/api/stripe/checkout'
+      console.info('[publish/checkout] fetch start', { url: checkoutUrl, eventId: event.id })
+
+      const { ok, status, data, parseError } = await postStripeCheckout(event.id)
+
+      console.info('[publish/checkout] fetch done', {
+        ok,
+        status,
+        hasUrl: Boolean(data.url),
+        error: data.error ?? null,
+        parseError: parseError ?? null,
       })
-      const data = (await res.json()) as { error?: string; url?: string }
-      if (!res.ok || !data.url) {
+
+      if (!ok || !data.url) {
         setPublishError(data.error ?? 'No se pudo iniciar el pago.')
         setPublishing(false)
         return
       }
-      window.location.href = data.url
-    } catch {
+
+      setShowPaymentModal(false)
+      window.location.assign(data.url)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown'
+      console.error('[publish/checkout] fetch failed', { source, message })
       setPublishError('No se pudo iniciar el pago.')
       setPublishing(false)
     }
@@ -648,11 +670,17 @@ export default function EventSharePage() {
                   <button
                     type="button"
                     disabled={publishing}
-                    onClick={() => setShowPaymentModal(true)}
+                    onClick={() => {
+                      if (publishRequiresPayment) {
+                        void startPaidCheckout('main-cta')
+                      } else {
+                        setShowPaymentModal(true)
+                      }
+                    }}
                     className={`mt-4 w-full rounded-lg px-4 py-3 text-sm font-semibold transition ring-offset-2 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${focusRingClass} ${primaryButtonClass}`}
                   >
                     {publishing
-                      ? 'Publicando...'
+                      ? 'Un momento…'
                       : publishRequiresPayment
                         ? `Quiero generar la invitación — ${billingConfig.priceLabel}`
                         : 'Quiero generar la invitación'}
@@ -721,10 +749,10 @@ export default function EventSharePage() {
                 type="button"
                 disabled={publishing}
                 onClick={() => {
-                  setShowPaymentModal(false)
                   if (publishRequiresPayment) {
-                    void handlePaidPublish()
+                    void startPaidCheckout('modal-cta')
                   } else {
+                    setShowPaymentModal(false)
                     void handlePublish()
                   }
                 }}
