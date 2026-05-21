@@ -14,7 +14,12 @@ import {
   sharePageThemeFromUrl,
 } from '@/lib/eventFormTheme'
 import { createClient } from '@/lib/supabase/client'
-import { isActiveEventStatus } from '@/lib/eventLifecycle'
+import {
+  decidePublishBilling,
+  getOrganizerBillingConfig,
+  type OrganizerBillingConfig,
+} from '@/lib/organizerBilling'
+import { EVENT_STATUS_ACTIVE, EVENT_STATUS_DRAFT, isActiveEventStatus } from '@/lib/eventLifecycle'
 import { themes, type ThemeKey } from '@/lib/themes'
 
 type EventShareRow = {
@@ -235,7 +240,10 @@ export default function EventSharePage() {
 
   const [event, setEvent] = useState<EventShareRow | null>(null)
   const [foodLabels, setFoodLabels] = useState<string[]>([])
-  const [freeEventAvailable, setFreeEventAvailable] = useState(false)
+  const [billingConfig] = useState<OrganizerBillingConfig>(() => getOrganizerBillingConfig())
+  const [publishMessage, setPublishMessage] = useState('')
+  const [publishRequiresPayment, setPublishRequiresPayment] = useState(false)
+  const [isDraft, setIsDraft] = useState(true)
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
@@ -264,16 +272,13 @@ export default function EventSharePage() {
         return
       }
 
-      const [{ data: row, error: eventError }, { data: profile }] = await Promise.all([
-        supabase
-          .from('events')
-          .select(
-            'id, user_id, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_notes, organizer_phone, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, public_slug, birthday_number, rsvp_deadline_days, enable_food_options, invitation_theme, status'
-          )
-          .eq('public_slug', slug)
-          .maybeSingle<EventShareRow>(),
-        supabase.from('users').select('free_event_available').eq('id', user.id).maybeSingle(),
-      ])
+      const { data: row, error: eventError } = await supabase
+        .from('events')
+        .select(
+          'id, user_id, title, child_name, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, organizer_notes, organizer_phone, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, public_slug, birthday_number, rsvp_deadline_days, enable_food_options, invitation_theme, status'
+        )
+        .eq('public_slug', slug)
+        .maybeSingle<EventShareRow>()
 
       if (cancelled) {
         return
@@ -284,12 +289,27 @@ export default function EventSharePage() {
         return
       }
 
-      if (!isActiveEventStatus(row.status)) {
-        router.replace(`/dashboard/eventos/nuevo?draftId=${row.id}`)
+      const status = row.status ?? EVENT_STATUS_DRAFT
+      const draft = status === EVENT_STATUS_DRAFT
+      const active = isActiveEventStatus(status)
+
+      if (!draft && !active) {
+        router.replace('/dashboard')
         return
       }
 
-      setFreeEventAvailable(profile?.free_event_available === true)
+      setIsDraft(draft)
+
+      if (draft) {
+        const { count } = await supabase
+          .from('events')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('status', EVENT_STATUS_ACTIVE)
+        const decision = decidePublishBilling(count ?? 0, billingConfig)
+        setPublishMessage(decision.message)
+        setPublishRequiresPayment(decision.requiresPayment)
+      }
 
       let labels: string[] = []
       if (row.enable_food_options) {
@@ -318,52 +338,119 @@ export default function EventSharePage() {
     return () => {
       cancelled = true
     }
-  }, [slug, supabase, router])
+  }, [slug, supabase, router, billingConfig])
+
+  useEffect(() => {
+    const checkout = searchParams.get('checkout')
+    const sessionId = searchParams.get('session_id')
+    if (checkout !== 'success' || !sessionId || !event) return
+
+    let cancelled = false
+    const verify = async () => {
+      setPublishing(true)
+      setPublishError(null)
+      try {
+        const res = await fetch(
+          `/api/stripe/verify-session?session_id=${encodeURIComponent(sessionId)}`
+        )
+        const data = (await res.json()) as {
+          error?: string
+          published?: boolean
+          slug?: string
+        }
+        if (!res.ok) {
+          if (!cancelled) {
+            setPublishError(data.error ?? 'No se pudo confirmar el pago.')
+            setPublishing(false)
+          }
+          return
+        }
+        if (!cancelled && data.published && data.slug) {
+          router.replace(`/dashboard/eventos/${data.slug}`)
+        }
+      } catch {
+        if (!cancelled) {
+          setPublishError('No se pudo confirmar el pago.')
+          setPublishing(false)
+        }
+      }
+    }
+    void verify()
+    return () => {
+      cancelled = true
+    }
+  }, [searchParams, event, router])
 
   const handlePublish = async () => {
-    if (!event || !slug) {
+    if (!event || !slug || !isDraft) {
+      if (event && slug && !isDraft) {
+        router.push(`/dashboard/eventos/${slug}`)
+      }
       return
     }
     setPublishError(null)
     setPublishing(true)
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
+    try {
+      const publishRes = await fetch('/api/events/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: event.id }),
+      })
+      const publishData = (await publishRes.json()) as {
+        error?: string
+        published?: boolean
+        requiresPayment?: boolean
+        slug?: string
+        message?: string
+      }
 
-    if (userError || !user) {
-      setPublishing(false)
-      router.replace('/dashboard')
-      return
-    }
-
-    const { error: eventUpdateError } = await supabase
-      .from('events')
-      .update({ status: 'active' })
-      .eq('public_slug', slug)
-
-    if (eventUpdateError) {
-      setPublishError(eventUpdateError.message ?? 'No se pudo publicar.')
-      setPublishing(false)
-      return
-    }
-
-    const wasFree = freeEventAvailable
-    if (wasFree) {
-      const { error: profileError } = await supabase
-        .from('users')
-        .update({ free_event_available: false })
-        .eq('id', user.id)
-
-      if (profileError) {
-        setPublishError(profileError.message ?? 'No se pudo actualizar tu perfil.')
+      if (!publishRes.ok) {
+        setPublishError(publishData.error ?? 'No se pudo publicar.')
         setPublishing(false)
         return
       }
-    }
 
-    router.push(`/dashboard/eventos/${slug}`)
+      if (publishData.published && publishData.slug) {
+        router.push(`/dashboard/eventos/${publishData.slug}`)
+        return
+      }
+
+      if (publishData.requiresPayment) {
+        setPublishing(false)
+        setShowPaymentModal(true)
+        return
+      }
+
+      setPublishError('No se pudo publicar el evento.')
+      setPublishing(false)
+    } catch {
+      setPublishError('No se pudo publicar el evento.')
+      setPublishing(false)
+    }
+  }
+
+  const handlePaidPublish = async () => {
+    if (!event) return
+    setPublishError(null)
+    setPublishing(true)
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: event.id }),
+      })
+      const data = (await res.json()) as { error?: string; url?: string }
+      if (!res.ok || !data.url) {
+        setPublishError(data.error ?? 'No se pudo iniciar el pago.')
+        setPublishing(false)
+        return
+      }
+      window.location.href = data.url
+    } catch {
+      setPublishError('No se pudo iniciar el pago.')
+      setPublishing(false)
+    }
   }
 
   const imagePos = event ? parseInvitationPosition(event.invitation_image_position) : { x: 50, y: 50 }
@@ -556,43 +643,50 @@ export default function EventSharePage() {
                 </a>
               </div>
 
-              <div className="border-t border-gray-200 pt-6">
-                {freeEventAvailable ? (
+              {isDraft ? (
+                <div className="border-t border-gray-200 pt-6">
+                  <p className="text-center text-sm text-gray-600">{publishMessage}</p>
+                  {!publishRequiresPayment ? null : (
+                    <>
+                      <p className="mt-3 text-center text-2xl font-bold text-gray-900">
+                        {billingConfig.priceLabel}
+                      </p>
+                      <p className="mt-1 text-center text-sm text-gray-600">
+                        Pago único por evento. Sin suscripciones.
+                      </p>
+                    </>
+                  )}
                   <button
                     type="button"
                     disabled={publishing}
-                    onClick={() => {
-                      console.log('modal trigger clicked')
-                      setShowPaymentModal(true)
-                    }}
-                    className={`w-full rounded-lg px-4 py-3 text-sm font-semibold transition ring-offset-2 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${focusRingClass} ${primaryButtonClass}`}
+                    onClick={() => setShowPaymentModal(true)}
+                    className={`mt-4 w-full rounded-lg px-4 py-3 text-sm font-semibold transition ring-offset-2 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${focusRingClass} ${primaryButtonClass}`}
                   >
-                    {publishing ? 'Publicando...' : 'Quiero enviar la invitación'}
+                    {publishing
+                      ? 'Publicando...'
+                      : publishRequiresPayment
+                        ? `Quiero enviar la invitación — ${billingConfig.priceLabel}`
+                        : 'Quiero enviar la invitación'}
                   </button>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-2xl font-bold text-gray-900">€1.99</p>
-                    <p className="text-sm text-gray-600">Pago único por evento. Sin suscripciones.</p>
-                    <button
-                      type="button"
-                      disabled={publishing}
-                      onClick={() => {
-                        console.log('modal trigger clicked')
-                        setShowPaymentModal(true)
-                      }}
-                      className={`w-full rounded-lg px-4 py-3 text-sm font-semibold transition ring-offset-2 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${focusRingClass} ${primaryButtonClass}`}
-                    >
-                      {publishing ? 'Publicando...' : 'Quiero enviar la invitación — €1.99'}
-                    </button>
-                  </div>
-                )}
-
-                {publishError ? (
-                  <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {publishError}
+                  {publishError ? (
+                    <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                      {publishError}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="border-t border-gray-200 pt-6">
+                  <p className="text-center text-sm text-gray-600">
+                    Tu evento ya está publicado. Comparte el enlace con tus invitados.
                   </p>
-                ) : null}
-              </div>
+                  <Link
+                    href={`/dashboard/eventos/${slug}`}
+                    className={`mt-4 block w-full rounded-lg px-4 py-3 text-center text-sm font-semibold transition ring-offset-2 focus:outline-none focus:ring-2 ${focusRingClass} ${primaryButtonClass}`}
+                  >
+                    Ir al panel del evento
+                  </Link>
+                </div>
+              )}
             </div>
           ) : null}
         </section>
@@ -626,25 +720,36 @@ export default function EventSharePage() {
             <p className="mt-2 text-sm text-gray-500 text-center">
               Comparte tu invitación y empieza a recibir respuestas en tu plataforma de eventos MiParty.
             </p>
-            <p className={`mt-4 text-center text-3xl font-bold ${brandClass}`}>€1.99</p>
-            <p className="mt-2 text-center text-sm text-gray-600">
-              Pago único por evento. Sin suscripciones.
-            </p>
+            <p className="mt-4 text-center text-sm text-gray-700">{publishMessage}</p>
+            {publishRequiresPayment ? (
+              <>
+                <p className={`mt-3 text-center text-3xl font-bold ${brandClass}`}>
+                  {billingConfig.priceLabel}
+                </p>
+                <p className="mt-2 text-center text-sm text-gray-600">
+                  Pago único por evento. Sin suscripciones.
+                </p>
+              </>
+            ) : null}
             <div className="mt-6 flex flex-col gap-3">
               <button
                 type="button"
                 disabled={publishing}
                 onClick={() => {
                   setShowPaymentModal(false)
-                  void handlePublish()
+                  if (publishRequiresPayment) {
+                    void handlePaidPublish()
+                  } else {
+                    void handlePublish()
+                  }
                 }}
                 className={`w-full rounded-lg px-4 py-3 text-sm font-semibold transition ring-offset-2 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${focusRingClass} ${primaryButtonClass}`}
               >
                 {publishing
                   ? 'Activando...'
-                  : freeEventAvailable
-                    ? 'Activar mi evento gratis'
-                    : 'Activar mi evento · €1.99'}
+                  : publishRequiresPayment
+                    ? `Activar mi evento · ${billingConfig.priceLabel}`
+                    : 'Activar mi evento gratis'}
               </button>
               <p className="mt-2 text-center text-xs text-gray-400">
                 Podrás compartir el enlace y ver las respuestas al instante.

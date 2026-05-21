@@ -2166,7 +2166,7 @@ function NewEventPageContent() {
         .from('events')
         .update({
           ...eventPayload,
-          status: EVENT_STATUS_ACTIVE,
+          status: EVENT_STATUS_DRAFT,
         })
         .eq('id', draftEventId)
         .eq('user_id', user.id)
@@ -2179,7 +2179,7 @@ function NewEventPageContent() {
         .from('events')
         .insert({
           ...eventPayload,
-          status: EVENT_STATUS_ACTIVE,
+          status: EVENT_STATUS_DRAFT,
         })
         .select('id, public_slug')
         .single()
