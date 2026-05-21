@@ -813,7 +813,7 @@ function RsvpFormInner({
       setIsLoggedIn(true)
       setLoggedInUserId(uid)
     } else {
-      setSignupFlowError('Revisa tu correo para confirmar la cuenta, si es necesario.')
+      setSignupFlowError('No se pudo completar el registro. Inténtalo de nuevo.')
     }
   }
 
@@ -853,7 +853,7 @@ function RsvpFormInner({
     }
     const uid = data.user?.id ?? data.session?.user?.id
     if (!uid) {
-      setSignupFlowError('Revisa tu correo para confirmar la cuenta, si es necesario.')
+      setSignupFlowError('No se pudo completar el registro. Inténtalo de nuevo.')
       return
     }
     await linkRsvpAndProfile(

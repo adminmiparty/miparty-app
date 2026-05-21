@@ -10,7 +10,7 @@ import {
   parseIsoDateParts,
 } from '@/lib/dates'
 import { brand } from '@/lib/brand'
-import { EVENT_STATUS_ACTIVE } from '@/lib/eventLifecycle'
+import { EVENT_STATUS_ACTIVE, EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
 import { createClient } from '@/lib/supabase/server'
 import { getTheme, type ThemeKey } from '@/lib/themes'
 import EventRecap from './EventRecap'
@@ -60,6 +60,19 @@ type EventDetails = {
 
 type FoodOption = {
   label: string
+}
+
+const eventSelectFields =
+  'id, child_name, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, enable_food_options, organizer_notes, rsvp_deadline_days, organizer_phone, birthday_number, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, status, user_id'
+
+type EventRow = EventDetails & {
+  status: string | null
+  user_id: string
+}
+
+function eventDetailsFromRow(row: EventRow): EventDetails {
+  const { status: _status, user_id: _userId, ...event } = row
+  return event
 }
 
 const DEFAULT_APP_METADATA: Metadata = {
@@ -153,14 +166,39 @@ export default async function PublicEventPage({
     previewRaw === 'true' || (Array.isArray(previewRaw) && previewRaw[0] === 'true')
   const supabase = await createClient()
 
-  const { data: event } = await supabase
-    .from('events')
-    .select(
-      'id, child_name, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, enable_food_options, organizer_notes, rsvp_deadline_days, organizer_phone, birthday_number, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
-    )
-    .eq('public_slug', slug)
-    .eq('status', EVENT_STATUS_ACTIVE)
-    .maybeSingle<EventDetails>()
+  let event: EventDetails | null = null
+
+  if (isPreview) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    const { data: row } = await supabase
+      .from('events')
+      .select(eventSelectFields)
+      .eq('public_slug', slug)
+      .maybeSingle<EventRow>()
+
+    if (row) {
+      const status = row.status ?? EVENT_STATUS_DRAFT
+      if (status === EVENT_STATUS_ACTIVE) {
+        event = eventDetailsFromRow(row)
+      } else if (status === EVENT_STATUS_DRAFT && user?.id === row.user_id) {
+        event = eventDetailsFromRow(row)
+      }
+    }
+  } else {
+    const { data: row } = await supabase
+      .from('events')
+      .select(eventSelectFields)
+      .eq('public_slug', slug)
+      .eq('status', EVENT_STATUS_ACTIVE)
+      .maybeSingle<EventRow>()
+
+    if (row) {
+      event = eventDetailsFromRow(row)
+    }
+  }
 
   if (!event) {
     return (

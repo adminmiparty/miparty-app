@@ -19,6 +19,7 @@ export default function SignupPage() {
   const [loadingSignup, setLoadingSignup] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [signupSuccess, setSignupSuccess] = useState(false)
+  const [signupAutoLogin, setSignupAutoLogin] = useState(false)
 
   const handleGoogleSignup = async () => {
     setError(null)
@@ -69,28 +70,32 @@ export default function SignupPage() {
       })
     }
 
+    setSignupAutoLogin(Boolean(data.session))
     setSignupSuccess(true)
     setLoadingSignup(false)
   }
 
   if (signupSuccess) {
+    const successMessage = signupAutoLogin
+      ? 'Cuenta creada. Bienvenido/a a MiParty.'
+      : 'Cuenta creada. Ya puedes entrar en MiParty.'
+    const successHref = signupAutoLogin ? '/dashboard' : '/login'
+    const successCta = signupAutoLogin ? 'Ir a MiParty' : 'Iniciar sesion'
+
     return (
       <AuthPageShell>
         <section className={`${authCardClassName} text-center`}>
             <p className="text-3xl sm:text-4xl" aria-hidden="true">
-              📬
+              🎉
             </p>
-            <h1 className="mt-3 text-xl font-bold text-gray-900 sm:text-2xl">Revisa tu correo</h1>
-            <p className="mt-2 text-sm text-gray-500">
-              Te enviamos un enlace de confirmacion. Abre tu email para activar tu cuenta de
-              MiParty.
-            </p>
-            <p className="mt-6 text-sm text-gray-500">
-              Ya tienes cuenta?{' '}
-              <Link href="/login" className={brand.linkBrand}>
-                Iniciar sesion
-              </Link>
-            </p>
+            <h1 className="mt-3 text-xl font-bold text-gray-900 sm:text-2xl">Cuenta creada</h1>
+            <p className="mt-2 text-sm text-gray-600">{successMessage}</p>
+            <Link
+              href={successHref}
+              className={`mt-6 inline-flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.formSubmit}`}
+            >
+              {successCta}
+            </Link>
         </section>
       </AuthPageShell>
     )

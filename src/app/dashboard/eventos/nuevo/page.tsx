@@ -1,7 +1,8 @@
-﻿'use client'
+'use client'
 
 import { useRouter } from 'next/navigation'
 import AppNav from '@/components/AppNav'
+import EventCreationSteps from '@/components/EventCreationSteps'
 import {
   Suspense,
   type ChangeEvent,
@@ -2472,15 +2473,12 @@ function NewEventPageContent() {
         ) : null}
         {formContentReady ? (
         <>
-        <div className={`mb-4 rounded-xl border ${eventFormBrandUi.progressCardBorder} bg-white/80 p-3`}>
-          <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
-            <span>Paso 1 de 2 — Crear evento</span>
-            <span>2: Compartir invitación</span>
-          </div>
-          <div className={`h-2 w-full rounded-full ${progressTrackClass}`}>
-            <div className={`h-2 w-1/2 rounded-full ${progressAccentClass}`} />
-          </div>
-        </div>
+        <EventCreationSteps
+          step={1}
+          progressAccentClass={progressAccentClass}
+          progressTrackClass={progressTrackClass}
+          progressCardBorderClass={eventFormBrandUi.progressCardBorder}
+        />
 
         <section className={`rounded-2xl border p-5 shadow-xl ${activePreviewTheme.card}`}>
           <div className="mb-5">

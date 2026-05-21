@@ -1,6 +1,7 @@
 'use client'
 
 import AppNav from '@/components/AppNav'
+import EventCreationSteps from '@/components/EventCreationSteps'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
@@ -142,14 +143,6 @@ const progressTrackMap: Record<ThemeKey, string> = {
   purple: 'bg-purple-100',
 }
 
-const progressCardBorderMap: Record<ThemeKey, string> = {
-  yellow: 'border-yellow-100',
-  pink: 'border-pink-100',
-  blue: 'border-blue-100',
-  green: 'border-green-100',
-  purple: 'border-purple-100',
-}
-
 const previewThemeClasses: Record<ThemeKey, { card: string }> = {
   yellow: { card: 'bg-yellow-50 border-yellow-200' },
   pink: { card: 'bg-pink-50 border-pink-200' },
@@ -204,7 +197,7 @@ export default function EventSharePage() {
     green: 'from-green-50 to-white',
     purple: 'from-purple-50 to-white',
   }
-  const pageMainClass = `${eventFormPageMainClass(urlTheme, pageBgMap)} px-4 py-8`
+  const pageMainClass = eventFormPageMainClass(urlTheme, pageBgMap)
   const themeDef = urlTheme ? (themes[urlTheme] ?? themes.yellow) : null
   const primaryButtonClass = themeDef
     ? `${themeDef.button} ${themeDef.buttonHover} ${primaryButtonTextMap[urlTheme!] ?? primaryButtonTextMap.yellow}`
@@ -218,11 +211,6 @@ export default function EventSharePage() {
     progressTrackMap,
     urlTheme,
     eventFormBrandUi.progressTrack
-  )
-  const progressCardBorderClass = resolveThemeOrBrand(
-    progressCardBorderMap,
-    urlTheme,
-    eventFormBrandUi.progressCardBorder
   )
   const cardClass = urlTheme
     ? (previewThemeClasses[urlTheme]?.card ?? previewThemeClasses.yellow.card)
@@ -482,21 +470,15 @@ export default function EventSharePage() {
         backHref={`/dashboard/eventos/${slug}/editar${editShareQuery}`}
         backLabel="⬅️ Volver al Paso 1"
       />
-      <div className="mx-auto w-full max-w-md border-b border-gray-200 bg-[var(--brand-surface-nav)]/95 px-4 shadow-sm backdrop-blur-sm md:max-w-6xl">
-        <div className="border-t border-gray-200/60 pb-3 pt-2">
-          <div className={`rounded-xl border ${progressCardBorderClass} bg-white/80 p-3`}>
-            <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
-              <span className="font-normal text-gray-400">Paso 1 — Crea tu evento</span>
-              <span className="font-semibold text-gray-900">Paso 2 — Revisa tu invitación</span>
-            </div>
-            <div className={`h-2 w-full rounded-full ${progressTrackClass}`}>
-              <div className={`h-2 w-full rounded-full ${progressAccentClass}`} />
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <div className="mx-auto w-full max-w-md pb-8 pt-4">
+      <div className="mx-auto w-full max-w-sm px-4 py-6 pb-8">
+        <EventCreationSteps
+          step={2}
+          progressAccentClass={progressAccentClass}
+          progressTrackClass={progressTrackClass}
+          progressCardBorderClass={eventFormBrandUi.progressCardBorder}
+        />
+
         <section className={`rounded-2xl border p-5 shadow-xl ${cardClass}`}>
           {loading ? (
             <p className="text-center text-sm text-gray-600">Cargando...</p>
@@ -638,7 +620,10 @@ export default function EventSharePage() {
                 <Link href={`/dashboard/eventos/${slug}/editar${editShareQuery}`} className={secondaryOutlineClass}>
                   Editar evento
                 </Link>
-                <a href={`/e/${event.public_slug}?preview=true&from=share`} className={secondaryOutlineClass}>
+                <a
+                  href={`/e/${event.public_slug}?preview=true&from=share${urlTheme ? `&theme=${urlTheme}` : ''}`}
+                  className={secondaryOutlineClass}
+                >
                   Ver cómo la verán tus invitados
                 </a>
               </div>
