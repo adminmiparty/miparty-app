@@ -188,7 +188,7 @@ export default function SignupPage() {
 
             <div>
               <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-gray-900">
-                Contrasena
+                Contraseña
               </label>
               <div className="relative">
                 <input
