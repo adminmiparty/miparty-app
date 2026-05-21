@@ -16,6 +16,7 @@ import {
 } from '@/lib/eventFormTheme'
 import { createClient } from '@/lib/supabase/client'
 import { postStripeCheckout } from '@/lib/stripe/checkoutClient'
+import { verifyCheckoutReturnWithRetry } from '@/lib/stripe/verifyCheckoutReturn'
 import {
   decidePublishBilling,
   getOrganizerBillingConfig,
@@ -237,6 +238,7 @@ export default function EventSharePage() {
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [confirmingCheckoutReturn, setConfirmingCheckoutReturn] = useState(false)
 
   useEffect(() => {
     if (!slug) {
@@ -332,43 +334,41 @@ export default function EventSharePage() {
   useEffect(() => {
     const checkout = searchParams.get('checkout')
     const sessionId = searchParams.get('session_id')
-    if (checkout !== 'success' || !sessionId || !event) return
+    if (checkout !== 'success' || !sessionId) return
 
     let cancelled = false
-    const verify = async () => {
+    const confirmPaymentReturn = async () => {
+      setConfirmingCheckoutReturn(true)
       setPublishing(true)
       setPublishError(null)
-      try {
-        const res = await fetch(
-          `/api/stripe/verify-session?session_id=${encodeURIComponent(sessionId)}`
-        )
-        const data = (await res.json()) as {
-          error?: string
-          published?: boolean
-          slug?: string
-        }
-        if (!res.ok) {
-          if (!cancelled) {
-            setPublishError(data.error ?? 'No se pudo confirmar el pago.')
-            setPublishing(false)
-          }
-          return
-        }
-        if (!cancelled && data.published && data.slug) {
-          router.replace(`/dashboard/eventos/${data.slug}`)
-        }
-      } catch {
-        if (!cancelled) {
-          setPublishError('No se pudo confirmar el pago.')
-          setPublishing(false)
-        }
+
+      const result = await verifyCheckoutReturnWithRetry(sessionId)
+      if (cancelled) return
+
+      setPublishing(false)
+      setConfirmingCheckoutReturn(false)
+
+      if (result.status === 401) {
+        setPublishError('Inicia sesión de nuevo para confirmar el pago.')
+        return
       }
+
+      if (!result.ok || !result.published || !result.slug) {
+        setPublishError(
+          result.error ??
+            'El pago se recibió, pero el evento aún no está publicado. Espera unos segundos y recarga la página.'
+        )
+        return
+      }
+
+      router.replace(`/dashboard/eventos/${result.slug}/compartir`)
     }
-    void verify()
+
+    void confirmPaymentReturn()
     return () => {
       cancelled = true
     }
-  }, [searchParams, event, router])
+  }, [searchParams, router])
 
   const handlePublish = async () => {
     if (!event || !slug || !isDraft) {
@@ -426,7 +426,7 @@ export default function EventSharePage() {
       return
     }
 
-    console.info('[publish/checkout] click', { source, eventId: event.id })
+    console.log('[publish/checkout] click', { source, eventId: event.id })
     setPublishError(null)
     setPublishing(true)
 
@@ -435,7 +435,7 @@ export default function EventSharePage() {
         typeof window !== 'undefined'
           ? `${window.location.origin}/api/stripe/checkout`
           : '/api/stripe/checkout'
-      console.info('[publish/checkout] fetch start', { url: checkoutUrl, eventId: event.id })
+      console.log('[publish/checkout] fetch start', { url: checkoutUrl, eventId: event.id })
 
       const { ok, status, data, parseError } = await postStripeCheckout(event.id)
 
@@ -506,7 +506,14 @@ export default function EventSharePage() {
         />
 
         <section className={`rounded-2xl border p-5 shadow-xl ${cardClass}`}>
-          {loading ? (
+          {confirmingCheckoutReturn ? (
+            <div className="py-10 text-center">
+              <p className="text-sm font-medium text-gray-900">Confirmando tu pago…</p>
+              <p className="mt-2 text-sm text-gray-600">
+                En unos segundos podrás compartir tu invitación.
+              </p>
+            </div>
+          ) : loading ? (
             <p className="text-center text-sm text-gray-600">Cargando...</p>
           ) : event ? (
             <div className="space-y-6">

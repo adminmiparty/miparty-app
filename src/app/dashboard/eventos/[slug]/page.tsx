@@ -11,7 +11,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { subDays } from 'date-fns'
 import { brand } from '@/lib/brand'
-import { EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
+import { EVENT_STATUS_ACTIVE, EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
 import { formatSpanishDateMedium, formatSpanishFullDate, parseIsoDateParts } from '@/lib/dates'
 import { createClient } from '@/lib/supabase/client'
 import ShareButton from '@/components/ShareButton'
@@ -274,6 +274,23 @@ export default function EventControlCenterPage() {
       }
 
       if (eventRow.status === EVENT_STATUS_DRAFT) {
+        const { data: paidRow } = await supabase
+          .from('event_payments')
+          .select('id')
+          .eq('event_id', eventRow.id)
+          .eq('status', 'paid')
+          .maybeSingle()
+
+        if (paidRow) {
+          await supabase
+            .from('events')
+            .update({ status: EVENT_STATUS_ACTIVE })
+            .eq('id', eventRow.id)
+            .eq('user_id', user.id)
+          router.replace(`/dashboard/eventos/${slug}/compartir`)
+          return
+        }
+
         router.replace(`/dashboard/eventos/nuevo?draftId=${eventRow.id}`)
         return
       }

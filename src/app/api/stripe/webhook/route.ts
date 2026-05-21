@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { logPaymentConfigFlags, readServerEnv } from '@/lib/envServer'
-import { EVENT_STATUS_ACTIVE, EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
+import { activateOrganizedEventAfterPayment } from '@/lib/organizerPublish'
 import { initStripe } from '@/lib/stripe/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -60,12 +60,7 @@ export async function POST(request: Request) {
         })
         .eq('stripe_checkout_session_id', session.id)
 
-      await admin
-        .from('events')
-        .update({ status: EVENT_STATUS_ACTIVE })
-        .eq('id', eventId)
-        .eq('user_id', userId)
-        .eq('status', EVENT_STATUS_DRAFT)
+      await activateOrganizedEventAfterPayment(admin, eventId, userId)
     }
   }
 

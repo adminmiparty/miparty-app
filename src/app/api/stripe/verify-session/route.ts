@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { logPaymentConfigFlags } from '@/lib/envServer'
-import { EVENT_STATUS_ACTIVE, EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
+import { activateOrganizedEventAfterPayment } from '@/lib/organizerPublish'
+import { EVENT_STATUS_ACTIVE } from '@/lib/eventLifecycle'
+import { isStripeCheckoutPaid } from '@/lib/stripe/checkoutSession'
 import { initStripe } from '@/lib/stripe/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -43,28 +45,37 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Evento no encontrado en la sesión' }, { status: 400 })
   }
 
-  if (session.payment_status === 'paid') {
-    const admin = createAdminClient()
-    const paidAt = new Date().toISOString()
+  const paid = isStripeCheckoutPaid(session)
 
-    await admin
-      .from('event_payments')
-      .update({
-        status: 'paid',
-        paid_at: paidAt,
-        stripe_payment_intent_id:
-          typeof session.payment_intent === 'string'
-            ? session.payment_intent
-            : session.payment_intent?.id ?? null,
+  if (paid) {
+    try {
+      const admin = createAdminClient()
+      const paidAt = new Date().toISOString()
+
+      await admin
+        .from('event_payments')
+        .update({
+          status: 'paid',
+          paid_at: paidAt,
+          stripe_payment_intent_id:
+            typeof session.payment_intent === 'string'
+              ? session.payment_intent
+              : session.payment_intent?.id ?? null,
+        })
+        .eq('stripe_checkout_session_id', session.id)
+
+      const activated = await activateOrganizedEventAfterPayment(admin, eventId, user.id)
+      console.info('[stripe/verify-session] activated', {
+        eventId,
+        ok: activated.ok,
+        slug: activated.slug,
       })
-      .eq('stripe_checkout_session_id', session.id)
-
-    await admin
-      .from('events')
-      .update({ status: EVENT_STATUS_ACTIVE })
-      .eq('id', eventId)
-      .eq('user_id', user.id)
-      .eq('status', EVENT_STATUS_DRAFT)
+    } catch (err) {
+      console.error(
+        '[stripe/verify-session] post-payment update failed',
+        err instanceof Error ? err.message : err
+      )
+    }
   }
 
   const { data: eventRow } = await supabase
@@ -74,9 +85,11 @@ export async function GET(request: Request) {
     .eq('user_id', user.id)
     .maybeSingle()
 
+  const published = eventRow?.status === EVENT_STATUS_ACTIVE
+
   return NextResponse.json({
-    paid: session.payment_status === 'paid',
-    published: eventRow?.status === EVENT_STATUS_ACTIVE,
+    paid,
+    published,
     slug: eventRow?.public_slug ?? session.metadata?.public_slug ?? null,
   })
 }

@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     }
 
     const configFlags = logPaymentConfigFlags('stripe/checkout')
-    console.info('[stripe/checkout] start', { eventId, userId: user.id })
+    console.log('[stripe/checkout] start', { eventId, userId: user.id })
 
     const event = await loadOwnedDraftEvent(supabase, eventId, user.id)
     if (!event) {
