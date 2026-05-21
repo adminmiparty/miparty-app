@@ -81,40 +81,64 @@ export default function LoginPage() {
       <AuthPageBrand />
       <section className={authCardClassName}>
           <div className="mb-5 sm:mb-6">
-            <p className={`text-sm font-medium ${brand.textBrand}`}>Bienvenido a MiParty</p>
-            <h2 className="mt-1 text-xl font-bold text-gray-900 sm:text-2xl">Inicia sesion</h2>
-            <p className="mt-2 text-sm text-gray-500">
-              Accede para gestionar tus eventos y ver tu panel.
-            </p>
+            {showForgotPassword ? (
+              <>
+                <p className={`text-sm font-medium ${brand.textBrand}`}>MiParty</p>
+                <h2 className="mt-1 text-xl font-bold text-gray-900 sm:text-2xl">Recuperar contraseña</h2>
+                <p className="mt-2 text-sm text-gray-500">Te enviaremos un enlace a tu correo.</p>
+              </>
+            ) : (
+              <>
+                <p className={`text-sm font-medium ${brand.textBrand}`}>Bienvenido a MiParty</p>
+                <h2 className="mt-1 text-xl font-bold text-gray-900 sm:text-2xl">Inicia sesión</h2>
+                <p className="mt-2 text-sm text-gray-500">
+                  Accede para gestionar tus eventos y ver tu panel.
+                </p>
+              </>
+            )}
           </div>
 
           {showForgotPassword ? (
             <div className="space-y-3">
+              <p className="text-sm font-medium text-gray-900">Restablecer contraseña</p>
+
               <p className="text-sm text-gray-600">
                 Escribe tu email y te enviaremos un enlace para restablecer tu contraseña.
               </p>
-              <input
-                type="email"
-                placeholder="tu@email.com"
-                value={forgotEmail}
-                onChange={(e) => setForgotEmail(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900"
-              />
-              {forgotError ? <p className="text-xs text-red-500">{forgotError}</p> : null}
-              {forgotSent ? (
-                <p className="text-center text-sm text-green-600">
-                  ✅ Si tienes una cuenta registrada con este email, recibirás un enlace en breve. Si
-                  usaste Google para registrarte, inicia sesión con el botón de Google.
-                </p>
+
+              {!forgotSent ? (
+                <>
+                  <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                    <p className="text-xs text-blue-600">
+                      ℹ️ Si iniciaste sesión con Google, usa el botón &quot;Continuar con Google&quot;. El enlace
+                      solo funciona para cuentas con email y contraseña.
+                    </p>
+                  </div>
+                  <input
+                    type="email"
+                    placeholder="tu@email.com"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400"
+                  />
+                  {forgotError ? <p className="text-xs text-red-500">{forgotError}</p> : null}
+                  <button
+                    type="button"
+                    onClick={() => void handleForgotPassword()}
+                    className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
+                  >
+                    Enviar enlace
+                  </button>
+                </>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => void handleForgotPassword()}
-                  className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
-                >
-                  Enviar enlace
-                </button>
+                <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-3">
+                  <p className="text-center text-sm text-green-700">
+                    ✅ Si tienes una cuenta registrada con este email, recibirás un enlace en breve. Si
+                    usaste Google para registrarte, inicia sesión con el botón de Google.
+                  </p>
+                </div>
               )}
+
               <button
                 type="button"
                 onClick={() => {
