@@ -4,6 +4,7 @@ import AuthPageBrand from '@/components/AuthPageBrand'
 import AuthPageShell, { authCardClassName } from '@/components/AuthPageShell'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Eye, EyeOff } from 'lucide-react'
 import { FormEvent, useState } from 'react'
 import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
@@ -14,6 +15,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loadingGoogle, setLoadingGoogle] = useState(false)
   const [loadingEmail, setLoadingEmail] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -126,22 +128,31 @@ export default function LoginPage() {
               <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-gray-900">
                 Contrasena
               </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                onInvalid={(e) => {
-                  (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
-                }}
-                onInput={(e) => {
-                  (e.target as HTMLInputElement).setCustomValidity('')
-                }}
-                className={brand.formInput}
-                placeholder="••••••••"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  onInvalid={(e) => {
+                    (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
+                  }}
+                  onInput={(e) => {
+                    (e.target as HTMLInputElement).setCustomValidity('')
+                  }}
+                  className={`${brand.formInput} pr-10`}
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             {error ? (

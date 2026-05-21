@@ -3,6 +3,7 @@
 import AuthPageBrand from '@/components/AuthPageBrand'
 import AuthPageShell, { authCardClassName } from '@/components/AuthPageShell'
 import Link from 'next/link'
+import { Eye, EyeOff } from 'lucide-react'
 import { FormEvent, useState } from 'react'
 import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
@@ -13,6 +14,7 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loadingGoogle, setLoadingGoogle] = useState(false)
   const [loadingSignup, setLoadingSignup] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -188,23 +190,32 @@ export default function SignupPage() {
               <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-gray-900">
                 Contrasena
               </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="new-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                minLength={6}
-                required
-                onInvalid={(e) => {
-                  (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
-                }}
-                onInput={(e) => {
-                  (e.target as HTMLInputElement).setCustomValidity('')
-                }}
-                className={brand.formInput}
-                placeholder="Minimo 6 caracteres"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  minLength={6}
+                  required
+                  onInvalid={(e) => {
+                    (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
+                  }}
+                  onInput={(e) => {
+                    (e.target as HTMLInputElement).setCustomValidity('')
+                  }}
+                  className={`${brand.formInput} pr-10`}
+                  placeholder="Minimo 6 caracteres"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             {error ? (
