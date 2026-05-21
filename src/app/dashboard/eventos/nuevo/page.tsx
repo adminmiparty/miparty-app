@@ -441,6 +441,21 @@ function getChildAgeOnEventDate(birthDate: Date, eventDate: Date) {
   return age
 }
 
+function getCelebrationBirthdayNumber(birthDate: Date, eventDate: Date) {
+  const age = getChildAgeOnEventDate(birthDate, eventDate)
+  const birthdayOnEventYear = new Date(
+    eventDate.getFullYear(),
+    birthDate.getMonth(),
+    birthDate.getDate()
+  )
+  const birthdayPassedOnOrBeforeEvent = eventDate.getTime() >= birthdayOnEventYear.getTime()
+  const celebrationAge = birthdayPassedOnOrBeforeEvent ? age : age + 1
+  if (celebrationAge < 1 || celebrationAge > 120) {
+    return null
+  }
+  return celebrationAge
+}
+
 function parse24hTime(time24h: string) {
   const [hours, minutes] = time24h.split(':')
   return {
@@ -1467,12 +1482,12 @@ function NewEventPageContent() {
     }
     const birth = parseIsoDateToLocal(parsedBirth)
     const event = parseIsoDateToLocal(parsedEvent)
-    const age = getChildAgeOnEventDate(birth, event)
-    if (age < 0 || age > 120) {
+    const celebrationAge = getCelebrationBirthdayNumber(birth, event)
+    if (celebrationAge == null) {
       setBirthdayNumber('')
       return
     }
-    setBirthdayNumber(String(age))
+    setBirthdayNumber(String(celebrationAge))
   }, [birthDay, birthMonth, birthYear, eventDate, birthdayNumberUserEdited])
 
   const handleChildSelect = (id: string) => {
@@ -1851,7 +1866,7 @@ function NewEventPageContent() {
     const birthdayTrimmed = birthdayNumber.trim()
     if (birthdayTrimmed !== '') {
       const parsed = Number.parseInt(birthdayTrimmed, 10)
-      if (!Number.isNaN(parsed) && parsed >= 1) {
+      if (!Number.isNaN(parsed) && parsed >= 1 && parsed <= 120) {
         birthdayNumberValue = parsed
       }
     }
@@ -2024,7 +2039,7 @@ function NewEventPageContent() {
     const birthdayTrimmed = birthdayNumber.trim()
     if (birthdayTrimmed !== '') {
       const birthdayParsed = Number.parseInt(birthdayTrimmed, 10)
-      if (Number.isNaN(birthdayParsed) || birthdayParsed < 1) {
+      if (Number.isNaN(birthdayParsed) || birthdayParsed < 1 || birthdayParsed > 120) {
         setError('El número de cumpleaños no es válido.')
         return
       }
@@ -2626,6 +2641,7 @@ function NewEventPageContent() {
                             id="birthdayNumber"
                             type="number"
                             min={1}
+                            max={120}
                             inputMode="numeric"
                             value={birthdayNumber}
                             onChange={(event) => {
@@ -2639,8 +2655,8 @@ function NewEventPageContent() {
                       </div>
                     </>
                   ) : (
-                    <div className="pointer-events-none space-y-3 rounded-lg border border-gray-200 bg-white p-3">
-                      <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-3">
+                      <div className="pointer-events-none flex items-center justify-between gap-3">
                         <label
                           htmlFor="childBirthDateReadOnly"
                           className="whitespace-nowrap text-sm font-medium text-gray-900"
@@ -2664,12 +2680,17 @@ function NewEventPageContent() {
                         </label>
                         <input
                           id="birthdayNumberReadOnly"
-                          readOnly
-                          tabIndex={-1}
-                          type="text"
+                          type="number"
+                          min={1}
+                          max={120}
                           inputMode="numeric"
                           value={birthdayNumber}
-                          className="w-32 shrink-0 cursor-default whitespace-nowrap rounded-lg bg-gray-100 px-3 py-1 text-center text-sm text-gray-900 outline-none ring-0 border-0 focus:border-0 focus:ring-0"
+                          onChange={(event) => {
+                            setBirthdayNumberUserEdited(true)
+                            setBirthdayNumber(event.target.value)
+                          }}
+                          placeholder="Ej. 5"
+                          className={`w-32 shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1 text-center text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                         />
                       </div>
                     </div>

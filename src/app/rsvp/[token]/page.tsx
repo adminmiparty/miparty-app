@@ -6,6 +6,7 @@ import { subDays } from 'date-fns'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useParams } from 'next/navigation'
+import { Eye, EyeOff } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { brand } from '@/lib/brand'
@@ -329,6 +330,7 @@ export default function RsvpEditPage() {
   const [showEmailSignup, setShowEmailSignup] = useState(false)
   const [signupEmail, setSignupEmail] = useState('')
   const [signupPassword, setSignupPassword] = useState('')
+  const [showSignupPassword, setShowSignupPassword] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [signupToggle, setSignupToggle] = useState(false)
   const [showWelcomeModal, setShowWelcomeModal] = useState(false)
@@ -914,13 +916,22 @@ export default function RsvpEditPage() {
               onChange={(e) => setSignupEmail(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             />
-            <input
-              type="password"
-              placeholder="Contraseña"
-              value={signupPassword}
-              onChange={(e) => setSignupPassword(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
+            <div className="relative">
+              <input
+                type={showSignupPassword ? 'text' : 'password'}
+                placeholder="Contraseña"
+                value={signupPassword}
+                onChange={(e) => setSignupPassword(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSignupPassword(!showSignupPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+              >
+                {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => void handleEmailSignup()}
@@ -1897,14 +1908,23 @@ export default function RsvpEditPage() {
                     onChange={(e) => setSignupEmail(e.target.value)}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
                   />
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    placeholder="Contraseña"
-                    value={signupPassword}
-                    onChange={(e) => setSignupPassword(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showSignupPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      placeholder="Contraseña"
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm text-gray-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSignupPassword(!showSignupPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+                    >
+                      {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => void handleEmailSignup()}

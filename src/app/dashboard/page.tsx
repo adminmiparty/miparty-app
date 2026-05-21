@@ -18,7 +18,7 @@ import {
   type DashboardLocationCard,
   type SavedPlace,
 } from '@/lib/savedPlaces'
-import { CalendarDays, Map as MapIcon, Pencil, X } from 'lucide-react'
+import { CalendarDays, Eye, EyeOff, Map as MapIcon, Pencil, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -890,6 +890,8 @@ export default function DashboardHomePage() {
   const [profileSuccessToast, setProfileSuccessToast] = useState(false)
   const [profilePhoneNotice, setProfilePhoneNotice] = useState(false)
   const [showPasswordSection, setShowPasswordSection] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [profileNewPassword, setProfileNewPassword] = useState('')
   const [profileConfirmPassword, setProfileConfirmPassword] = useState('')
   const [passwordSaving, setPasswordSaving] = useState(false)
@@ -2797,14 +2799,27 @@ export default function DashboardHomePage() {
                           >
                             Nueva contraseña
                           </label>
-                          <input
-                            id="profileNewPassword"
-                            type="password"
-                            autoComplete="new-password"
-                            value={profileNewPassword}
-                            onChange={(e) => setProfileNewPassword(e.target.value)}
-                            className={profileInputClassName}
-                          />
+                          <div className="relative">
+                            <input
+                              id="profileNewPassword"
+                              type={showNewPassword ? 'text' : 'password'}
+                              autoComplete="new-password"
+                              value={profileNewPassword}
+                              onChange={(e) => setProfileNewPassword(e.target.value)}
+                              className={`${profileInputClassName} pr-10`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowNewPassword(!showNewPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+                            >
+                              {showNewPassword ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
                         </div>
                         <div>
                           <label
@@ -2813,14 +2828,27 @@ export default function DashboardHomePage() {
                           >
                             Confirmar contraseña
                           </label>
-                          <input
-                            id="profileConfirmPassword"
-                            type="password"
-                            autoComplete="new-password"
-                            value={profileConfirmPassword}
-                            onChange={(e) => setProfileConfirmPassword(e.target.value)}
-                            className={profileInputClassName}
-                          />
+                          <div className="relative">
+                            <input
+                              id="profileConfirmPassword"
+                              type={showConfirmPassword ? 'text' : 'password'}
+                              autoComplete="new-password"
+                              value={profileConfirmPassword}
+                              onChange={(e) => setProfileConfirmPassword(e.target.value)}
+                              className={`${profileInputClassName} pr-10`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+                            >
+                              {showConfirmPassword ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
                         </div>
                         {passwordError ? (
                           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

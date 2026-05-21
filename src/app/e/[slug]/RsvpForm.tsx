@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { Eye, EyeOff } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
@@ -388,11 +389,23 @@ function RsvpFormInner({
   const [modalSignupPassword, setModalSignupPassword] = useState('')
   const [modalLoginEmail, setModalLoginEmail] = useState('')
   const [modalLoginPassword, setModalLoginPassword] = useState('')
+  const [showModalForgotPassword, setShowModalForgotPassword] = useState(false)
+  const [modalForgotEmail, setModalForgotEmail] = useState('')
+  const [modalForgotSent, setModalForgotSent] = useState(false)
+  const [modalForgotError, setModalForgotError] = useState('')
+  const [showInlineForgotPassword, setShowInlineForgotPassword] = useState(false)
+  const [inlineForgotEmail, setInlineForgotEmail] = useState('')
+  const [inlineForgotSent, setInlineForgotSent] = useState(false)
+  const [inlineForgotError, setInlineForgotError] = useState('')
   const [modalShowEmailFields, setModalShowEmailFields] = useState(false)
   const [signupFlowError, setSignupFlowError] = useState<string | null>(null)
   const [showInlineLogin, setShowInlineLogin] = useState(false)
   const [inlineEmail, setInlineEmail] = useState('')
   const [inlinePassword, setInlinePassword] = useState('')
+  const [showModalSignupPassword, setShowModalSignupPassword] = useState(false)
+  const [showModalLoginPassword, setShowModalLoginPassword] = useState(false)
+  const [showInlineLoginPassword, setShowInlineLoginPassword] = useState(false)
+  const [showInlineSignupPassword, setShowInlineSignupPassword] = useState(false)
   const [inlineLoginError, setInlineLoginError] = useState('')
   const [inlineLoginSuccess, setInlineLoginSuccess] = useState(false)
   const [justSignedUp, setJustSignedUp] = useState(false)
@@ -866,6 +879,40 @@ function RsvpFormInner({
       submittedRsvpId
     )
     setModalView('welcome')
+  }
+
+  const handleModalForgotPassword = async () => {
+    setModalForgotError('')
+    if (!modalForgotEmail.trim()) {
+      setModalForgotError('Introduce tu email')
+      return
+    }
+    const sb = createClient()
+    const { error: resetError } = await sb.auth.resetPasswordForEmail(modalForgotEmail, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    })
+    if (resetError) {
+      setModalForgotError('No se pudo enviar el enlace. Inténtalo de nuevo.')
+      return
+    }
+    setModalForgotSent(true)
+  }
+
+  const handleInlineForgotPassword = async () => {
+    setInlineForgotError('')
+    if (!inlineForgotEmail.trim()) {
+      setInlineForgotError('Introduce tu email')
+      return
+    }
+    const sb = createClient()
+    const { error: resetError } = await sb.auth.resetPasswordForEmail(inlineForgotEmail, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    })
+    if (resetError) {
+      setInlineForgotError('No se pudo enviar el enlace. Inténtalo de nuevo.')
+      return
+    }
+    setInlineForgotSent(true)
   }
 
   const handleLoginAndLink = async () => {
@@ -2039,14 +2086,27 @@ END:VCALENDAR`
                     onChange={(e) => setModalSignupEmail(e.target.value)}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                   />
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    placeholder="Contraseña"
-                    value={modalSignupPassword}
-                    onChange={(e) => setModalSignupPassword(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showModalSignupPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      placeholder="Contraseña"
+                      value={modalSignupPassword}
+                      onChange={(e) => setModalSignupPassword(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowModalSignupPassword(!showModalSignupPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+                    >
+                      {showModalSignupPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => void handleEmailSignupModal()}
@@ -2082,33 +2142,94 @@ END:VCALENDAR`
             <div className="pt-2">
               <h3 className="text-center text-lg font-bold text-gray-900">Inicia sesión</h3>
               <p className="mt-1 text-center text-sm text-gray-600">Vincula tu confirmación a tu cuenta</p>
-              <div className="mt-4 space-y-2">
-                {renderGoogleSignupButton()}
-                <p className="text-center text-xs text-gray-500">o</p>
-                <input
-                  type="email"
-                  autoComplete="email"
-                  placeholder="Email"
-                  value={modalLoginEmail}
-                  onChange={(e) => setModalLoginEmail(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="Contraseña"
-                  value={modalLoginPassword}
-                  onChange={(e) => setModalLoginPassword(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleLoginAndLink()}
-                  className="inline-flex w-full items-center justify-center rounded-lg bg-gray-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800"
-                >
-                  Iniciar sesión
-                </button>
-              </div>
+              {showModalForgotPassword ? (
+                <div className="mt-4 space-y-3">
+                  <p className="text-sm text-gray-600">
+                    Escribe tu email y te enviaremos un enlace para restablecer tu contraseña.
+                  </p>
+                  <input
+                    type="email"
+                    placeholder="tu@email.com"
+                    value={modalForgotEmail}
+                    onChange={(e) => setModalForgotEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                  />
+                  {modalForgotError ? <p className="text-xs text-red-500">{modalForgotError}</p> : null}
+                  {modalForgotSent ? (
+                    <p className="text-center text-sm text-green-600">
+                      ✅ Enlace enviado. Revisa tu bandeja de entrada.
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handleModalForgotPassword()}
+                      className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
+                    >
+                      Enviar enlace
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowModalForgotPassword(false)
+                      setModalForgotSent(false)
+                      setModalForgotError('')
+                      setModalForgotEmail('')
+                    }}
+                    className="w-full text-xs text-gray-400 underline hover:text-gray-600"
+                  >
+                    ← Volver al inicio de sesión
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  {renderGoogleSignupButton()}
+                  <p className="text-center text-xs text-gray-500">o</p>
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="Email"
+                    value={modalLoginEmail}
+                    onChange={(e) => setModalLoginEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <div className="relative">
+                    <input
+                      type={showModalLoginPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      placeholder="Contraseña"
+                      value={modalLoginPassword}
+                      onChange={(e) => setModalLoginPassword(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowModalLoginPassword(!showModalLoginPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+                    >
+                      {showModalLoginPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowModalForgotPassword(true)}
+                    className="mt-1 w-full text-right text-xs text-gray-400 underline hover:text-gray-600"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleLoginAndLink()}
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-gray-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800"
+                  >
+                    Iniciar sesión
+                  </button>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -2358,32 +2479,99 @@ END:VCALENDAR`
           </div>
           {showInlineLogin ? (
             <div className="space-y-2">
-              <input
-                type="email"
-                placeholder="tu@email.com"
-                value={inlineEmail}
-                onChange={(e) => setInlineEmail(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
-              />
-              <input
-                type="password"
-                placeholder="Contraseña"
-                value={inlinePassword}
-                onChange={(e) => setInlinePassword(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
-              />
-              {inlineLoginError ? <p className="text-xs text-red-500">{inlineLoginError}</p> : null}
-              <button
-                type="button"
-                onClick={() => void handleInlineLogin()}
-                className="w-full rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
-              >
-                Iniciar sesión
-              </button>
+              {showInlineForgotPassword ? (
+                <>
+                  <p className="text-sm text-gray-600">
+                    Escribe tu email y te enviaremos un enlace para restablecer tu contraseña.
+                  </p>
+                  <input
+                    type="email"
+                    placeholder="tu@email.com"
+                    value={inlineForgotEmail}
+                    onChange={(e) => setInlineForgotEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                  />
+                  {inlineForgotError ? <p className="text-xs text-red-500">{inlineForgotError}</p> : null}
+                  {inlineForgotSent ? (
+                    <p className="text-center text-sm text-green-600">
+                      ✅ Enlace enviado. Revisa tu bandeja de entrada.
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handleInlineForgotPassword()}
+                      className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
+                    >
+                      Enviar enlace
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowInlineForgotPassword(false)
+                      setInlineForgotSent(false)
+                      setInlineForgotError('')
+                      setInlineForgotEmail('')
+                    }}
+                    className="w-full text-xs text-gray-400 underline hover:text-gray-600"
+                  >
+                    ← Volver al inicio de sesión
+                  </button>
+                </>
+              ) : (
+                <>
+                  <input
+                    type="email"
+                    placeholder="tu@email.com"
+                    value={inlineEmail}
+                    onChange={(e) => setInlineEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  />
+                  <div className="relative">
+                    <input
+                      type={showInlineLoginPassword ? 'text' : 'password'}
+                      placeholder="Contraseña"
+                      value={inlinePassword}
+                      onChange={(e) => setInlinePassword(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowInlineLoginPassword(!showInlineLoginPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+                    >
+                      {showInlineLoginPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowInlineForgotPassword(true)}
+                    className="mt-1 w-full text-right text-xs text-gray-400 underline hover:text-gray-600"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                  {inlineLoginError ? <p className="text-xs text-red-500">{inlineLoginError}</p> : null}
+                  <button
+                    type="button"
+                    onClick={() => void handleInlineLogin()}
+                    className="w-full rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+                  >
+                    Iniciar sesión
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={() => {
                   setShowInlineLogin(false)
+                  setShowInlineForgotPassword(false)
+                  setInlineForgotSent(false)
+                  setInlineForgotError('')
+                  setInlineForgotEmail('')
                   setInlineLoginError('')
                 }}
                 className="w-full text-xs text-gray-400 hover:text-gray-600"
@@ -2712,15 +2900,29 @@ END:VCALENDAR`
                     onChange={(e) => setInlineSignupEmail(e.target.value)}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
                   />
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    disabled={isPreview}
-                    placeholder="Contraseña"
-                    value={inlineSignupPassword}
-                    onChange={(e) => setInlineSignupPassword(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showInlineSignupPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      disabled={isPreview}
+                      placeholder="Contraseña"
+                      value={inlineSignupPassword}
+                      onChange={(e) => setInlineSignupPassword(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm text-gray-900"
+                    />
+                    <button
+                      type="button"
+                      disabled={isPreview}
+                      onClick={() => setShowInlineSignupPassword(!showInlineSignupPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+                    >
+                      {showInlineSignupPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                   <button
                     type="button"
                     disabled={isPreview}
