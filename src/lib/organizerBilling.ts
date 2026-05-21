@@ -1,3 +1,4 @@
+import { readServerEnv } from '@/lib/envServer'
 import { EVENT_STATUS_ACTIVE } from '@/lib/eventLifecycle'
 
 export type OrganizerBillingConfig = {
@@ -28,15 +29,16 @@ export function getOrganizerBillingConfig(): OrganizerBillingConfig {
     process.env.NEXT_PUBLIC_FREE_ORGANIZED_EVENTS_ENABLED === 'true'
 
   const limitRaw =
-    process.env.FREE_ORGANIZED_EVENTS_LIMIT ??
     process.env.NEXT_PUBLIC_FREE_ORGANIZED_EVENTS_LIMIT ??
+    (typeof window === 'undefined' ? readServerEnv('FREE_ORGANIZED_EVENTS_LIMIT') : undefined) ??
     '1'
   const parsedLimit = Number.parseInt(limitRaw, 10)
   const freeOrganizedEventsLimit =
     Number.isFinite(parsedLimit) && parsedLimit >= 0 ? parsedLimit : 1
 
   const priceEur = parsePriceEur(
-    process.env.NEXT_PUBLIC_EVENT_PRICE_EUR ?? process.env.EVENT_PRICE_EUR
+    process.env.NEXT_PUBLIC_EVENT_PRICE_EUR ??
+      (typeof window === 'undefined' ? readServerEnv('EVENT_PRICE_EUR') : undefined)
   )
 
   return {

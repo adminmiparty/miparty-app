@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
+import { readServerEnv } from '@/lib/envServer'
 
 /** Service-role client for webhooks and trusted server writes. Never import in client components. */
 export function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const url = readServerEnv('NEXT_PUBLIC_SUPABASE_URL')
+  const key = readServerEnv('SUPABASE_SERVICE_ROLE_KEY')
   if (!url || !key) {
     throw new Error('Missing Supabase admin credentials')
   }

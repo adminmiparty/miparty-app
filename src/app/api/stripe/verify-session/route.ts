@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
+import { logPaymentConfigFlags } from '@/lib/envServer'
 import { EVENT_STATUS_ACTIVE, EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
-import { getStripe } from '@/lib/stripe/server'
+import { initStripe } from '@/lib/stripe/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+
+export const runtime = 'nodejs'
 
 export async function GET(request: Request) {
   const supabase = await createClient()
@@ -20,8 +23,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Falta session_id' }, { status: 400 })
   }
 
-  const stripe = getStripe()
-  const session = await stripe.checkout.sessions.retrieve(sessionId)
+  const configFlags = logPaymentConfigFlags('stripe/verify-session')
+  const stripeInit = initStripe()
+  if (!stripeInit.ok) {
+    console.error('[stripe/verify-session] stripe not configured', {
+      reason: stripeInit.reason,
+      configFlags,
+    })
+    return NextResponse.json({ error: 'Pago no configurado' }, { status: 503 })
+  }
+  const session = await stripeInit.stripe.checkout.sessions.retrieve(sessionId)
 
   if (session.metadata?.user_id !== user.id) {
     return NextResponse.json({ error: 'Sesión no válida' }, { status: 403 })

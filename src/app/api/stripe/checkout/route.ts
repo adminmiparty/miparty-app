@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server'
+import { logPaymentConfigFlags, readServerEnv } from '@/lib/envServer'
 import { getOrganizerBillingConfig } from '@/lib/organizerBilling'
 import { loadOwnedDraftEvent } from '@/lib/organizerPublish'
-import { getStripe } from '@/lib/stripe/server'
+import { initStripe } from '@/lib/stripe/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 
 function siteUrl() {
-  const url = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.VERCEL_URL
+  const url = readServerEnv('NEXT_PUBLIC_SITE_URL') ?? readServerEnv('VERCEL_URL')
   if (!url) return 'http://localhost:3000'
   if (url.startsWith('http')) return url.replace(/\/$/, '')
   return `https://${url}`
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Falta el evento' }, { status: 400 })
     }
 
+    const configFlags = logPaymentConfigFlags('stripe/checkout')
     console.info('[stripe/checkout] start', { eventId, userId: user.id })
 
     const event = await loadOwnedDraftEvent(supabase, eventId, user.id)
@@ -52,16 +54,18 @@ export async function POST(request: Request) {
     const successUrl = `${base}/dashboard/eventos/${event.public_slug}/compartir?checkout=success&session_id={CHECKOUT_SESSION_ID}`
     const cancelUrl = `${base}/dashboard/eventos/${event.public_slug}/compartir?checkout=cancelled`
 
-    let stripe
-    try {
-      stripe = getStripe()
-    } catch (err) {
-      console.error('[stripe/checkout] stripe not configured', err instanceof Error ? err.message : err)
+    const stripeInit = initStripe()
+    if (!stripeInit.ok) {
+      console.error('[stripe/checkout] stripe not configured', {
+        reason: stripeInit.reason,
+        configFlags,
+      })
       return NextResponse.json(
         { error: 'El pago no está configurado todavía. Inténtalo más tarde.' },
         { status: 503 }
       )
     }
+    const stripe = stripeInit.stripe
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',

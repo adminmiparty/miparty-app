@@ -1,15 +1,26 @@
 import { NextResponse } from 'next/server'
 import type Stripe from 'stripe'
+import { logPaymentConfigFlags, readServerEnv } from '@/lib/envServer'
 import { EVENT_STATUS_ACTIVE, EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
-import { getStripe } from '@/lib/stripe/server'
+import { initStripe } from '@/lib/stripe/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
 
 export async function POST(request: Request) {
-  const stripe = getStripe()
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+  const configFlags = logPaymentConfigFlags('stripe/webhook')
+  const stripeInit = initStripe()
+  if (!stripeInit.ok) {
+    console.error('[stripe/webhook] stripe not configured', {
+      reason: stripeInit.reason,
+      configFlags,
+    })
+    return NextResponse.json({ error: 'Webhook no configurado' }, { status: 500 })
+  }
+  const stripe = stripeInit.stripe
+  const webhookSecret = readServerEnv('STRIPE_WEBHOOK_SECRET')
   if (!webhookSecret) {
+    console.error('[stripe/webhook] missing STRIPE_WEBHOOK_SECRET', { configFlags })
     return NextResponse.json({ error: 'Webhook no configurado' }, { status: 500 })
   }
 
