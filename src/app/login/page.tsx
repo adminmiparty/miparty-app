@@ -100,12 +100,6 @@ export default function LoginPage() {
 
           {showForgotPassword ? (
             <div className="space-y-3">
-              <p className="text-sm font-medium text-gray-900">Restablecer contraseña</p>
-
-              <p className="text-sm text-gray-600">
-                Escribe tu email y te enviaremos un enlace para restablecer tu contraseña.
-              </p>
-
               {!forgotSent ? (
                 <>
                   <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
