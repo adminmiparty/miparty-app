@@ -931,6 +931,9 @@ export default function DashboardHomePage() {
   const [childSaving, setChildSaving] = useState(false)
   const [childModalError, setChildModalError] = useState<string | null>(null)
   const [childAddSuccessToast, setChildAddSuccessToast] = useState(false)
+  const [pendingDeleteChild, setPendingDeleteChild] = useState<DashboardChildRow | null>(null)
+  const [childDeleteBusy, setChildDeleteBusy] = useState(false)
+  const [childDeletedToast, setChildDeletedToast] = useState(false)
   const [viewingChild, setViewingChild] = useState<DashboardChildRow | null>(null)
   const [childActionTarget, setChildActionTarget] = useState<DashboardChildRow | null>(null)
   const [locationActionTarget, setLocationActionTarget] = useState<DashboardLocationCard | null>(null)
@@ -1188,6 +1191,39 @@ export default function DashboardHomePage() {
       window.setTimeout(() => setDraftDeletedToast(false), 2500)
     }
   }, [draftDeleteTarget, userId, supabase])
+
+  const confirmDeleteChild = useCallback(async () => {
+    if (!pendingDeleteChild || !userId) return
+    const child = pendingDeleteChild
+    setChildDeleteBusy(true)
+
+    const avatarUrl = child.avatar_url?.trim()
+    if (avatarUrl) {
+      const storagePath = avatarUrl.match(/\/avatars\/(.+?)(?:\?|$)/)?.[1]
+      if (storagePath) {
+        await supabase.storage.from('avatars').remove([storagePath])
+      }
+    }
+
+    const { error } = await supabase
+      .from('children')
+      .delete()
+      .eq('id', child.id)
+      .eq('user_id', userId)
+
+    setChildDeleteBusy(false)
+    setPendingDeleteChild(null)
+
+    if (error) {
+      return
+    }
+
+    setChildren((prev) => prev.filter((c) => c.id !== child.id))
+    setChildActionTarget((current) => (current?.id === child.id ? null : current))
+    setViewingChild((current) => (current?.id === child.id ? null : current))
+    setChildDeletedToast(true)
+    window.setTimeout(() => setChildDeletedToast(false), 2500)
+  }, [pendingDeleteChild, userId, supabase])
 
   const organizedEventIds = useMemo(() => new Set(events.map((e) => e.id)), [events])
 
@@ -2482,6 +2518,15 @@ export default function DashboardHomePage() {
         </p>
       ) : null}
 
+      {childDeletedToast ? (
+        <p
+          className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
+          role="status"
+        >
+          ✓ Perfil eliminado
+        </p>
+      ) : null}
+
       {placeDeleteSuccessToast ? (
         <p
           className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
@@ -3416,6 +3461,75 @@ export default function DashboardHomePage() {
                   ✏️
                 </span>
                 <span className="text-sm font-medium text-gray-700">Ver perfil</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingDeleteChild(childActionTarget)
+                  setChildActionTarget(null)
+                }}
+                className="flex w-full items-center gap-3 rounded-xl border border-rose-100/90 bg-rose-50 px-4 py-3 text-left transition hover:bg-rose-100/80"
+              >
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100/90 text-lg"
+                  aria-hidden
+                >
+                  🗑️
+                </span>
+                <span className="text-sm font-medium text-rose-800/90">Eliminar perfil</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingDeleteChild ? (
+        <div
+          className="fixed inset-0 z-[55] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => !childDeleteBusy && setPendingDeleteChild(null)}
+          role="presentation"
+        >
+          <div
+            className="relative mx-4 max-h-[min(85vh,calc(100dvh-2rem))] w-full max-w-xs overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-child-confirm-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              disabled={childDeleteBusy}
+              onClick={() => setPendingDeleteChild(null)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </button>
+            <h2 id="delete-child-confirm-title" className="pr-8 text-lg font-semibold text-gray-900">
+              ¿Eliminar perfil?
+            </h2>
+            <p className="mt-2 text-sm font-medium text-gray-800">
+              {`${pendingDeleteChild.name} ${pendingDeleteChild.last_name || ''}`.trim()}
+            </p>
+            <p className="mt-3 text-sm leading-relaxed text-gray-600">
+              Esta persona dejará de mostrarse en Mi gente. Ninguno de tus eventos se verá afectado.
+            </p>
+            <div className="mt-5 flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={childDeleteBusy}
+                onClick={() => setPendingDeleteChild(null)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:w-auto sm:min-w-[7.5rem]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={childDeleteBusy}
+                onClick={() => void confirmDeleteChild()}
+                className="w-full rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-rose-700 disabled:opacity-60 sm:w-auto sm:min-w-[7.5rem]"
+              >
+                {childDeleteBusy ? 'Eliminando…' : 'Eliminar'}
               </button>
             </div>
           </div>
