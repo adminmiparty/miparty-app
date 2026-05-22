@@ -1,7 +1,6 @@
 'use client'
 
 import AppNav from '@/components/AppNav'
-import CheckoutRuntimeDebugBanner from '@/components/CheckoutRuntimeDebugBanner'
 import EventCreationSteps from '@/components/EventCreationSteps'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
@@ -17,7 +16,6 @@ import {
 } from '@/lib/eventFormTheme'
 import { createClient } from '@/lib/supabase/client'
 import { postStripeCheckout } from '@/lib/stripe/checkoutClient'
-import { logCheckoutClientDiagnostics } from '@/lib/stripe/checkoutDiagnostics'
 import { verifyCheckoutReturnWithRetry } from '@/lib/stripe/verifyCheckoutReturn'
 import {
   decidePublishBilling,
@@ -421,36 +419,26 @@ export default function EventSharePage() {
     }
   }
 
-  const startPaidCheckout = async (source: 'main-cta' | 'modal-cta') => {
+  const startPaidCheckout = async (_source: 'main-cta' | 'modal-cta') => {
     if (!event?.id) {
-      console.warn('[publish/checkout] skipped: no event loaded', { source })
       setPublishError('No se encontró el evento. Recarga la página.')
       return
     }
 
-    const diag = logCheckoutClientDiagnostics('click', { source, eventId: event.id })
     setPublishError(null)
     setPublishing(true)
 
     try {
       const {
         data: { session },
-        error: sessionError,
       } = await supabase.auth.getSession()
 
-      console.log('[publish/checkout] session', {
-        ...diag,
-        hasSession: Boolean(session),
-        sessionError: sessionError?.message ?? null,
-      })
+      const isMobile =
+        typeof navigator !== 'undefined' &&
+        /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
 
-      if (diag?.isMobile && session) {
-        const { error: refreshError } = await supabase.auth.refreshSession()
-        if (refreshError) {
-          console.warn('[publish/checkout] refreshSession', {
-            message: refreshError.message,
-          })
-        }
+      if (isMobile && session) {
+        await supabase.auth.refreshSession()
       }
 
       if (!session) {
@@ -459,51 +447,23 @@ export default function EventSharePage() {
         return
       }
 
-      console.log('[publish/checkout] fetch start', {
-        origin: window.location.origin,
-        fetchPath: '/api/stripe/checkout',
-        eventId: event.id,
-      })
-
-      const { ok, status, data, parseError, fetchUrl } = await postStripeCheckout(event.id)
-
-      console.log('[publish/checkout] fetch done', {
-        ok,
-        status,
-        fetchUrl,
-        hasUrl: Boolean(data.url),
-        error: data.error ?? null,
-        parseError: parseError ?? null,
-      })
+      const { ok, status, data } = await postStripeCheckout(event.id)
 
       if (!ok || !data.url) {
         if (status === 401) {
           setPublishError(
             'Tu sesión no se envió al servidor. Cierra la pestaña, vuelve a entrar desde el mismo enlace (miparty.net) e inténtalo de nuevo.'
           )
-        } else if (data.error === 'stripe_not_configured') {
-          console.error('[publish/checkout] stripe_not_configured', {
-            host: data.host,
-            vercelEnv: data.vercelEnv,
-            hasStripeSecret: data.hasStripeSecret,
-            fetchUrl,
-          })
-          setPublishError(
-            `${data.message ?? 'El pago no está configurado todavía.'} (host: ${data.host ?? '?'}, env: ${data.vercelEnv ?? '?'}, key: ${data.hasStripeSecret ? 'sí' : 'no'})`
-          )
         } else {
-          setPublishError(data.message ?? data.error ?? 'No se pudo iniciar el pago.')
+          setPublishError(data.error ?? 'No se pudo iniciar el pago.')
         }
         setPublishing(false)
         return
       }
 
       setShowPaymentModal(false)
-      console.log('[publish/checkout] redirect', { hasCheckoutUrl: true })
       window.location.assign(data.url)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'unknown'
-      console.error('[publish/checkout] fetch failed', { source, message, ...diag })
+    } catch {
       setPublishError('No se pudo iniciar el pago.')
       setPublishing(false)
     }
@@ -544,7 +504,6 @@ export default function EventSharePage() {
       />
 
       <div className="mx-auto w-full max-w-sm px-4 py-6 pb-8">
-        <CheckoutRuntimeDebugBanner />
         <EventCreationSteps
           step={2}
           progressAccentClass={progressAccentClass}
