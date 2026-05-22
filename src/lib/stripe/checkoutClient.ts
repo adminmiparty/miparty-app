@@ -1,3 +1,8 @@
+import {
+  getCheckoutClientDiagnostics,
+  logCheckoutClientDiagnostics,
+} from '@/lib/stripe/checkoutDiagnostics'
+
 /** Safe client-side helper for starting Stripe Checkout (no secrets). */
 
 export type StripeCheckoutApiResponse = {
@@ -5,38 +10,65 @@ export type StripeCheckoutApiResponse = {
   error?: string
 }
 
+const CHECKOUT_API_PATH = '/api/stripe/checkout'
+
 export async function postStripeCheckout(eventId: string): Promise<{
   ok: boolean
   status: number
   data: StripeCheckoutApiResponse
   parseError?: string
+  fetchUrl: string
 }> {
-  const url =
+  const fetchUrl =
     typeof window !== 'undefined'
-      ? `${window.location.origin}/api/stripe/checkout`
-      : '/api/stripe/checkout'
+      ? `${window.location.origin}${CHECKOUT_API_PATH}`
+      : CHECKOUT_API_PATH
 
-  const res = await fetch(url, {
+  logCheckoutClientDiagnostics('fetch', { fetchUrl, eventId })
+
+  const res = await fetch(CHECKOUT_API_PATH, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin',
+    credentials: 'include',
     body: JSON.stringify({ eventId }),
+  })
+
+  const diag = getCheckoutClientDiagnostics()
+  console.log('[publish/checkout] fetch response', {
+    ...diag,
+    fetchUrl,
+    status: res.status,
+    ok: res.ok,
   })
 
   const contentType = res.headers.get('content-type') ?? ''
   if (!contentType.includes('application/json')) {
     const snippet = (await res.text()).slice(0, 120)
-    return {
+    const result = {
       ok: false,
       status: res.status,
       data: { error: 'Respuesta inesperada del servidor' },
       parseError: `non-json:${res.status}:${snippet}`,
+      fetchUrl,
     }
+    console.log('[publish/checkout] fetch response body', {
+      ...diag,
+      status: res.status,
+      error: result.data.error,
+      parseError: result.parseError,
+    })
+    return result
   }
 
   try {
     const data = (await res.json()) as StripeCheckoutApiResponse
-    return { ok: res.ok, status: res.status, data }
+    console.log('[publish/checkout] fetch response body', {
+      ...diag,
+      status: res.status,
+      error: data.error ?? null,
+      hasCheckoutUrl: Boolean(data.url),
+    })
+    return { ok: res.ok, status: res.status, data, fetchUrl }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'json-parse-failed'
     return {
@@ -44,6 +76,7 @@ export async function postStripeCheckout(eventId: string): Promise<{
       status: res.status,
       data: { error: 'No se pudo leer la respuesta del servidor' },
       parseError: message,
+      fetchUrl,
     }
   }
 }

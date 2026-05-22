@@ -7,14 +7,10 @@ export type VerifyCheckoutResult = {
   error?: string
 }
 
-function apiBase() {
-  return typeof window !== 'undefined' ? window.location.origin : ''
-}
-
 export async function verifyCheckoutReturn(sessionId: string): Promise<VerifyCheckoutResult> {
   const res = await fetch(
-    `${apiBase()}/api/stripe/verify-session?session_id=${encodeURIComponent(sessionId)}`,
-    { credentials: 'same-origin' }
+    `/api/stripe/verify-session?session_id=${encodeURIComponent(sessionId)}`,
+    { credentials: 'include' }
   )
 
   const contentType = res.headers.get('content-type') ?? ''

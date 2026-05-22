@@ -1,3 +1,4 @@
+import { getCanonicalHostRedirect } from '@/lib/canonicalHost'
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -55,6 +56,15 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     const redirectResponse = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach(({ name, value }) => {
+      redirectResponse.cookies.set(name, value)
+    })
+    return redirectResponse
+  }
+
+  const canonicalUrl = getCanonicalHostRedirect(request)
+  if (canonicalUrl) {
+    const redirectResponse = NextResponse.redirect(canonicalUrl, 308)
     supabaseResponse.cookies.getAll().forEach(({ name, value }) => {
       redirectResponse.cookies.set(name, value)
     })

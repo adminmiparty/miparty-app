@@ -61,7 +61,7 @@ export default function DraftEventListRow({ draft, onContinue, onDelete }: Draft
           <button
             type="button"
             onClick={onDelete}
-            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-rose-50 hover:text-rose-700"
+            className="order-1 rounded-lg p-1.5 text-gray-400 transition hover:bg-rose-50 hover:text-rose-700 sm:order-2"
             aria-label="Eliminar borrador"
           >
             🗑️
@@ -69,7 +69,7 @@ export default function DraftEventListRow({ draft, onContinue, onDelete }: Draft
           <button
             type="button"
             onClick={onContinue}
-            className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition hover:bg-gray-50 sm:flex-none sm:whitespace-nowrap"
+            className="order-2 min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition hover:bg-gray-50 sm:order-1 sm:flex-none sm:whitespace-nowrap"
           >
             Continuar editando
           </button>

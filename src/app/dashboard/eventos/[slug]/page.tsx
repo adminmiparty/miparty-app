@@ -6,7 +6,7 @@
 
 import AppNav from '@/components/AppNav'
 import Link from 'next/link'
-import { Copy, LayoutGrid, MessageCircle, Share2, Table2 } from 'lucide-react'
+import { Contact, Copy, LayoutGrid, MessageCircle, Share2, Table2, X } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { subDays } from 'date-fns'
@@ -181,6 +181,164 @@ function rsvpStatusMeta(status: RsvpItem['attendance_status']) {
   return { label: 'Pendiente', badge: 'bg-gray-100 text-gray-600 border-gray-200' }
 }
 
+type GuestContactTarget = {
+  childName: string
+  parentName: string
+  phone: string
+}
+
+function digitsForWhatsApp(phone: string) {
+  return phone.replace(/\D/g, '')
+}
+
+function escapeVCardValue(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/\n/g, '\\n')
+}
+
+function downloadGuestContactVCard(parentName: string, phone: string) {
+  const tel = digitsForWhatsApp(phone)
+  const vcard = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `FN:${escapeVCardValue(parentName)}`,
+    ...(tel ? [`TEL;TYPE=CELL:${tel}`] : []),
+    'END:VCARD',
+  ].join('\n')
+  const blob = new Blob([vcard], { type: 'text/vcard;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = `${parentName.replace(/\s+/g, '_') || 'contacto'}.vcf`
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+function openGuestWhatsApp(phone: string, childName: string) {
+  const digits = digitsForWhatsApp(phone)
+  if (digits.length < 8) return false
+  const text = encodeURIComponent(
+    `Hola, soy el organizador del cumpleaños de ${childName}. `
+  )
+  window.location.assign(`https://wa.me/${digits}?text=${text}`)
+  return true
+}
+
+function RsvpContactIconButton({
+  rsvp,
+  onOpen,
+  className = '',
+}: {
+  rsvp: RsvpItem
+  onOpen: (target: GuestContactTarget) => void
+  className?: string
+}) {
+  const parentName = (rsvp.guest_parent_name ?? '').trim()
+  const phone = (rsvp.guest_parent_phone ?? '').trim()
+  if (!parentName && !phone) {
+    return <span className="text-gray-300">—</span>
+  }
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        onOpen({
+          childName: rsvp.child_name.trim(),
+          parentName: parentName || '—',
+          phone,
+        })
+      }
+      className={`inline-flex rounded-lg p-2 text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 ${className}`}
+      aria-label={`Contacto: ${parentName || rsvp.child_name}`}
+    >
+      <Contact className="h-4 w-4" aria-hidden />
+    </button>
+  )
+}
+
+function GuestContactModal({
+  contact,
+  onClose,
+  onToast,
+}: {
+  contact: GuestContactTarget
+  onClose: () => void
+  onToast: (message: string) => void
+}) {
+  const phoneDigits = digitsForWhatsApp(contact.phone)
+  const canWhatsApp = phoneDigits.length >= 8
+  const canSave = contact.parentName !== '—' || contact.phone.trim() !== ''
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="relative mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="guest-contact-modal-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          aria-label="Cerrar"
+          onClick={onClose}
+          className="absolute top-4 right-4 p-1 text-lg leading-none text-gray-400 hover:text-gray-600"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
+        <h2 id="guest-contact-modal-title" className="pr-8 text-lg font-bold text-gray-900">
+          Contacto del invitado
+        </h2>
+        <p className="mt-1 text-sm text-gray-500">Invitado/a: {contact.childName}</p>
+        <dl className="mt-4 space-y-3 text-sm">
+          <div>
+            <dt className="text-gray-500">Adulto responsable</dt>
+            <dd className="font-medium text-gray-900">{contact.parentName}</dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Teléfono</dt>
+            <dd className="font-medium text-gray-900">
+              {contact.phone.trim() ? contact.phone : '—'}
+            </dd>
+          </div>
+        </dl>
+        <div className="mt-6 flex flex-col gap-3">
+          <button
+            type="button"
+            disabled={!canSave}
+            onClick={() => {
+              if (!canSave) return
+              downloadGuestContactVCard(contact.parentName, contact.phone)
+              onToast('Contacto listo para guardar')
+              onClose()
+            }}
+            className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Guardar como contacto
+          </button>
+          <button
+            type="button"
+            disabled={!canWhatsApp}
+            onClick={() => {
+              if (!openGuestWhatsApp(contact.phone, contact.childName)) {
+                onToast('Añade un teléfono válido para enviar WhatsApp')
+                return
+              }
+              onClose()
+            }}
+            className="w-full rounded-lg bg-[#25D366] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1ebe57] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Enviar mensaje por WhatsApp
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function EventControlCenterPage() {
   const params = useParams()
   const router = useRouter()
@@ -198,6 +356,7 @@ export default function EventControlCenterPage() {
   const copyInviteLinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [guestContactModal, setGuestContactModal] = useState<GuestContactTarget | null>(null)
 
   const toggleFilter = (status: string) => {
     setActiveFilters((prev) =>
@@ -410,6 +569,9 @@ export default function EventControlCenterPage() {
     }
     return 'Confirmaciones hasta el día del evento'
   }, [event])
+
+  const showFoodColumn = Boolean(event?.enable_food_options && foodOptionLabels.length > 0)
+  const rsvpTableColCount = showFoodColumn ? 6 : 5
 
   const dashboardGiftLine = event ? formatDashboardGiftLine(event) : null
   const hasLocationDetails =
@@ -837,13 +999,19 @@ export default function EventControlCenterPage() {
                               <div className="flex items-start justify-between gap-2">
                                 <div>
                                   <p className="text-sm font-semibold text-gray-500">Lucía Pérez</p>
-                                  <p className="text-xs text-gray-500">Adulto: María Pérez</p>
                                 </div>
-                                <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">
-                                  ✅ Sí
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex rounded-lg p-2 text-gray-400">
+                                    <Contact className="h-4 w-4" aria-hidden />
+                                  </span>
+                                  <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">
+                                    ✅ Sí
+                                  </span>
+                                </div>
                               </div>
-                              <p className="mt-2 text-sm text-gray-500">🍕 Pizza</p>
+                              {showFoodColumn ? (
+                                <p className="mt-2 text-sm text-gray-500">🍕 Pizza</p>
+                              ) : null}
                               <p className="mt-1 rounded-lg bg-gray-100/80 px-2 py-1 text-sm italic text-gray-500">
                                 💬 ¡Qué ilusión, gracias por invitarnos!
                               </p>
@@ -854,13 +1022,19 @@ export default function EventControlCenterPage() {
                               <div className="flex items-start justify-between gap-2">
                                 <div>
                                   <p className="text-sm font-semibold text-gray-500">Carlos Díaz</p>
-                                  <p className="text-xs text-gray-500">Adulto: Roberto Díaz</p>
                                 </div>
-                                <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">
-                                  🤔 Aún no lo sé
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex rounded-lg p-2 text-gray-400">
+                                    <Contact className="h-4 w-4" aria-hidden />
+                                  </span>
+                                  <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">
+                                    🤔 Aún no lo sé
+                                  </span>
+                                </div>
                               </div>
-                              <p className="mt-2 text-sm text-gray-500">🌭 Perrito</p>
+                              {showFoodColumn ? (
+                                <p className="mt-2 text-sm text-gray-500">🌭 Perrito</p>
+                              ) : null}
                               <p className="mt-1 text-sm text-gray-500">⚠️ Gluten</p>
                             </article>
                           ) : null}
@@ -869,11 +1043,15 @@ export default function EventControlCenterPage() {
                               <div className="flex items-start justify-between gap-2">
                                 <div>
                                   <p className="text-sm font-semibold text-gray-500">Emma García</p>
-                                  <p className="text-xs text-gray-500">Adulto: Laura García</p>
                                 </div>
-                                <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">
-                                  ❌ No puede ir
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex rounded-lg p-2 text-gray-400">
+                                    <Contact className="h-4 w-4" aria-hidden />
+                                  </span>
+                                  <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">
+                                    ❌ No puede ir
+                                  </span>
+                                </div>
                               </div>
                               <p className="mt-1 rounded-lg bg-gray-100/80 px-2 py-1 text-sm italic text-gray-500">
                                 💬 Lo sentimos, ese día tenemos compromiso
@@ -890,9 +1068,11 @@ export default function EventControlCenterPage() {
                           <thead>
                             <tr className="border-b border-gray-200 text-xs font-medium text-gray-600">
                               <th className="whitespace-nowrap px-3 py-2">Niño/a</th>
-                              <th className="whitespace-nowrap px-3 py-2">Adulto</th>
+                              <th className="whitespace-nowrap px-3 py-2 text-center">Contacto</th>
                               <th className="whitespace-nowrap px-3 py-2">Estado</th>
-                              <th className="whitespace-nowrap px-3 py-2">Comida</th>
+                              {showFoodColumn ? (
+                                <th className="whitespace-nowrap px-3 py-2">Comida</th>
+                              ) : null}
                               <th className="whitespace-nowrap px-3 py-2">Alergias</th>
                               <th className="whitespace-nowrap px-3 py-2 min-w-[120px]">Mensaje</th>
                             </tr>
@@ -900,7 +1080,10 @@ export default function EventControlCenterPage() {
                           <tbody>
                             {!anyDemoRowVisible ? (
                               <tr>
-                                <td colSpan={6} className="whitespace-nowrap px-3 py-4 text-center text-sm text-gray-600">
+                                <td
+                                  colSpan={rsvpTableColCount}
+                                  className="whitespace-nowrap px-3 py-4 text-center text-sm text-gray-600"
+                                >
                                   No hay respuestas con estos filtros.
                                 </td>
                               </tr>
@@ -909,17 +1092,19 @@ export default function EventControlCenterPage() {
                                 {showDemoLucía ? (
                                   <tr className="border-b border-gray-100 bg-gray-50 italic text-gray-400 opacity-70">
                                     <td className="whitespace-nowrap px-3 py-2 font-medium">Lucía Pérez</td>
-                                    <td className="whitespace-nowrap px-3 py-2" title="María Pérez">
-                                      María Pérez
+                                    <td className="whitespace-nowrap px-3 py-2 text-center text-gray-400">
+                                      <Contact className="mx-auto h-4 w-4" aria-hidden />
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-2">
                                       <span className="whitespace-nowrap rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-400">
                                         ✅ Sí
                                       </span>
                                     </td>
-                                    <td className="whitespace-nowrap px-3 py-2" title="🍕 Pizza">
-                                      🍕 Pizza
-                                    </td>
+                                    {showFoodColumn ? (
+                                      <td className="whitespace-nowrap px-3 py-2" title="🍕 Pizza">
+                                        🍕 Pizza
+                                      </td>
+                                    ) : null}
                                     <td className="whitespace-nowrap px-3 py-2 text-gray-400">—</td>
                                     <td className="whitespace-nowrap px-3 py-2 min-w-[120px] text-gray-700" title="¡Qué ilusión, gracias por invitarnos!">
                                       ¡Qué ilusión, gracias por invitarnos!
@@ -929,17 +1114,19 @@ export default function EventControlCenterPage() {
                                 {showDemoCarlos ? (
                                   <tr className="border-b border-gray-100 bg-gray-50 italic text-gray-400 opacity-70">
                                     <td className="whitespace-nowrap px-3 py-2 font-medium">Carlos Díaz</td>
-                                    <td className="whitespace-nowrap px-3 py-2" title="Roberto Díaz">
-                                      Roberto Díaz
+                                    <td className="whitespace-nowrap px-3 py-2 text-center text-gray-400">
+                                      <Contact className="mx-auto h-4 w-4" aria-hidden />
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-2">
                                       <span className="whitespace-nowrap rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-400">
                                         🤔 Aún no lo sé
                                       </span>
                                     </td>
-                                    <td className="whitespace-nowrap px-3 py-2" title="🌭 Perrito">
-                                      🌭 Perrito
-                                    </td>
+                                    {showFoodColumn ? (
+                                      <td className="whitespace-nowrap px-3 py-2" title="🌭 Perrito">
+                                        🌭 Perrito
+                                      </td>
+                                    ) : null}
                                     <td className="whitespace-nowrap px-3 py-2" title="Gluten">
                                       Gluten
                                     </td>
@@ -949,15 +1136,17 @@ export default function EventControlCenterPage() {
                                 {showDemoEmma ? (
                                   <tr className="border-b border-gray-100 bg-gray-50 italic text-gray-400 opacity-70">
                                     <td className="whitespace-nowrap px-3 py-2 font-medium">Emma García</td>
-                                    <td className="whitespace-nowrap px-3 py-2" title="Laura García">
-                                      Laura García
+                                    <td className="whitespace-nowrap px-3 py-2 text-center text-gray-400">
+                                      <Contact className="mx-auto h-4 w-4" aria-hidden />
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-2">
                                       <span className="whitespace-nowrap rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-400">
                                         ❌ No puede ir
                                       </span>
                                     </td>
-                                    <td className="whitespace-nowrap px-3 py-2 text-gray-400">—</td>
+                                    {showFoodColumn ? (
+                                      <td className="whitespace-nowrap px-3 py-2 text-gray-400">—</td>
+                                    ) : null}
                                     <td className="whitespace-nowrap px-3 py-2 text-gray-400">—</td>
                                     <td className="whitespace-nowrap px-3 py-2 min-w-[120px] text-gray-700" title="Lo sentimos, ese día tenemos compromiso">
                                       Lo sentimos, ese día tenemos compromiso
@@ -1012,13 +1201,18 @@ export default function EventControlCenterPage() {
                                       </span>
                                     ) : null}
                                   </div>
-                                  <p className="text-xs text-gray-500">Adulto: {rsvp.guest_parent_name}</p>
                                 </div>
-                                <span className={`rounded-full border px-2 py-1 text-xs font-medium ${status.badge}`}>
-                                  {status.label}
-                                </span>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <RsvpContactIconButton
+                                    rsvp={rsvp}
+                                    onOpen={setGuestContactModal}
+                                  />
+                                  <span className={`rounded-full border px-2 py-1 text-xs font-medium ${status.badge}`}>
+                                    {status.label}
+                                  </span>
+                                </div>
                               </div>
-                              {rsvp.food_preference ? (
+                              {showFoodColumn && rsvp.food_preference ? (
                                 <p className="mt-2 text-sm text-gray-700">{`🍽️ ${rsvp.food_preference}`}</p>
                               ) : null}
                               {rsvp.allergy_notes ? (
@@ -1038,10 +1232,11 @@ export default function EventControlCenterPage() {
                         <thead className="sticky top-0 z-10 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
                           <tr className="border-b border-gray-200 text-xs font-medium text-gray-600">
                             <th className="whitespace-nowrap px-3 py-2">Niño/a</th>
-                            <th className="whitespace-nowrap px-3 py-2">Adulto</th>
-                            <th className="whitespace-nowrap px-3 py-2">Teléfono</th>
+                            <th className="whitespace-nowrap px-3 py-2 text-center">Contacto</th>
                             <th className="whitespace-nowrap px-3 py-2">Estado</th>
-                            <th className="whitespace-nowrap px-3 py-2">Comida</th>
+                            {showFoodColumn ? (
+                              <th className="whitespace-nowrap px-3 py-2">Comida</th>
+                            ) : null}
                             <th className="whitespace-nowrap px-3 py-2">Alergias</th>
                             <th className="whitespace-nowrap px-3 py-2">Mensaje</th>
                           </tr>
@@ -1049,7 +1244,10 @@ export default function EventControlCenterPage() {
                         <tbody>
                           {filteredRsvps.length === 0 ? (
                             <tr>
-                              <td colSpan={7} className="whitespace-nowrap px-3 py-4 text-center text-sm text-gray-600">
+                              <td
+                                colSpan={rsvpTableColCount}
+                                className="whitespace-nowrap px-3 py-4 text-center text-sm text-gray-600"
+                              >
                                 No hay respuestas con estos filtros.
                               </td>
                             </tr>
@@ -1062,7 +1260,6 @@ export default function EventControlCenterPage() {
                             const foodDisplay = foodRaw ? `🍽️ ${foodRaw}` : ''
                             const allergyRaw = (rsvp.allergy_notes ?? '').trim()
                             const messageRaw = (rsvp.extra_notes ?? '').trim()
-                            const phoneRaw = (rsvp.guest_parent_phone ?? '').trim()
                             return (
                               <tr
                                 key={rsvp.id}
@@ -1078,14 +1275,12 @@ export default function EventControlCenterPage() {
                                     ) : null}
                                   </div>
                                 </td>
-                                <td
-                                  className="whitespace-nowrap px-3 py-2 text-gray-700"
-                                  title={rsvp.guest_parent_name || undefined}
-                                >
-                                  {rsvp.guest_parent_name}
-                                </td>
-                                <td className="whitespace-nowrap px-3 py-2 text-sm text-gray-600">
-                                  {phoneRaw ? phoneRaw : <span className="text-gray-300">—</span>}
+                                <td className="whitespace-nowrap px-3 py-2 text-center">
+                                  <RsvpContactIconButton
+                                    rsvp={rsvp}
+                                    onOpen={setGuestContactModal}
+                                    className="mx-auto"
+                                  />
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-2">
                                   <span
@@ -1094,13 +1289,18 @@ export default function EventControlCenterPage() {
                                     {status.label}
                                   </span>
                                 </td>
-                                <td className="whitespace-nowrap px-3 py-2 text-gray-700" title={foodDisplay || undefined}>
-                                  {foodRaw ? (
-                                    foodDisplay
-                                  ) : (
-                                    <span className="text-gray-300">—</span>
-                                  )}
-                                </td>
+                                {showFoodColumn ? (
+                                  <td
+                                    className="whitespace-nowrap px-3 py-2 text-gray-700"
+                                    title={foodDisplay || undefined}
+                                  >
+                                    {foodRaw ? (
+                                      foodDisplay
+                                    ) : (
+                                      <span className="text-gray-300">—</span>
+                                    )}
+                                  </td>
+                                ) : null}
                                 <td className="whitespace-nowrap px-3 py-2 text-gray-700" title={allergyRaw || undefined}>
                                   {allergyRaw ? allergyRaw : <span className="text-gray-300">—</span>}
                                 </td>
@@ -1189,6 +1389,14 @@ export default function EventControlCenterPage() {
           </div>
         </div>
       </div>
+
+      {guestContactModal ? (
+        <GuestContactModal
+          contact={guestContactModal}
+          onClose={() => setGuestContactModal(null)}
+          onToast={showToast}
+        />
+      ) : null}
 
       {toastMessage ? (
         <div

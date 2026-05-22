@@ -1,19 +1,13 @@
 import { NextResponse } from 'next/server'
-import { logPaymentConfigFlags, readServerEnv } from '@/lib/envServer'
+import { logPaymentConfigFlags } from '@/lib/envServer'
 import { getOrganizerBillingConfig } from '@/lib/organizerBilling'
+import { getRequestHostDiagnostics, getRequestOrigin } from '@/lib/requestOrigin'
 import { loadOwnedDraftEvent } from '@/lib/organizerPublish'
 import { initStripe } from '@/lib/stripe/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
-
-function siteUrl() {
-  const url = readServerEnv('NEXT_PUBLIC_SITE_URL') ?? readServerEnv('VERCEL_URL')
-  if (!url) return 'http://localhost:3000'
-  if (url.startsWith('http')) return url.replace(/\/$/, '')
-  return `https://${url}`
-}
 
 export async function POST(request: Request) {
   try {
@@ -23,8 +17,13 @@ export async function POST(request: Request) {
       error: userError,
     } = await supabase.auth.getUser()
 
+    const hostDiag = getRequestHostDiagnostics(request)
+
     if (userError || !user) {
-      console.warn('[stripe/checkout] unauthorized')
+      console.warn('[stripe/checkout] unauthorized', {
+        ...hostDiag,
+        userError: userError?.message ?? null,
+      })
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
@@ -41,7 +40,13 @@ export async function POST(request: Request) {
     }
 
     const configFlags = logPaymentConfigFlags('stripe/checkout')
-    console.log('[stripe/checkout] start', { eventId, userId: user.id })
+    console.log('[stripe/checkout] start', {
+      eventId,
+      userId: user.id,
+      hasUser: true,
+      ...hostDiag,
+      configFlags,
+    })
 
     const event = await loadOwnedDraftEvent(supabase, eventId, user.id)
     if (!event) {
@@ -50,9 +55,14 @@ export async function POST(request: Request) {
     }
 
     const config = getOrganizerBillingConfig()
-    const base = siteUrl()
+    const base = getRequestOrigin(request)
     const successUrl = `${base}/dashboard/eventos/${event.public_slug}/compartir?checkout=success&session_id={CHECKOUT_SESSION_ID}`
     const cancelUrl = `${base}/dashboard/eventos/${event.public_slug}/compartir?checkout=cancelled`
+    console.log('[stripe/checkout] redirect urls', {
+      base,
+      envSiteUrl: hostDiag.envSiteUrl,
+      requestHost: hostDiag.host,
+    })
 
     const stripeInit = initStripe()
     if (!stripeInit.ok) {
@@ -118,7 +128,11 @@ export async function POST(request: Request) {
       )
     }
 
-    console.info('[stripe/checkout] session created', { sessionId: session.id, eventId: event.id })
+    console.log('[stripe/checkout] session created', {
+      sessionId: session.id,
+      eventId: event.id,
+      ...hostDiag,
+    })
 
     return NextResponse.json({ url: session.url })
   } catch (err) {

@@ -16,6 +16,7 @@ import {
 } from '@/lib/eventFormTheme'
 import { createClient } from '@/lib/supabase/client'
 import { postStripeCheckout } from '@/lib/stripe/checkoutClient'
+import { logCheckoutClientDiagnostics } from '@/lib/stripe/checkoutDiagnostics'
 import { verifyCheckoutReturnWithRetry } from '@/lib/stripe/verifyCheckoutReturn'
 import {
   decidePublishBilling,
@@ -426,38 +427,72 @@ export default function EventSharePage() {
       return
     }
 
-    console.log('[publish/checkout] click', { source, eventId: event.id })
+    const diag = logCheckoutClientDiagnostics('click', { source, eventId: event.id })
     setPublishError(null)
     setPublishing(true)
 
     try {
-      const checkoutUrl =
-        typeof window !== 'undefined'
-          ? `${window.location.origin}/api/stripe/checkout`
-          : '/api/stripe/checkout'
-      console.log('[publish/checkout] fetch start', { url: checkoutUrl, eventId: event.id })
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession()
 
-      const { ok, status, data, parseError } = await postStripeCheckout(event.id)
+      console.log('[publish/checkout] session', {
+        ...diag,
+        hasSession: Boolean(session),
+        sessionError: sessionError?.message ?? null,
+      })
 
-      console.info('[publish/checkout] fetch done', {
+      if (diag?.isMobile && session) {
+        const { error: refreshError } = await supabase.auth.refreshSession()
+        if (refreshError) {
+          console.warn('[publish/checkout] refreshSession', {
+            message: refreshError.message,
+          })
+        }
+      }
+
+      if (!session) {
+        setPublishError('Inicia sesión de nuevo para continuar con el pago.')
+        setPublishing(false)
+        return
+      }
+
+      console.log('[publish/checkout] fetch start', {
+        origin: window.location.origin,
+        fetchPath: '/api/stripe/checkout',
+        eventId: event.id,
+      })
+
+      const { ok, status, data, parseError, fetchUrl } = await postStripeCheckout(event.id)
+
+      console.log('[publish/checkout] fetch done', {
         ok,
         status,
+        fetchUrl,
         hasUrl: Boolean(data.url),
         error: data.error ?? null,
         parseError: parseError ?? null,
       })
 
       if (!ok || !data.url) {
-        setPublishError(data.error ?? 'No se pudo iniciar el pago.')
+        if (status === 401) {
+          setPublishError(
+            'Tu sesión no se envió al servidor. Cierra la pestaña, vuelve a entrar desde el mismo enlace (miparty.net) e inténtalo de nuevo.'
+          )
+        } else {
+          setPublishError(data.error ?? 'No se pudo iniciar el pago.')
+        }
         setPublishing(false)
         return
       }
 
       setShowPaymentModal(false)
+      console.log('[publish/checkout] redirect', { hasCheckoutUrl: true })
       window.location.assign(data.url)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown'
-      console.error('[publish/checkout] fetch failed', { source, message })
+      console.error('[publish/checkout] fetch failed', { source, message, ...diag })
       setPublishError('No se pudo iniciar el pago.')
       setPublishing(false)
     }
