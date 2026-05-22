@@ -2125,131 +2125,149 @@ export default function DashboardHomePage() {
         </header>
 
         {loading && !parentProfile ? (
-          <div
-            className="mb-6 grid grid-cols-1 gap-3 sm:mb-8 sm:grid-cols-2"
+          <section
+            className="mb-6 sm:mb-10"
             aria-busy="true"
-            aria-label="Cargando perfil"
+            aria-labelledby="mi-perfil-heading"
           >
-            {[0, 1].map((i) => (
-              <div
-                key={i}
-                className="card-soft flex min-h-[5.625rem] animate-pulse flex-row items-center gap-3 p-3 sm:gap-4"
-              >
-                <div className="h-16 w-16 shrink-0 rounded-full bg-gray-200" />
-                <div className="min-w-0 flex-1 space-y-2 pr-6">
-                  <div className="h-4 w-28 rounded bg-gray-200" />
-                  <div className="h-3 w-24 rounded bg-gray-100" />
-                  <div className="h-3 w-32 rounded bg-gray-100" />
+            <h2
+              id="mi-perfil-heading"
+              className="mb-3 text-base font-semibold text-gray-900 sm:text-lg"
+            >
+              Mi perfil
+            </h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {[0, 1].map((i) => (
+                <div
+                  key={i}
+                  className="card-soft flex min-h-[5.625rem] animate-pulse flex-row items-center gap-3 p-3 sm:gap-4"
+                >
+                  <div className="h-16 w-16 shrink-0 rounded-full bg-gray-200" />
+                  <div className="min-w-0 flex-1 space-y-2 pr-6">
+                    <div className="h-4 w-28 rounded bg-gray-200" />
+                    <div className="h-3 w-24 rounded bg-gray-100" />
+                    <div className="h-3 w-32 rounded bg-gray-100" />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </section>
         ) : null}
 
         {parentProfile ? (
-          <div className="mb-6 grid grid-cols-1 gap-3 sm:mb-8 sm:grid-cols-2">
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={openProfileModal}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  openProfileModal()
-                }
-              }}
-              className="card-soft relative flex min-h-[5.625rem] cursor-pointer flex-row items-center gap-3 p-3 sm:gap-4"
+          <section className="mb-6 sm:mb-10" aria-labelledby="mi-perfil-heading">
+            <h2
+              id="mi-perfil-heading"
+              className="mb-3 text-base font-semibold text-gray-900 sm:text-lg"
             >
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  openProfileModal()
+              Mi perfil
+            </h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={openProfileModal}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    openProfileModal()
+                  }
                 }}
-                className="absolute top-2 right-2 rounded-full p-1 text-gray-300 transition hover:bg-gray-100 hover:text-gray-500"
-                aria-label="Editar perfil"
+                className="card-soft relative flex min-h-[5.625rem] cursor-pointer flex-row items-center gap-3 p-3 sm:gap-4"
               >
-                <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
-              </button>
-              {showParentAvatar ? (
-                <img
-                  src={avatarUrl}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  onError={() => setAvatarError(true)}
-                  className="h-16 w-16 shrink-0 rounded-full object-cover"
-                />
-              ) : (
-                <div
-                  className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-white ${brand.accentBg}`}
-                  aria-hidden
-                >
-                  {profileInitials.slice(0, 1)}
-                </div>
-              )}
-              <div className="min-w-0 flex-1 pr-6">
-                <p className="text-xs font-medium text-gray-500">Mi perfil</p>
-                <p className="text-base font-semibold leading-snug text-gray-900 break-words sm:truncate">
-                  {parentProfile.fullName ?? 'Tu cuenta'}
-                </p>
-                {parentProfile.phone ? (
-                  <p className="text-sm text-gray-500 break-words sm:truncate">{parentProfile.phone}</p>
-                ) : null}
-                <p className="text-sm text-gray-400 break-words sm:truncate">{parentProfile.email}</p>
-              </div>
-            </div>
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => setShowAddPartnerModal(true)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  setShowAddPartnerModal(true)
-                }
-              }}
-              className={`card-soft relative flex min-h-[5.625rem] cursor-pointer flex-row items-center gap-3 p-3 sm:gap-4 ${
-                partner ? 'border border-gray-100' : 'border border-dashed border-gray-200'
-              }`}
-            >
-              {partner ? (
                 <button
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation()
-                    setShowAddPartnerModal(true)
+                    openProfileModal()
                   }}
                   className="absolute top-2 right-2 rounded-full p-1 text-gray-300 transition hover:bg-gray-100 hover:text-gray-500"
-                  aria-label="Editar pareja"
+                  aria-label="Editar perfil"
                 >
                   <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
                 </button>
-              ) : null}
-              <div
-                className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-semibold ${
-                  partner ? partnerAvatarColors[0] : 'border-2 bg-gray-50 text-gray-400'
-                }`}
-                aria-hidden
-              >
-                {partner ? getPartnerInitials(partner.full_name, partner.last_name) : '+'}
-              </div>
-              <div className={`min-w-0 flex-1 text-left ${partner ? 'pr-6' : ''}`}>
-                {partner ? (
-                  <>
-                    <p className="text-xs font-medium text-gray-500">Pareja</p>
-                    <p className="text-base font-semibold leading-snug text-gray-900 break-words sm:truncate">
-                      {partnerDisplayLabel(partner)}
-                    </p>
-                    {partner.phone ? (
-                      <p className="text-sm text-gray-500 break-words sm:truncate">{partner.phone}</p>
-                    ) : null}
-                  </>
+                {showParentAvatar ? (
+                  <img
+                    src={avatarUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    onError={() => setAvatarError(true)}
+                    className="h-16 w-16 shrink-0 rounded-full object-cover"
+                  />
                 ) : (
-                  <p className="text-xs font-medium text-gray-400">Añadir pareja</p>
+                  <div
+                    className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-white ${brand.accentBg}`}
+                    aria-hidden
+                  >
+                    {profileInitials.slice(0, 1)}
+                  </div>
                 )}
+                <div className="min-w-0 flex-1 pr-6">
+                  <p className="text-base font-semibold leading-snug text-gray-900 break-words sm:truncate">
+                    {parentProfile.fullName ?? 'Tu cuenta'}
+                  </p>
+                  {parentProfile.phone ? (
+                    <p className="mt-0.5 text-sm text-gray-500 break-words sm:truncate">{parentProfile.phone}</p>
+                  ) : null}
+                  <p className="text-sm text-gray-400 break-words sm:truncate">{parentProfile.email}</p>
+                </div>
+              </div>
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setShowAddPartnerModal(true)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    setShowAddPartnerModal(true)
+                  }
+                }}
+                className={`card-soft relative flex min-h-[5.625rem] cursor-pointer flex-row items-center gap-3 p-3 sm:gap-4 ${
+                  partner ? 'border border-gray-100' : 'border border-dashed border-gray-200'
+                }`}
+              >
+                {partner ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setShowAddPartnerModal(true)
+                    }}
+                    className="absolute top-2 right-2 rounded-full p-1 text-gray-300 transition hover:bg-gray-100 hover:text-gray-500"
+                    aria-label="Editar pareja"
+                  >
+                    <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
+                  </button>
+                ) : null}
+                <div
+                  className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-semibold ${
+                    partner ? partnerAvatarColors[0] : 'border-2 bg-gray-50 text-gray-400'
+                  }`}
+                  aria-hidden
+                >
+                  {partner ? getPartnerInitials(partner.full_name, partner.last_name) : '+'}
+                </div>
+                <div className={`min-w-0 flex-1 text-left ${partner ? 'pr-6' : ''}`}>
+                  {partner ? (
+                    <>
+                      <p className="text-xs font-medium text-gray-500">Pareja</p>
+                      <p className="text-base font-semibold leading-snug text-gray-900 break-words sm:truncate">
+                        {partnerDisplayLabel(partner)}
+                      </p>
+                      {partner.phone ? (
+                        <p className="text-sm text-gray-500 break-words sm:truncate">{partner.phone}</p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-base font-medium text-gray-700">Añadir pareja</p>
+                      <p className="mt-0.5 text-sm text-gray-400">Opcional</p>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          </section>
         ) : null}
 
         {userId || loading ? (
