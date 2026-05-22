@@ -7,7 +7,7 @@
 import AppNav from '@/components/AppNav'
 import Link from 'next/link'
 import { Contact, Copy, LayoutGrid, MessageCircle, Share2, Table2, X } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { subDays } from 'date-fns'
 import { brand } from '@/lib/brand'
@@ -15,6 +15,9 @@ import { EVENT_STATUS_ACTIVE, EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
 import { formatSpanishDateMedium, formatSpanishFullDate, parseIsoDateParts } from '@/lib/dates'
 import { createClient } from '@/lib/supabase/client'
 import ShareButton from '@/components/ShareButton'
+import { ConfettiBurst } from '@/components/ConfettiBurst'
+import { PublishedSuccessModal } from '@/components/PublishedSuccessModal'
+import { verifyCheckoutReturnWithRetry } from '@/lib/stripe/verifyCheckoutReturn'
 
 function localTodayIsoDate() {
   const t = new Date()
@@ -342,6 +345,7 @@ function GuestContactModal({
 export default function EventControlCenterPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const slug =
     typeof params?.slug === 'string' ? params.slug : Array.isArray(params?.slug) ? (params.slug[0] ?? '') : ''
 
@@ -357,6 +361,12 @@ export default function EventControlCenterPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [guestContactModal, setGuestContactModal] = useState<GuestContactTarget | null>(null)
+  const [confirmingCheckoutReturn, setConfirmingCheckoutReturn] = useState(false)
+  const [checkoutVerifyError, setCheckoutVerifyError] = useState<string | null>(null)
+  const [showPublishedSuccess, setShowPublishedSuccess] = useState(false)
+  const [showPublishConfetti, setShowPublishConfetti] = useState(false)
+  const inviteShareSectionRef = useRef<HTMLDivElement>(null)
+  const publishCelebrationStartedRef = useRef(false)
 
   const toggleFilter = (status: string) => {
     setActiveFilters((prev) =>
@@ -385,6 +395,57 @@ export default function EventControlCenterPage() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    const checkout = searchParams.get('checkout')
+    const sessionId = searchParams.get('session_id')
+    if (checkout !== 'success' || !sessionId || !slug) return
+
+    let cancelled = false
+    const confirmPaymentReturn = async () => {
+      setConfirmingCheckoutReturn(true)
+      setCheckoutVerifyError(null)
+
+      const result = await verifyCheckoutReturnWithRetry(sessionId)
+      if (cancelled) return
+
+      setConfirmingCheckoutReturn(false)
+
+      if (result.status === 401) {
+        setCheckoutVerifyError('Inicia sesión de nuevo para confirmar el pago.')
+        router.replace(`/dashboard/eventos/${slug}`)
+        return
+      }
+
+      if (!result.ok || !result.published || !result.slug) {
+        setCheckoutVerifyError(
+          result.error ??
+            'El pago se recibió, pero el evento aún no está publicado. Espera unos segundos y recarga la página.'
+        )
+        router.replace(`/dashboard/eventos/${slug}`)
+        return
+      }
+
+      router.replace(`/dashboard/eventos/${result.slug}?published=paid`)
+    }
+
+    void confirmPaymentReturn()
+    return () => {
+      cancelled = true
+    }
+  }, [searchParams, router, slug])
+
+  useEffect(() => {
+    const published = searchParams.get('published')
+    if (published !== 'paid' && published !== 'free') return
+    if (loading || !event) return
+    if (publishCelebrationStartedRef.current) return
+
+    publishCelebrationStartedRef.current = true
+    setShowPublishConfetti(true)
+    setShowPublishedSuccess(true)
+    window.setTimeout(() => setShowPublishConfetti(false), 3200)
+  }, [searchParams, loading, event])
 
   useEffect(() => {
     if (!slug) {
@@ -433,6 +494,16 @@ export default function EventControlCenterPage() {
       }
 
       if (eventRow.status === EVENT_STATUS_DRAFT) {
+        const awaitingCheckoutConfirm =
+          searchParams.get('checkout') === 'success' && Boolean(searchParams.get('session_id'))
+
+        if (awaitingCheckoutConfirm) {
+          if (!cancelled) {
+            setLoading(false)
+          }
+          return
+        }
+
         const { data: paidRow } = await supabase
           .from('event_payments')
           .select('id')
@@ -446,7 +517,7 @@ export default function EventControlCenterPage() {
             .update({ status: EVENT_STATUS_ACTIVE })
             .eq('id', eventRow.id)
             .eq('user_id', user.id)
-          router.replace(`/dashboard/eventos/${slug}/compartir`)
+          router.replace(`/dashboard/eventos/${slug}?published=paid`)
           return
         }
 
@@ -488,7 +559,7 @@ export default function EventControlCenterPage() {
     return () => {
       cancelled = true
     }
-  }, [slug, router])
+  }, [slug, router, searchParams])
 
   const confirmedCount = rsvps.filter((rsvp) => rsvp.attendance_status === 'confirmed').length
   const declinedCount = rsvps.filter((rsvp) => rsvp.attendance_status === 'declined').length
@@ -665,6 +736,39 @@ export default function EventControlCenterPage() {
     }, 2000)
   }
 
+  const dismissPublishedSuccess = () => {
+    setShowPublishedSuccess(false)
+    if (slug) {
+      router.replace(`/dashboard/eventos/${slug}`)
+    }
+  }
+
+  const shareEventInvitation = async () => {
+    if (!event) return
+    const url = `https://miparty.net/e/${event.public_slug}`
+    const shareData = {
+      title: event.title,
+      text: `¡Hola! Te comparto la invitación al cumple de ${event.child_name} 🎉`,
+      url,
+    }
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        await navigator.share(shareData)
+      } else {
+        await navigator.clipboard.writeText(url)
+        showToast('Enlace copiado ✨')
+      }
+    } catch {
+      /* share cancelled or unavailable */
+    }
+  }
+
+  const handlePublishedShareClick = () => {
+    dismissPublishedSuccess()
+    inviteShareSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    void shareEventInvitation()
+  }
+
   const shareOrCopyExport = async (text: string, title: string, copyToast: string) => {
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
@@ -768,7 +872,18 @@ export default function EventControlCenterPage() {
     </div>
   )
 
-  if (loading) return null
+  if (loading && !confirmingCheckoutReturn) return null
+
+  if (confirmingCheckoutReturn) {
+    return (
+      <main className={`min-h-screen ${brand.pageBg} px-4 py-8`}>
+        <AppNav backHref="/dashboard" backLabel="⬅️ Mi panel" />
+        <p className="mt-8 text-center text-sm text-gray-600">
+          Confirmando tu pago… En unos segundos verás tu panel del evento.
+        </p>
+      </main>
+    )
+  }
 
   if (loadError) {
     return (
@@ -788,7 +903,21 @@ export default function EventControlCenterPage() {
 
   return (
     <main className={`min-h-screen bg-gradient-to-b ${pageBg}`}>
+      <ConfettiBurst active={showPublishConfetti} />
+      <PublishedSuccessModal
+        open={showPublishedSuccess}
+        onClose={dismissPublishedSuccess}
+        onShareInvitation={handlePublishedShareClick}
+      />
       <AppNav backHref="/dashboard" backLabel="⬅️ Mi panel" />
+
+      {checkoutVerifyError ? (
+        <div className="mx-auto max-w-7xl px-6 pt-4">
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {checkoutVerifyError}
+          </p>
+        </div>
+      ) : null}
 
       <div className="mx-auto w-full max-w-7xl px-6 pb-12 pt-10">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[360px_minmax(0,1fr)] md:gap-6">
@@ -888,7 +1017,7 @@ export default function EventControlCenterPage() {
                 </Link>
               </div>
 
-              <div className="mt-4">
+              <div ref={inviteShareSectionRef} id="event-share-section" className="mt-4">
                 <div>
                   <p className="text-xs text-gray-400">Enlace de invitación</p>
                   <div className="mt-1 flex min-w-0 items-center gap-2 rounded-lg border border-gray-200 bg-white py-1.5 pl-3 pr-1">

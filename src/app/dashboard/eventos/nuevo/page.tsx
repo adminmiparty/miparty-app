@@ -1723,6 +1723,8 @@ function NewEventPageContent() {
 
   const shouldConfirmLeave = useMemo(() => {
     if (draftHydrating) return false
+    // Persisted draft (e.g. returned from Paso 2): still confirm on exit even if the form matches baseline.
+    if (draftEventId) return true
     const baseline = formBaselineSerializedRef.current
     if (!baseline) {
       return hasMeaningfulDraftContent
@@ -1731,6 +1733,7 @@ function NewEventPageContent() {
   }, [
     serializeFormSnapshot,
     draftHydrating,
+    draftEventId,
     formBaselineVersion,
     hasMeaningfulDraftContent,
   ])

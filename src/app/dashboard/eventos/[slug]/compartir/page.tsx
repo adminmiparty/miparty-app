@@ -361,7 +361,7 @@ export default function EventSharePage() {
         return
       }
 
-      router.replace(`/dashboard/eventos/${result.slug}/compartir`)
+      router.replace(`/dashboard/eventos/${result.slug}?published=paid`)
     }
 
     void confirmPaymentReturn()
@@ -401,7 +401,7 @@ export default function EventSharePage() {
       }
 
       if (publishData.published && publishData.slug) {
-        router.push(`/dashboard/eventos/${publishData.slug}`)
+        router.push(`/dashboard/eventos/${publishData.slug}?published=free`)
         return
       }
 

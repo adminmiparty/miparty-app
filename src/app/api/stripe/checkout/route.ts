@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
     const config = getOrganizerBillingConfig()
     const base = getRequestOrigin(request)
-    const successUrl = `${base}/dashboard/eventos/${event.public_slug}/compartir?checkout=success&session_id={CHECKOUT_SESSION_ID}`
+    const successUrl = `${base}/dashboard/eventos/${event.public_slug}?checkout=success&session_id={CHECKOUT_SESSION_ID}`
     const cancelUrl = `${base}/dashboard/eventos/${event.public_slug}/compartir?checkout=cancelled`
 
     const stripeInit = initStripe()
