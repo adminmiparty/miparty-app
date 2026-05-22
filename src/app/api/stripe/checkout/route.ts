@@ -3,6 +3,7 @@ import { logPaymentConfigFlags } from '@/lib/envServer'
 import { getOrganizerBillingConfig } from '@/lib/organizerBilling'
 import { getRequestHostDiagnostics, getRequestOrigin } from '@/lib/requestOrigin'
 import { loadOwnedDraftEvent } from '@/lib/organizerPublish'
+import { logStripeRuntimeDiagnostics, stripeNotConfiguredPayload } from '@/lib/stripe/runtimeDiagnostics'
 import { initStripe } from '@/lib/stripe/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -66,14 +67,13 @@ export async function POST(request: Request) {
 
     const stripeInit = initStripe()
     if (!stripeInit.ok) {
+      const notConfigured = stripeNotConfiguredPayload(request)
       console.error('[stripe/checkout] stripe not configured', {
         reason: stripeInit.reason,
         configFlags,
+        ...notConfigured,
       })
-      return NextResponse.json(
-        { error: 'El pago no está configurado todavía. Inténtalo más tarde.' },
-        { status: 503 }
-      )
+      return NextResponse.json(notConfigured, { status: 503 })
     }
     const stripe = stripeInit.stripe
 

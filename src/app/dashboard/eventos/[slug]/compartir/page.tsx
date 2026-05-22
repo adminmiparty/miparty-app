@@ -1,6 +1,7 @@
 'use client'
 
 import AppNav from '@/components/AppNav'
+import CheckoutRuntimeDebugBanner from '@/components/CheckoutRuntimeDebugBanner'
 import EventCreationSteps from '@/components/EventCreationSteps'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
@@ -480,8 +481,18 @@ export default function EventSharePage() {
           setPublishError(
             'Tu sesión no se envió al servidor. Cierra la pestaña, vuelve a entrar desde el mismo enlace (miparty.net) e inténtalo de nuevo.'
           )
+        } else if (data.error === 'stripe_not_configured') {
+          console.error('[publish/checkout] stripe_not_configured', {
+            host: data.host,
+            vercelEnv: data.vercelEnv,
+            hasStripeSecret: data.hasStripeSecret,
+            fetchUrl,
+          })
+          setPublishError(
+            `${data.message ?? 'El pago no está configurado todavía.'} (host: ${data.host ?? '?'}, env: ${data.vercelEnv ?? '?'}, key: ${data.hasStripeSecret ? 'sí' : 'no'})`
+          )
         } else {
-          setPublishError(data.error ?? 'No se pudo iniciar el pago.')
+          setPublishError(data.message ?? data.error ?? 'No se pudo iniciar el pago.')
         }
         setPublishing(false)
         return
@@ -533,6 +544,7 @@ export default function EventSharePage() {
       />
 
       <div className="mx-auto w-full max-w-sm px-4 py-6 pb-8">
+        <CheckoutRuntimeDebugBanner />
         <EventCreationSteps
           step={2}
           progressAccentClass={progressAccentClass}

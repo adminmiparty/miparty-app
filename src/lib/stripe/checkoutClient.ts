@@ -8,6 +8,10 @@ import {
 export type StripeCheckoutApiResponse = {
   url?: string
   error?: string
+  message?: string
+  host?: string | null
+  vercelEnv?: string | null
+  hasStripeSecret?: boolean
 }
 
 const CHECKOUT_API_PATH = '/api/stripe/checkout'
