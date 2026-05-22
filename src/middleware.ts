@@ -39,15 +39,6 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
-  if (pathname === '/api/stripe/checkout') {
-    console.log('[middleware/stripe/checkout]', {
-      host: request.headers.get('host'),
-      xForwardedHost: request.headers.get('x-forwarded-host'),
-      vercelEnv: process.env.VERCEL_ENV ?? null,
-      vercelUrl: process.env.VERCEL_URL ?? null,
-    })
-  }
-
   if (
     !user &&
     (pathname === '/dashboard' || pathname.startsWith('/dashboard/'))

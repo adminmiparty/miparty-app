@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
 import { logPaymentConfigFlags } from '@/lib/envServer'
 import { getOrganizerBillingConfig } from '@/lib/organizerBilling'
-import { getRequestHostDiagnostics, getRequestOrigin } from '@/lib/requestOrigin'
+import { getRequestOrigin } from '@/lib/requestOrigin'
 import { loadOwnedDraftEvent } from '@/lib/organizerPublish'
-import { logStripeRuntimeDiagnostics, stripeNotConfiguredPayload } from '@/lib/stripe/runtimeDiagnostics'
 import { initStripe } from '@/lib/stripe/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -18,13 +17,7 @@ export async function POST(request: Request) {
       error: userError,
     } = await supabase.auth.getUser()
 
-    const hostDiag = getRequestHostDiagnostics(request)
-
     if (userError || !user) {
-      console.warn('[stripe/checkout] unauthorized', {
-        ...hostDiag,
-        userError: userError?.message ?? null,
-      })
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
@@ -40,18 +33,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Falta el evento' }, { status: 400 })
     }
 
-    const configFlags = logPaymentConfigFlags('stripe/checkout')
-    console.log('[stripe/checkout] start', {
-      eventId,
-      userId: user.id,
-      hasUser: true,
-      ...hostDiag,
-      configFlags,
-    })
-
     const event = await loadOwnedDraftEvent(supabase, eventId, user.id)
     if (!event) {
-      console.warn('[stripe/checkout] draft not found', { eventId, userId: user.id })
       return NextResponse.json({ error: 'Borrador no encontrado' }, { status: 404 })
     }
 
@@ -59,21 +42,18 @@ export async function POST(request: Request) {
     const base = getRequestOrigin(request)
     const successUrl = `${base}/dashboard/eventos/${event.public_slug}/compartir?checkout=success&session_id={CHECKOUT_SESSION_ID}`
     const cancelUrl = `${base}/dashboard/eventos/${event.public_slug}/compartir?checkout=cancelled`
-    console.log('[stripe/checkout] redirect urls', {
-      base,
-      envSiteUrl: hostDiag.envSiteUrl,
-      requestHost: hostDiag.host,
-    })
 
     const stripeInit = initStripe()
     if (!stripeInit.ok) {
-      const notConfigured = stripeNotConfiguredPayload(request)
+      const configFlags = logPaymentConfigFlags('stripe/checkout')
       console.error('[stripe/checkout] stripe not configured', {
         reason: stripeInit.reason,
         configFlags,
-        ...notConfigured,
       })
-      return NextResponse.json(notConfigured, { status: 503 })
+      return NextResponse.json(
+        { error: 'El pago no está configurado todavía. Inténtalo más tarde.' },
+        { status: 503 }
+      )
     }
     const stripe = stripeInit.stripe
 
@@ -127,12 +107,6 @@ export async function POST(request: Request) {
         adminErr instanceof Error ? adminErr.message : adminErr
       )
     }
-
-    console.log('[stripe/checkout] session created', {
-      sessionId: session.id,
-      eventId: event.id,
-      ...hostDiag,
-    })
 
     return NextResponse.json({ url: session.url })
   } catch (err) {
