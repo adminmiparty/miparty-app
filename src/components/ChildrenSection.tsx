@@ -1,6 +1,11 @@
 'use client'
 
 import { brand } from '@/lib/brand'
+import {
+  formatPersonRelationLine,
+  normalizePersonRelation,
+  type PersonRelation,
+} from '@/lib/personRelation'
 import { Camera, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -13,26 +18,14 @@ export type DashboardChildRow = {
   avatar_url: string | null
   short_name: string | null
   allergies: string | null
+  relation: PersonRelation
+  phone: string | null
 }
 
-function formatBirthDdMmYyyy(isoDate: string) {
-  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (!match) {
-    return ''
-  }
-  const [, y, m, d] = match
-  return `${d}/${m}/${y}`
-}
-
-function computeAgeYears(birthIso: string, today: Date): number {
-  const [y, mo, d] = birthIso.split('-').map((value) => Number.parseInt(value, 10))
-  const birth = new Date(y, mo - 1, d)
-  let age = today.getFullYear() - birth.getFullYear()
-  const monthDiff = today.getMonth() - birth.getMonth()
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age -= 1
-  }
-  return age
+function getInitials(name: string, lastName: string) {
+  const first = name.trim()[0]?.toUpperCase() || ''
+  const last = (lastName || '').trim()[0]?.toUpperCase() || ''
+  return first + last
 }
 
 const avatarColors = [
@@ -42,12 +35,6 @@ const avatarColors = [
   'bg-green-100 text-green-700',
   'bg-purple-100 text-purple-700',
 ]
-
-function getInitials(name: string, lastName: string) {
-  const first = name.trim()[0]?.toUpperCase() || ''
-  const last = (lastName || '').trim()[0]?.toUpperCase() || ''
-  return first + last
-}
 
 function avatarStoragePathFromUrl(url: string): string | null {
   const match = url.match(/\/avatars\/(.+?)(?:\?|$)/)
@@ -59,7 +46,6 @@ type ChildrenSectionProps = {
   initialChildren: DashboardChildRow[]
   isLoading: boolean
   onAddChild: () => void
-  /** Card click — opens child action modal */
   onChildCardPress: (child: DashboardChildRow) => void
   childActionTargetId?: string | null
 }
@@ -198,24 +184,16 @@ export function ChildrenSection({
     ? children.find((c) => c.id === photoActionChildId)
     : null
 
+  const handleAddClick = () => {
+    if (children.length >= 6) {
+      setShowLimitModal(true)
+    } else {
+      onAddChild()
+    }
+  }
+
   return (
     <section className="mb-5 sm:mb-8">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-gray-900 sm:text-lg">Mis hijos/as</h2>
-        <button
-          type="button"
-          onClick={() => {
-            if (children.length >= 6) {
-              setShowLimitModal(true)
-            } else {
-              onAddChild()
-            }
-          }}
-          className={brand.dashboardPrimaryPill}
-        >
-          Añadir hijo/a
-        </button>
-      </div>
       <input
         ref={fileInputRef}
         type="file"
@@ -224,116 +202,138 @@ export function ChildrenSection({
         aria-hidden
         onChange={(e) => void handleFileChange(e)}
       />
+
       {isLoading ? (
-        <div
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3"
-          aria-busy="true"
-          aria-label="Cargando hijos"
-        >
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="card-soft flex min-h-[5rem] animate-pulse flex-row items-center gap-3 p-2"
-            >
-              <div className="h-16 w-16 shrink-0 rounded-full bg-gray-200" />
-              <div className="min-w-0 flex-1 space-y-2">
-                <div className="h-3.5 w-20 rounded bg-gray-200" />
-                <div className="h-3 w-28 rounded bg-gray-100" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-          {displayed.map((child, index) => {
-            const fullName = `${child.name} ${child.last_name || ''}`.trim()
-            const birth = child.birth_date?.trim()
-            const age = birth ? computeAgeYears(birth, todayDate()) : null
-            const birthFmt = birth ? formatBirthDdMmYyyy(birth) : ''
-            const uploading = uploadingId === child.id
-            const deleting = deletingId === child.id
-            const hasPhoto = Boolean(child.avatar_url?.trim())
-            const initials = getInitials(child.name, child.last_name ?? '')
-            const avatarColorClass = avatarColors[index % avatarColors.length]
-            const isCardActive = childActionTargetId === child.id
-            return (
+        <>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-gray-900 sm:text-lg">Mi gente</h2>
+          </div>
+          <div
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3"
+            aria-busy="true"
+            aria-label="Cargando personas"
+          >
+            {[0, 1, 2].map((i) => (
               <div
-                key={child.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => onChildCardPress(child)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    onChildCardPress(child)
-                  }
-                }}
-                aria-label={`Opciones de ${fullName}`}
-                aria-haspopup="menu"
-                aria-expanded={isCardActive}
-                className={`card-soft group relative flex min-h-[5rem] w-full cursor-pointer flex-row items-center gap-3 p-3 text-left transition hover:shadow-[var(--shadow-card-hover)] hover:-translate-y-px focus-visible:outline-none sm:p-2 ${brand.cardFocusRing} ${
-                  isCardActive ? `shadow-[var(--shadow-card-hover)] ${brand.cardActiveRing}` : ''
-                }`}
+                key={i}
+                className="card-soft flex min-h-[5rem] animate-pulse flex-row items-center gap-3 p-2"
               >
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleAvatarPress(child, hasPhoto)
-                  }}
-                  disabled={uploading || deleting}
-                  className="group/avatar relative h-16 w-16 shrink-0 cursor-pointer border-0 bg-transparent p-0 disabled:opacity-50"
-                  aria-label={hasPhoto ? 'Opciones de foto' : 'Añadir foto'}
-                >
-                  {hasPhoto ? (
-                    <img
-                      src={child.avatar_url!}
-                      alt=""
-                      className="avatar-soft h-16 w-16 rounded-full border border-dashed border-gray-300"
-                    />
-                  ) : (
-                    <div
-                      className={`avatar-soft flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-semibold ${avatarColorClass}`}
-                    >
-                      {initials || '?'}
-                    </div>
-                  )}
-                  <div
-                    className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/30 transition-opacity ${
-                      uploading || deleting ? 'opacity-100' : 'opacity-0 group-hover/avatar:opacity-100'
-                    }`}
-                  >
-                    {uploading || deleting ? (
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                    ) : (
-                      <Camera className="h-3 w-3 text-white" strokeWidth={2} aria-hidden />
-                    )}
-                  </div>
-                </button>
-                <div className="flex min-w-0 flex-1 flex-col items-start justify-start gap-0.5">
-                  <p
-                    className="text-sm font-medium leading-snug text-gray-700 break-words sm:truncate"
-                    title={fullName}
-                  >
-                    {fullName}
-                  </p>
-                  {birth ? (
-                    <p className="text-xs leading-snug text-gray-400 break-words sm:truncate">
-                      {age != null ? `${age} años · ${birthFmt}` : birthFmt}
-                    </p>
-                  ) : (
-                    <p className="text-xs italic text-gray-300">Fecha de nacimiento no añadida</p>
-                  )}
-                  {child.allergies ? (
-                    <p className="line-clamp-2 text-xs leading-snug text-gray-400 break-words sm:truncate">
-                      Alergias: {child.allergies}
-                    </p>
-                  ) : null}
+                <div className="h-16 w-16 shrink-0 rounded-full bg-gray-200" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-3.5 w-20 rounded bg-gray-200" />
+                  <div className="h-3 w-28 rounded bg-gray-100" />
                 </div>
               </div>
-            )
-          })}
+            ))}
+          </div>
+        </>
+      ) : children.length === 0 ? (
+        <div className="card-soft rounded-2xl border border-dashed border-gray-200 bg-gradient-to-b from-white to-gray-50/80 px-5 py-8 text-center">
+          <h2 className="text-base font-semibold text-gray-900 sm:text-lg">Mi gente</h2>
+          <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-gray-600">
+            Empieza añadiendo a tus hijos/as o a las personas con las que más celebras.
+          </p>
+          <button type="button" onClick={handleAddClick} className={`${brand.dashboardPrimaryPill} mt-5`}>
+            + Añadir persona
+          </button>
         </div>
+      ) : (
+        <>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-gray-900 sm:text-lg">Mi gente</h2>
+            <button type="button" onClick={handleAddClick} className={brand.dashboardPrimaryPill}>
+              + Añadir persona
+            </button>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+            {displayed.map((child, index) => {
+              const fullName = `${child.name} ${child.last_name || ''}`.trim()
+              const relationLine = formatPersonRelationLine(
+                normalizePersonRelation(child.relation),
+                child.birth_date,
+                todayDate()
+              )
+              const uploading = uploadingId === child.id
+              const deleting = deletingId === child.id
+              const hasPhoto = Boolean(child.avatar_url?.trim())
+              const initials = getInitials(child.name, child.last_name ?? '')
+              const avatarColorClass = avatarColors[index % avatarColors.length]
+              const isCardActive = childActionTargetId === child.id
+              return (
+                <div
+                  key={child.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onChildCardPress(child)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onChildCardPress(child)
+                    }
+                  }}
+                  aria-label={`Opciones de ${fullName}`}
+                  aria-haspopup="menu"
+                  aria-expanded={isCardActive}
+                  className={`card-soft group relative flex min-h-[5rem] w-full cursor-pointer flex-row items-center gap-3 p-3 text-left transition hover:shadow-[var(--shadow-card-hover)] hover:-translate-y-px focus-visible:outline-none sm:p-2 ${brand.cardFocusRing} ${
+                    isCardActive ? `shadow-[var(--shadow-card-hover)] ${brand.cardActiveRing}` : ''
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleAvatarPress(child, hasPhoto)
+                    }}
+                    disabled={uploading || deleting}
+                    className="group/avatar relative h-16 w-16 shrink-0 cursor-pointer border-0 bg-transparent p-0 disabled:opacity-50"
+                    aria-label={hasPhoto ? 'Opciones de foto' : 'Añadir foto'}
+                  >
+                    {hasPhoto ? (
+                      <img
+                        src={child.avatar_url!}
+                        alt=""
+                        className="avatar-soft h-16 w-16 rounded-full border border-dashed border-gray-300"
+                      />
+                    ) : (
+                      <div
+                        className={`avatar-soft flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-semibold ${avatarColorClass}`}
+                      >
+                        {initials || '?'}
+                      </div>
+                    )}
+                    <div
+                      className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/30 transition-opacity ${
+                        uploading || deleting ? 'opacity-100' : 'opacity-0 group-hover/avatar:opacity-100'
+                      }`}
+                    >
+                      {uploading || deleting ? (
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                      ) : (
+                        <Camera className="h-3 w-3 text-white" strokeWidth={2} aria-hidden />
+                      )}
+                    </div>
+                  </button>
+                  <div className="flex min-w-0 flex-1 flex-col items-start justify-start gap-1">
+                    <p
+                      className="text-sm font-medium leading-snug text-gray-800 break-words sm:truncate"
+                      title={fullName}
+                    >
+                      {fullName}
+                    </p>
+                    <span className="inline-flex max-w-full rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                      {relationLine}
+                    </span>
+                    {child.allergies ? (
+                      <p className="line-clamp-1 text-xs leading-snug text-gray-400 break-words sm:truncate">
+                        Alergias: {child.allergies}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
       )}
 
       {photoActionChild ? (
@@ -402,14 +402,14 @@ export function ChildrenSection({
               <X className="h-4 w-4" strokeWidth={2} aria-hidden />
             </button>
             <div className="flex items-center gap-2">
-              <span aria-hidden>👶</span>
+              <span aria-hidden>✨</span>
               <h3 id="children-limit-title" className="text-lg font-semibold text-gray-900">
                 Has llegado al máximo
               </h3>
             </div>
             <p className="mt-2 text-sm text-gray-500">
-              Has llegado al máximo de 6 perfiles infantiles. Si necesitas añadir más, te invitamos a crear
-              otra cuenta o contactarnos.
+              Puedes guardar hasta 6 personas en Mi gente. Si necesitas más, crea otra cuenta o
+              contáctanos.
             </p>
             <button
               type="button"

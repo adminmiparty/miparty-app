@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useRouter } from 'next/navigation'
 import AppNav from '@/components/AppNav'
@@ -2262,6 +2262,7 @@ function NewEventPageContent() {
         name: params.trimmedNombre,
         last_name: params.trimmedApellido || null,
         birth_date: params.parsedChildBirthDate || null,
+        relation: 'hijo',
       })
 
       if (childInsertError) {

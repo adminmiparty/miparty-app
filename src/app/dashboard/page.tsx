@@ -30,6 +30,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 're
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { EVENT_STATUS_DRAFT, isActiveEventStatus } from '@/lib/eventLifecycle'
+import {
+  normalizePersonRelation,
+  PERSON_RELATION_OPTIONS,
+  type PersonRelation,
+} from '@/lib/personRelation'
 
 const themeCardBorder: Record<string, string> = {
   yellow: 'border-l-yellow-400',
@@ -368,7 +373,7 @@ function ModalActionButtons({
   )
 }
 
-type ChildFormDisabledField = 'nombre' | 'apellido' | 'shortName' | 'birth_date'
+type ChildFormDisabledField = 'nombre' | 'apellido' | 'shortName' | 'birth_date' | 'relation'
 
 type ChildFormFieldsProps = {
   idPrefix?: string
@@ -384,11 +389,16 @@ type ChildFormFieldsProps = {
   setBirthMonth: (value: string) => void
   birthYear: string
   setBirthYear: (value: string) => void
+  relation: PersonRelation
+  setRelation: (value: PersonRelation) => void
+  phone: string
+  setPhone: (value: string) => void
   allergies: string
   setAllergies: (value: string) => void
   birthYears: string[]
   disabledFields?: ChildFormDisabledField[]
   nombreRequired?: boolean
+  apellidoRequired?: boolean
 }
 
 function isChildFieldDisabled(
@@ -396,6 +406,30 @@ function isChildFieldDisabled(
   field: ChildFormDisabledField
 ) {
   return disabledFields?.includes(field) ?? false
+}
+
+function mapDashboardChildRow(row: {
+  id: string
+  name: string
+  last_name: string | null
+  birth_date: string | null
+  avatar_url: string | null
+  short_name: string | null
+  allergies: string | null
+  relation?: string | null
+  phone?: string | null
+}): DashboardChildRow {
+  return {
+    id: row.id,
+    name: row.name,
+    last_name: row.last_name,
+    birth_date: row.birth_date,
+    avatar_url: row.avatar_url,
+    short_name: row.short_name,
+    allergies: row.allergies ?? null,
+    relation: normalizePersonRelation(row.relation),
+    phone: row.phone ?? null,
+  }
 }
 
 function ChildFormFields({
@@ -412,15 +446,21 @@ function ChildFormFields({
   setBirthMonth,
   birthYear,
   setBirthYear,
+  relation,
+  setRelation,
+  phone,
+  setPhone,
   allergies,
   setAllergies,
   birthYears,
   disabledFields,
   nombreRequired = false,
+  apellidoRequired = false,
 }: ChildFormFieldsProps) {
   const nombreDisabled = isChildFieldDisabled(disabledFields, 'nombre')
   const apellidoDisabled = isChildFieldDisabled(disabledFields, 'apellido')
   const birthDisabled = isChildFieldDisabled(disabledFields, 'birth_date')
+  const relationDisabled = isChildFieldDisabled(disabledFields, 'relation')
 
   return (
     <>
@@ -457,6 +497,7 @@ function ChildFormFields({
               autoComplete="family-name"
               value={apellido}
               onChange={(event) => setApellido(event.target.value)}
+              required={apellidoRequired}
               className={profileInputClassName}
               placeholder="Ej. García"
             />
@@ -482,7 +523,54 @@ function ChildFormFields({
       </div>
 
       <div>
-        <p className="mb-1.5 text-sm font-medium text-gray-900">Fecha de nacimiento</p>
+        <label htmlFor={`${idPrefix}Relation`} className="text-sm font-medium text-gray-700">
+          Relación
+        </label>
+        {relationDisabled ? (
+          <div className={childFieldReadOnlyClassName}>
+            {PERSON_RELATION_OPTIONS.find((o) => o.value === relation)?.label ?? '—'}
+          </div>
+        ) : (
+          <select
+            id={`${idPrefix}Relation`}
+            value={relation}
+            onChange={(event) => setRelation(event.target.value as PersonRelation)}
+            required
+            className={profileBirthDateSelectClassName}
+          >
+            {PERSON_RELATION_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.emoji} {option.label}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between">
+          <label htmlFor={`${idPrefix}Phone`} className="text-sm font-medium text-gray-700">
+            Móvil de contacto
+          </label>
+          <span className="text-xs text-gray-400">Opcional</span>
+        </div>
+        <input
+          id={`${idPrefix}Phone`}
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+          className={profileInputClassName}
+          placeholder="Ej. 612 345 678"
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between">
+          <p className="mb-1.5 text-sm font-medium text-gray-900">Fecha de nacimiento</p>
+          <span className="text-xs text-gray-400">Opcional</span>
+        </div>
         {birthDisabled ? (
           <div className={childFieldReadOnlyClassName}>
             {formatBirthDateDisplaySpain(birthDay, birthMonth, birthYear) || '—'}
@@ -838,6 +926,8 @@ export default function DashboardHomePage() {
   const [childBirthMonth, setChildBirthMonth] = useState('')
   const [childBirthYear, setChildBirthYear] = useState('')
   const [childAllergies, setChildAllergies] = useState('')
+  const [childRelation, setChildRelation] = useState<PersonRelation>('hijo')
+  const [childPhone, setChildPhone] = useState('')
   const [childSaving, setChildSaving] = useState(false)
   const [childModalError, setChildModalError] = useState<string | null>(null)
   const [childAddSuccessToast, setChildAddSuccessToast] = useState(false)
@@ -867,6 +957,8 @@ export default function DashboardHomePage() {
   const [viewChildBirthMonth, setViewChildBirthMonth] = useState('')
   const [viewChildBirthYear, setViewChildBirthYear] = useState('')
   const [viewChildAllergies, setViewChildAllergies] = useState('')
+  const [viewChildRelation, setViewChildRelation] = useState<PersonRelation>('hijo')
+  const [viewChildPhone, setViewChildPhone] = useState('')
   const [viewChildSaving, setViewChildSaving] = useState(false)
   const [viewChildError, setViewChildError] = useState<string | null>(null)
   const [childUpdateSuccessToast, setChildUpdateSuccessToast] = useState(false)
@@ -926,17 +1018,12 @@ export default function DashboardHomePage() {
     async (uid: string) => {
       const { data, error: childrenError } = await supabase
         .from('children')
-        .select('id, name, last_name, birth_date, avatar_url, short_name, allergies')
+        .select('id, name, last_name, birth_date, avatar_url, short_name, allergies, relation, phone')
         .eq('user_id', uid)
         .order('created_at', { ascending: true })
 
       if (!childrenError && data) {
-        setChildren(
-          (data as DashboardChildRow[]).map((row) => ({
-            ...row,
-            allergies: row.allergies ?? null,
-          }))
-        )
+        setChildren(data.map(mapDashboardChildRow))
       }
     },
     [supabase]
@@ -1011,15 +1098,22 @@ export default function DashboardHomePage() {
     originalPartnerBirth,
   ])
 
-  const childAddHasChanges = childFirstName.trim() !== ''
+  const childAddHasChanges =
+    childFirstName.trim() !== '' ||
+    childLastName.trim() !== '' ||
+    childPhone.trim() !== '' ||
+    childShortName.trim() !== '' ||
+    childAllergies.trim() !== ''
 
   const childHasChanges = useMemo(() => {
     if (!viewingChild) return false
     return (
       viewChildShortName !== (viewingChild.short_name || '') ||
-      viewChildAllergies !== (viewingChild.allergies || '')
+      viewChildAllergies !== (viewingChild.allergies || '') ||
+      viewChildRelation !== normalizePersonRelation(viewingChild.relation) ||
+      viewChildPhone.trim() !== (viewingChild.phone || '').trim()
     )
-  }, [viewingChild, viewChildShortName, viewChildAllergies])
+  }, [viewingChild, viewChildShortName, viewChildAllergies, viewChildRelation, viewChildPhone])
 
   const { upcomingCount, pastCount } = useMemo(() => {
     const upIds = new Set<string>()
@@ -1295,7 +1389,7 @@ export default function DashboardHomePage() {
           .eq('user_id', user.id),
         supabase
           .from('children')
-          .select('id, name, last_name, birth_date, avatar_url, short_name, allergies')
+          .select('id, name, last_name, birth_date, avatar_url, short_name, allergies, relation, phone')
           .eq('user_id', user.id)
           .order('created_at', { ascending: true }),
         supabase
@@ -1310,10 +1404,7 @@ export default function DashboardHomePage() {
       const familyMembers = familyRes.data as FamilyMemberPartner[] | null
       setPartner(familyMembers?.[0] ?? null)
 
-      const loadedChildren = (childrenRes.data ?? []).map((row) => ({
-        ...(row as DashboardChildRow),
-        allergies: (row as DashboardChildRow).allergies ?? null,
-      }))
+      const loadedChildren = (childrenRes.data ?? []).map(mapDashboardChildRow)
       if (childrenRes.error) {
         setChildren([])
       } else {
@@ -1606,6 +1697,8 @@ export default function DashboardHomePage() {
     setChildBirthMonth('')
     setChildBirthYear('')
     setChildAllergies('')
+    setChildRelation('hijo')
+    setChildPhone('')
   }, [showAddChildModal])
 
   const handleChildSave = async (event: FormEvent<HTMLFormElement>) => {
@@ -1624,6 +1717,12 @@ export default function DashboardHomePage() {
       return
     }
 
+    if (!trimmedLastName) {
+      setChildModalError('El apellido es obligatorio.')
+      setChildSaving(false)
+      return
+    }
+
     if (!userId) {
       setChildModalError('No se pudo obtener tu sesión.')
       setChildSaving(false)
@@ -1635,13 +1734,17 @@ export default function DashboardHomePage() {
         ? `${childBirthYear}-${childBirthMonth.padStart(2, '0')}-${childBirthDay.padStart(2, '0')}`
         : null
 
+    const trimmedPhone = childPhone.trim()
+
     const { error: insertError } = await supabase.from('children').insert({
       user_id: userId,
       name: trimmedName,
-      last_name: trimmedLastName || null,
+      last_name: trimmedLastName,
       short_name: trimmedShortName || null,
       birth_date: childBirthDate || null,
       allergies: trimmedAllergies || null,
+      relation: childRelation,
+      phone: trimmedPhone || null,
     })
 
     if (insertError) {
@@ -1668,6 +1771,8 @@ export default function DashboardHomePage() {
     setViewChildBirthMonth(birth.month)
     setViewChildBirthYear(birth.year)
     setViewChildAllergies(viewingChild.allergies ?? '')
+    setViewChildRelation(normalizePersonRelation(viewingChild.relation))
+    setViewChildPhone(viewingChild.phone ?? '')
   }, [viewingChild])
 
   const handleViewChildSave = async (event: FormEvent<HTMLFormElement>) => {
@@ -1681,6 +1786,7 @@ export default function DashboardHomePage() {
     const trimmedLastName = viewChildLastName.trim()
     const trimmedShortName = viewChildShortName.trim()
     const trimmedAllergies = viewChildAllergies.trim()
+    const trimmedPhone = viewChildPhone.trim()
 
     if (!userId) {
       setViewChildError('No se pudo obtener tu sesión.')
@@ -1695,12 +1801,16 @@ export default function DashboardHomePage() {
 
     const updates: {
       allergies: string | null
+      relation: PersonRelation
+      phone: string | null
       name?: string
       last_name?: string | null
       short_name?: string | null
       birth_date?: string | null
     } = {
       allergies: trimmedAllergies || null,
+      relation: viewChildRelation,
+      phone: trimmedPhone || null,
     }
     if (!viewingChild.name) updates.name = trimmedName
     if (!viewingChild.last_name) updates.last_name = trimmedLastName || null
@@ -2042,6 +2152,7 @@ export default function DashboardHomePage() {
                 </div>
               )}
               <div className="min-w-0 flex-1 pr-6">
+                <p className="text-xs font-medium text-gray-500">Mi perfil</p>
                 <p className="text-base font-semibold leading-snug text-gray-900 break-words sm:truncate">
                   {parentProfile.fullName ?? 'Tu cuenta'}
                 </p>
@@ -2089,6 +2200,7 @@ export default function DashboardHomePage() {
               <div className={`min-w-0 flex-1 text-left ${partner ? 'pr-6' : ''}`}>
                 {partner ? (
                   <>
+                    <p className="text-xs font-medium text-gray-500">Pareja</p>
                     <p className="text-base font-semibold leading-snug text-gray-900 break-words sm:truncate">
                       {partnerDisplayLabel(partner)}
                     </p>
@@ -2357,7 +2469,7 @@ export default function DashboardHomePage() {
           className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow-lg"
           role="status"
         >
-          🎉 Perfil añadido
+          🎉 Persona añadida
         </div>
       ) : null}
 
@@ -3123,7 +3235,7 @@ export default function DashboardHomePage() {
           >
             <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-6 py-4">
               <h2 id="add-child-modal-title" className="text-lg font-semibold text-gray-900">
-                Añadir hijo/a
+                Añadir persona
               </h2>
               <button
                 type="button"
@@ -3149,10 +3261,15 @@ export default function DashboardHomePage() {
                 setBirthMonth={setChildBirthMonth}
                 birthYear={childBirthYear}
                 setBirthYear={setChildBirthYear}
+                relation={childRelation}
+                setRelation={setChildRelation}
+                phone={childPhone}
+                setPhone={setChildPhone}
                 allergies={childAllergies}
                 setAllergies={setChildAllergies}
                 birthYears={childBirthYears}
                 nombreRequired
+                apellidoRequired
               />
 
               {childModalError ? (
@@ -3209,6 +3326,10 @@ export default function DashboardHomePage() {
                 setBirthMonth={setViewChildBirthMonth}
                 birthYear={viewChildBirthYear}
                 setBirthYear={setViewChildBirthYear}
+                relation={viewChildRelation}
+                setRelation={setViewChildRelation}
+                phone={viewChildPhone}
+                setPhone={setViewChildPhone}
                 allergies={viewChildAllergies}
                 setAllergies={setViewChildAllergies}
                 birthYears={childBirthYears}

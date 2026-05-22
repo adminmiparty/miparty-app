@@ -704,12 +704,10 @@ export default function EventSharePage() {
                         onClick={() => void startPaidCheckout('main-cta')}
                         className={`mt-5 w-full rounded-lg px-4 py-3.5 text-sm font-semibold transition ring-offset-2 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${focusRingClass} ${primaryButtonClass}`}
                       >
-                        {publishing
-                          ? 'Un momento…'
-                          : `Publicar y compartir — ${billingConfig.priceLabel}`}
+                        {publishing ? 'Un momento…' : 'Publicar y compartir'}
                       </button>
-                      <p className="mt-3 text-center text-xs leading-relaxed text-gray-500">
-                        Pago seguro con Stripe. Volverás automáticamente a MiParty.
+                      <p className="mt-2.5 text-center text-[11px] leading-snug text-gray-400">
+                        Pago seguro con Stripe
                       </p>
                       {publishError ? (
                         <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
