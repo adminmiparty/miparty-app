@@ -22,6 +22,33 @@ export type DashboardLocationCard = {
 }
 
 const STORAGE_PREFIX = 'miparty_saved_places_'
+const DISMISSED_PREFIX = 'miparty_dismissed_locations_'
+
+export function loadDismissedLocationNames(userId: string): string[] {
+  if (typeof window === 'undefined' || !userId) {
+    return []
+  }
+  try {
+    const raw = window.localStorage.getItem(`${DISMISSED_PREFIX}${userId}`)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((item): item is string => typeof item === 'string' && item.trim() !== '')
+  } catch {
+    return []
+  }
+}
+
+export function persistDismissedLocationNames(userId: string, names: string[]) {
+  if (typeof window === 'undefined' || !userId) {
+    return
+  }
+  window.localStorage.setItem(`${DISMISSED_PREFIX}${userId}`, JSON.stringify(names))
+}
+
+export function normalizeLocationNameKey(name: string) {
+  return name.trim().toLowerCase()
+}
 
 export function buildPlaceAddressLine(
   street: string,
@@ -138,6 +165,18 @@ export function mergeEventAndSavedLocations(
   }
 
   return [...m.values()]
+}
+
+/** Hides dismissed names from the dashboard list without changing events. */
+export function filterDashboardLocations(
+  locations: DashboardLocationCard[],
+  dismissedNames: string[]
+): DashboardLocationCard[] {
+  if (dismissedNames.length === 0) {
+    return locations
+  }
+  const dismissed = new Set(dismissedNames.map(normalizeLocationNameKey))
+  return locations.filter((loc) => !dismissed.has(normalizeLocationNameKey(loc.location_name)))
 }
 
 /**

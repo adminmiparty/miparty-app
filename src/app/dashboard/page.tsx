@@ -12,8 +12,12 @@ import { formatEventDayMonthShort } from '@/lib/dates'
 import {
   buildGoogleMapsSearchUrl,
   buildPlaceAddressLine,
+  filterDashboardLocations,
+  loadDismissedLocationNames,
   loadSavedPlaces,
   mergeEventAndSavedLocations,
+  normalizeLocationNameKey,
+  persistDismissedLocationNames,
   persistSavedPlaces,
   tryDeleteSavedPlaceRemote,
   type DashboardLocationCard,
@@ -840,11 +844,12 @@ export default function DashboardHomePage() {
   const [viewingChild, setViewingChild] = useState<DashboardChildRow | null>(null)
   const [childActionTarget, setChildActionTarget] = useState<DashboardChildRow | null>(null)
   const [locationActionTarget, setLocationActionTarget] = useState<DashboardLocationCard | null>(null)
-  const [pendingDeleteSavedPlace, setPendingDeleteSavedPlace] = useState<{
-    savedPlaceId: string
+  const [pendingDeleteLocation, setPendingDeleteLocation] = useState<{
+    savedPlaceId: string | null
     locationName: string
   } | null>(null)
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([])
+  const [dismissedLocationNames, setDismissedLocationNames] = useState<string[]>([])
   const [showAddPlaceModal, setShowAddPlaceModal] = useState(false)
   const [placeName, setPlaceName] = useState('')
   const [placeStreet, setPlaceStreet] = useState('')
@@ -1100,10 +1105,10 @@ export default function DashboardHomePage() {
     return map
   }, [invitedItems])
 
-  const dashboardLocations = useMemo(
-    () => mergeEventAndSavedLocations(events, savedPlaces),
-    [events, savedPlaces]
-  )
+  const dashboardLocations = useMemo(() => {
+    const merged = mergeEventAndSavedLocations(events, savedPlaces)
+    return filterDashboardLocations(merged, dismissedLocationNames)
+  }, [events, savedPlaces, dismissedLocationNames])
 
   const placeFormCanSave = useMemo(
     () =>
@@ -1114,9 +1119,11 @@ export default function DashboardHomePage() {
   useEffect(() => {
     if (!userId) {
       setSavedPlaces([])
+      setDismissedLocationNames([])
       return
     }
     setSavedPlaces(loadSavedPlaces(userId))
+    setDismissedLocationNames(loadDismissedLocationNames(userId))
   }, [userId])
 
   const openAddPlaceModal = () => {
@@ -1185,19 +1192,31 @@ export default function DashboardHomePage() {
     window.setTimeout(() => setPlaceAddSuccessToast(false), 2500)
   }
 
-  const handleConfirmDeleteSavedPlace = async () => {
-    if (!pendingDeleteSavedPlace || !userId) {
+  const handleConfirmDeleteLocation = async () => {
+    if (!pendingDeleteLocation || !userId) {
       return
     }
-    const { savedPlaceId } = pendingDeleteSavedPlace
-    setPendingDeleteSavedPlace(null)
-    const supabase = createClient()
-    await tryDeleteSavedPlaceRemote(supabase, userId, savedPlaceId)
-    setSavedPlaces((prev) => {
-      const next = prev.filter((p) => p.id !== savedPlaceId)
-      persistSavedPlaces(userId, next)
+    const { savedPlaceId, locationName } = pendingDeleteLocation
+    setPendingDeleteLocation(null)
+
+    if (savedPlaceId) {
+      const supabase = createClient()
+      await tryDeleteSavedPlaceRemote(supabase, userId, savedPlaceId)
+      setSavedPlaces((prev) => {
+        const next = prev.filter((p) => p.id !== savedPlaceId)
+        persistSavedPlaces(userId, next)
+        return next
+      })
+    }
+
+    const key = normalizeLocationNameKey(locationName)
+    setDismissedLocationNames((prev) => {
+      const has = prev.some((name) => normalizeLocationNameKey(name) === key)
+      const next = has ? prev : [...prev, locationName.trim()]
+      persistDismissedLocationNames(userId, next)
       return next
     })
+
     setPlaceDeleteSuccessToast(true)
     window.setTimeout(() => setPlaceDeleteSuccessToast(false), 2500)
   }
@@ -3464,40 +3483,34 @@ export default function DashboardHomePage() {
                   <span className="text-sm font-medium text-gray-700">Ver en Google Maps</span>
                 </button>
               ) : null}
-              {locationActionTarget.saved_place_id ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = locationActionTarget.saved_place_id
-                    if (!id) return
-                    setPendingDeleteSavedPlace({
-                      savedPlaceId: id,
-                      locationName: locationActionTarget.location_name,
-                    })
-                    setLocationActionTarget(null)
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl border border-rose-100/90 bg-rose-50 px-4 py-3 text-left transition hover:bg-rose-100/80"
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingDeleteLocation({
+                    savedPlaceId: locationActionTarget.saved_place_id,
+                    locationName: locationActionTarget.location_name,
+                  })
+                  setLocationActionTarget(null)
+                }}
+                className="flex w-full items-center gap-3 rounded-xl border border-rose-100/90 bg-rose-50 px-4 py-3 text-left transition hover:bg-rose-100/80"
+              >
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100/90 text-lg"
+                  aria-hidden
                 >
-                  <span
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100/90 text-lg"
-                    aria-hidden
-                  >
-                    🗑️
-                  </span>
-                  <span className="text-sm font-medium text-rose-800/90">
-                    Eliminar lugar de mi perfil
-                  </span>
-                </button>
-              ) : null}
+                  🗑️
+                </span>
+                <span className="text-sm font-medium text-rose-800/90">Eliminar lugar</span>
+              </button>
             </div>
           </div>
         </div>
       ) : null}
 
-      {pendingDeleteSavedPlace ? (
+      {pendingDeleteLocation ? (
         <div
           className="fixed inset-0 z-[55] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
-          onClick={() => setPendingDeleteSavedPlace(null)}
+          onClick={() => setPendingDeleteLocation(null)}
           role="presentation"
         >
           <div
@@ -3509,7 +3522,7 @@ export default function DashboardHomePage() {
           >
             <button
               type="button"
-              onClick={() => setPendingDeleteSavedPlace(null)}
+              onClick={() => setPendingDeleteLocation(null)}
               className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
               aria-label="Cerrar"
             >
@@ -3518,20 +3531,23 @@ export default function DashboardHomePage() {
             <h2 id="delete-place-confirm-title" className="pr-8 text-lg font-semibold text-gray-900">
               ¿Eliminar lugar?
             </h2>
+            <p className="mt-2 text-sm font-medium text-gray-800">
+              {pendingDeleteLocation.locationName}
+            </p>
             <p className="mt-3 text-sm leading-relaxed text-gray-600">
-              Este lugar desaparecerá de tu perfil, pero no afectará a eventos ya creados.
+              Este lugar dejará de mostrarse en Mi Panel. Ninguno de tus eventos se verá afectado.
             </p>
             <div className="mt-5 flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => setPendingDeleteSavedPlace(null)}
+                onClick={() => setPendingDeleteLocation(null)}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:w-auto sm:min-w-[7.5rem]"
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                onClick={() => void handleConfirmDeleteSavedPlace()}
+                onClick={() => void handleConfirmDeleteLocation()}
                 className="w-full rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-900 transition hover:bg-rose-100 sm:w-auto sm:min-w-[7.5rem]"
               >
                 Eliminar
