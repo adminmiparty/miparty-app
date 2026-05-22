@@ -1037,14 +1037,31 @@ export default function DashboardHomePage() {
     []
   )
 
-  const viewChildDisabledFields = useMemo((): ChildFormDisabledField[] => {
-    if (!viewingChild) return []
-    const locked: ChildFormDisabledField[] = []
-    if (viewingChild.name?.trim()) locked.push('nombre')
-    if (viewingChild.last_name?.trim()) locked.push('apellido')
-    if (viewingChild.birth_date?.trim()) locked.push('birth_date')
-    return locked
-  }, [viewingChild])
+  const childHasChanges = useMemo(() => {
+    if (!viewingChild) return false
+    const birthIso = composeBirthDateIso(viewChildBirthDay, viewChildBirthMonth, viewChildBirthYear)
+    const originalBirth = viewingChild.birth_date ?? null
+    return (
+      viewChildFirstName.trim() !== (viewingChild.name || '').trim() ||
+      viewChildLastName.trim() !== (viewingChild.last_name || '').trim() ||
+      viewChildShortName !== (viewingChild.short_name || '') ||
+      viewChildAllergies !== (viewingChild.allergies || '') ||
+      viewChildRelation !== normalizePersonRelation(viewingChild.relation) ||
+      viewChildPhone.trim() !== (viewingChild.phone || '').trim() ||
+      (birthIso ?? null) !== (originalBirth ?? null)
+    )
+  }, [
+    viewingChild,
+    viewChildFirstName,
+    viewChildLastName,
+    viewChildShortName,
+    viewChildAllergies,
+    viewChildRelation,
+    viewChildPhone,
+    viewChildBirthDay,
+    viewChildBirthMonth,
+    viewChildBirthYear,
+  ])
 
   const profileCurrentPhone = useMemo(
     () => buildFullPhone(profileCountryCode, profileCustomCode, profilePhoneNumber),
@@ -1107,16 +1124,6 @@ export default function DashboardHomePage() {
     childPhone.trim() !== '' ||
     childShortName.trim() !== '' ||
     childAllergies.trim() !== ''
-
-  const childHasChanges = useMemo(() => {
-    if (!viewingChild) return false
-    return (
-      viewChildShortName !== (viewingChild.short_name || '') ||
-      viewChildAllergies !== (viewingChild.allergies || '') ||
-      viewChildRelation !== normalizePersonRelation(viewingChild.relation) ||
-      viewChildPhone.trim() !== (viewingChild.phone || '').trim()
-    )
-  }, [viewingChild, viewChildShortName, viewChildAllergies, viewChildRelation, viewChildPhone])
 
   const { upcomingCount, pastCount } = useMemo(() => {
     const upIds = new Set<string>()
@@ -1830,28 +1837,33 @@ export default function DashboardHomePage() {
       return
     }
 
-    const childBirthDate =
-      viewChildBirthDay && viewChildBirthMonth && viewChildBirthYear
-        ? `${viewChildBirthYear}-${viewChildBirthMonth.padStart(2, '0')}-${viewChildBirthDay.padStart(2, '0')}`
-        : null
+    const childBirthDate = composeBirthDateIso(
+      viewChildBirthDay,
+      viewChildBirthMonth,
+      viewChildBirthYear
+    )
 
-    const updates: {
-      allergies: string | null
-      relation: PersonRelation
-      phone: string | null
-      name?: string
-      last_name?: string | null
-      short_name?: string | null
-      birth_date?: string | null
-    } = {
+    if (!trimmedName) {
+      setViewChildError('El nombre es obligatorio.')
+      setViewChildSaving(false)
+      return
+    }
+
+    if (!trimmedLastName) {
+      setViewChildError('El apellido es obligatorio.')
+      setViewChildSaving(false)
+      return
+    }
+
+    const updates = {
+      name: trimmedName,
+      last_name: trimmedLastName,
+      short_name: trimmedShortName || null,
+      birth_date: childBirthDate,
       allergies: trimmedAllergies || null,
       relation: viewChildRelation,
       phone: trimmedPhone || null,
     }
-    if (!viewingChild.name) updates.name = trimmedName
-    if (!viewingChild.last_name) updates.last_name = trimmedLastName || null
-    if (!viewingChild.short_name) updates.short_name = trimmedShortName || null
-    if (!viewingChild.birth_date) updates.birth_date = childBirthDate || null
 
     const { error: updateError } = await supabase
       .from('children')
@@ -3363,7 +3375,7 @@ export default function DashboardHomePage() {
           >
             <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-6 py-4">
               <h2 id="view-child-modal-title" className="text-lg font-semibold text-gray-900">
-                Perfil de {viewingChild.name}
+                Editar perfil
               </h2>
               <button
                 type="button"
@@ -3396,7 +3408,6 @@ export default function DashboardHomePage() {
                 allergies={viewChildAllergies}
                 setAllergies={setViewChildAllergies}
                 birthYears={childBirthYears}
-                disabledFields={viewChildDisabledFields}
               />
 
               {viewChildError ? (
@@ -3478,7 +3489,7 @@ export default function DashboardHomePage() {
                 >
                   ✏️
                 </span>
-                <span className="text-sm font-medium text-gray-700">Ver perfil</span>
+                <span className="text-sm font-medium text-gray-700">Editar perfil</span>
               </button>
               <button
                 type="button"
