@@ -33,6 +33,7 @@ export type DraftPersistInput = {
     invitation_image_fit: 'contain' | 'cover' | null
     invitation_image_position: string | null
     invitation_image_zoom: number | null
+    event_type: string
   }
   foodLabels: string[]
 }

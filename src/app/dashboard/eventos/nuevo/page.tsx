@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import AppNav from '@/components/AppNav'
 import EventCreationSteps from '@/components/EventCreationSteps'
+import { EventTypeSelector } from '@/components/EventTypeSelector'
 import {
   Suspense,
   type ChangeEvent,
@@ -20,6 +21,12 @@ import { addDays, addMonths, format, startOfDay, subDays, subMonths } from 'date
 import { es } from 'date-fns/locale'
 import { brand } from '@/lib/brand'
 import { defaultDraftEventDateIso, upsertDraftEvent } from '@/lib/draftEventPersistence'
+import {
+  buildAutoEventTitle,
+  getEventPersonHeading,
+  normalizeEventType,
+  type EventType,
+} from '@/lib/eventType'
 import { EVENT_STATUS_ACTIVE, EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
 import {
   eventFormBrandUi,
@@ -350,6 +357,7 @@ type DuplicateSourceEventRow = {
   invitation_image_fit: 'contain' | 'cover' | null
   invitation_image_position: string | null
   invitation_image_zoom: number | null
+  event_type: string | null
 }
 
 function formatDisplayToIsoDate(displayDate: string) {
@@ -637,6 +645,7 @@ function NewEventPageContent() {
 
   const [eventTitle, setEventTitle] = useState('')
   const [eventTitleManuallyEdited, setEventTitleManuallyEdited] = useState(false)
+  const [eventType, setEventType] = useState<EventType>('cumpleanos')
   const [eventDate, setEventDate] = useState(() => format(addDays(new Date(), 1), 'dd/MM/yyyy'))
   const [currentMonth, setCurrentMonth] = useState(() => addDays(new Date(), 1))
   const [startTime, setStartTime] = useState('')
@@ -939,19 +948,11 @@ function NewEventPageContent() {
     if (eventTitleManuallyEdited) {
       return
     }
-    const firstName = childName.trim().split(/\s+/)[0]
-    const ageTrimmed = birthdayNumber.trim()
-    if (!firstName || !ageTrimmed) {
-      setEventTitle('')
-      return
-    }
-    const ageParsed = Number.parseInt(ageTrimmed, 10)
-    if (Number.isNaN(ageParsed) || ageParsed < 1) {
-      setEventTitle('')
-      return
-    }
-    setEventTitle(`Cumple ${ageParsed} de ${firstName}`)
-  }, [birthdayNumber, childName, eventTitleManuallyEdited])
+    const autoTitle = buildAutoEventTitle(eventType, childName)
+    setEventTitle(autoTitle ?? '')
+  }, [eventType, childName, eventTitleManuallyEdited])
+
+  const eventPersonHeading = useMemo(() => getEventPersonHeading(eventType), [eventType])
 
   useEffect(() => {
     let isMounted = true
@@ -1094,7 +1095,7 @@ function NewEventPageContent() {
       const { data: eventRow, error: eventError } = await supabase
         .from('events')
         .select(
-          'id, user_id, event_date, child_name, child_birth_date, title, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom'
+          'id, user_id, event_date, child_name, child_birth_date, title, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, event_type'
         )
         .eq('public_slug', fromEventParam.trim())
         .eq('status', EVENT_STATUS_ACTIVE)
@@ -1151,6 +1152,7 @@ function NewEventPageContent() {
 
       setEventTitle(eventRow.title)
       setEventTitleManuallyEdited(true)
+      setEventType(normalizeEventType(eventRow.event_type))
 
       setEventDate(formatIsoToDisplayDate(eventRow.event_date))
 
@@ -1287,7 +1289,7 @@ function NewEventPageContent() {
       const { data: eventRow, error: eventError } = await supabase
         .from('events')
         .select(
-          'id, user_id, event_date, child_name, child_birth_date, title, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, status, public_slug'
+          'id, user_id, event_date, child_name, child_birth_date, title, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, event_type, status, public_slug'
         )
         .eq('id', draftIdParam.trim())
         .eq('user_id', user.id)
@@ -1344,6 +1346,7 @@ function NewEventPageContent() {
 
       setEventTitle(eventRow.title)
       setEventTitleManuallyEdited(true)
+      setEventType(normalizeEventType(eventRow.event_type))
       setEventDate(formatIsoToDisplayDate(eventRow.event_date))
       setStartTime(eventRow.start_time ? eventRow.start_time.slice(0, 5) : '')
       setPickupTime(eventRow.pickup_time ? eventRow.pickup_time.slice(0, 5) : '')
@@ -1615,6 +1618,7 @@ function NewEventPageContent() {
       birthYear,
       eventTitle,
       eventTitleManuallyEdited,
+      eventType,
       eventDate,
       startTime,
       pickupTime,
@@ -1659,6 +1663,7 @@ function NewEventPageContent() {
     birthYear,
     eventTitle,
     eventTitleManuallyEdited,
+    eventType,
     eventDate,
     startTime,
     pickupTime,
@@ -1977,6 +1982,7 @@ function NewEventPageContent() {
         invitation_image_fit: showImage ? imageFit : null,
         invitation_image_position: showImage ? `${imagePosX}% ${imagePosY}%` : null,
         invitation_image_zoom: showImage ? imageZoom : null,
+        event_type: eventType,
       },
       foodLabels: normalizedFood,
     })
@@ -2230,6 +2236,7 @@ function NewEventPageContent() {
       invitation_image_position: showImage ? `${imagePosX}% ${imagePosY}%` : null,
       invitation_image_zoom: showImage ? imageZoom : null,
       public_slug: publicSlug,
+      event_type: eventType,
     }
 
     let insertedEvent: { id: string; public_slug: string } | null = null
@@ -2559,8 +2566,14 @@ function NewEventPageContent() {
             }}
             className="space-y-6"
           >
+            <EventTypeSelector
+              value={eventType}
+              onChange={setEventType}
+              selectedRingClass={inputFocusClass.replace('focus:ring-2', '').trim()}
+            />
+
             <div className="space-y-4">
-              <h2 className="text-base font-semibold text-gray-900">¿Para quién es el cumple?</h2>
+              <h2 className="text-base font-semibold text-gray-900">{eventPersonHeading}</h2>
 
               {childrenLoading ? <p className="text-sm text-gray-500">Cargando hijos...</p> : null}
 
@@ -2764,7 +2777,7 @@ function NewEventPageContent() {
 
               <div>
                 <label htmlFor="eventTitle" className="mb-1.5 block text-sm font-medium text-gray-900">
-                  Título del evento *
+                  Nombre del evento *
                 </label>
                 <input
                   id="eventTitle"
