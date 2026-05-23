@@ -906,6 +906,7 @@ export default function EventControlCenterPage() {
       <ConfettiBurst active={showPublishConfetti} />
       <PublishedSuccessModal
         open={showPublishedSuccess}
+        variant={searchParams.get('published') === 'free' ? 'free' : 'paid'}
         onClose={dismissPublishedSuccess}
         onShareInvitation={handlePublishedShareClick}
       />
@@ -1196,7 +1197,7 @@ export default function EventControlCenterPage() {
                         <table className="w-full table-auto text-left text-sm">
                           <thead>
                             <tr className="border-b border-gray-200 text-xs font-medium text-gray-600">
-                              <th className="whitespace-nowrap px-3 py-2">Niño/a</th>
+                              <th className="whitespace-nowrap px-3 py-2">Invitado/a</th>
                               <th className="whitespace-nowrap px-3 py-2 text-center">Contacto</th>
                               <th className="whitespace-nowrap px-3 py-2">Estado</th>
                               {showFoodColumn ? (
@@ -1360,7 +1361,7 @@ export default function EventControlCenterPage() {
                       <table className="w-full table-auto text-left text-sm">
                         <thead className="sticky top-0 z-10 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
                           <tr className="border-b border-gray-200 text-xs font-medium text-gray-600">
-                            <th className="whitespace-nowrap px-3 py-2">Niño/a</th>
+                            <th className="whitespace-nowrap px-3 py-2">Invitado/a</th>
                             <th className="whitespace-nowrap px-3 py-2 text-center">Contacto</th>
                             <th className="whitespace-nowrap px-3 py-2">Estado</th>
                             {showFoodColumn ? (

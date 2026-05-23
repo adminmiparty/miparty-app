@@ -5,9 +5,15 @@ import { brand } from '@/lib/brand'
 
 type PublishedSuccessModalProps = {
   open: boolean
+  variant?: 'paid' | 'free'
   onClose: () => void
   onShareInvitation: () => void
 }
+
+const BODY_COPY = {
+  paid: 'Gracias por confiar en MiParty. Ya puedes compartir la invitación con tus invitados, recibir confirmaciones y tener todo bajo control desde este panel.',
+  free: 'Tu primer evento en MiParty ya está publicado. Ya puedes compartir la invitación, recibir confirmaciones y tener todo bajo control desde este panel.',
+} as const
 
 const NEXT_STEPS = [
   { icon: Link2, text: 'Comparte el enlace de la invitación' },
@@ -17,6 +23,7 @@ const NEXT_STEPS = [
 
 export function PublishedSuccessModal({
   open,
+  variant = 'paid',
   onClose,
   onShareInvitation,
 }: PublishedSuccessModalProps) {
@@ -47,10 +54,7 @@ export function PublishedSuccessModal({
         <h2 id="published-success-title" className="pr-8 text-xl font-bold text-gray-900">
           ¡Tu invitación está publicada! 🎉
         </h2>
-        <p className="mt-3 text-sm leading-relaxed text-gray-600">
-          Gracias por confiar en MiParty. Ya puedes compartir la invitación con tus invitados, recibir
-          confirmaciones y tener todo bajo control desde este panel.
-        </p>
+        <p className="mt-3 text-sm leading-relaxed text-gray-600">{BODY_COPY[variant]}</p>
 
         <ul className="mt-4 space-y-2.5">
           {NEXT_STEPS.map(({ icon: Icon, text }) => (

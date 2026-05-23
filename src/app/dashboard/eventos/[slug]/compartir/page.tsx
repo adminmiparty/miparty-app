@@ -679,60 +679,58 @@ export default function EventSharePage() {
 
               {isDraft ? (
                 <div className="border-t border-gray-200 pt-6">
-                  {publishRequiresPayment ? (
-                    <div className="rounded-2xl border border-[var(--brand-border)] bg-gradient-to-b from-white to-[var(--brand-primary-light)]/40 p-5 shadow-sm">
-                      <h2 className="text-center text-lg font-bold text-gray-900">
-                        Publica y comparte tu invitación
-                      </h2>
-                      <p className="mt-2 text-center text-sm leading-relaxed text-gray-600">
-                        Activa el enlace para enviarlo a tus invitados.
-                      </p>
-                      <div className="mt-5 rounded-xl border border-gray-200/80 bg-white px-4 py-4 text-center shadow-sm">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                          Pago único
-                        </p>
-                        <p className="mt-1 text-3xl font-bold tabular-nums text-gray-900">
-                          {billingConfig.priceLabel}
-                        </p>
-                        <p className="mt-2 text-xs text-gray-600">
-                          Sin suscripciones. Sin costes ocultos.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={publishing}
-                        onClick={() => void startPaidCheckout('main-cta')}
-                        className={`mt-5 w-full rounded-lg px-4 py-3.5 text-sm font-semibold transition ring-offset-2 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${focusRingClass} ${primaryButtonClass}`}
-                      >
-                        {publishing ? 'Un momento…' : 'Publicar y compartir'}
-                      </button>
-                      <p className="mt-2.5 text-center text-[11px] leading-snug text-gray-400">
-                        Pago seguro con Stripe
-                      </p>
-                      {publishError ? (
-                        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                          {publishError}
-                        </p>
-                      ) : null}
+                  <div className="rounded-2xl border border-[var(--brand-border)] bg-gradient-to-b from-white to-[var(--brand-primary-light)]/40 p-5 shadow-sm">
+                    <h2 className="text-center text-lg font-bold leading-snug text-gray-900">
+                      Publica tu invitación para empezar a enviarla a tus invitados 🎉
+                    </h2>
+                    <div className="mt-5 rounded-xl border border-gray-200/80 bg-white px-4 py-4 text-center shadow-sm">
+                      {publishRequiresPayment ? (
+                        <>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            Pago único
+                          </p>
+                          <p className="mt-1 text-3xl font-bold tabular-nums text-gray-900">
+                            {billingConfig.priceLabel}
+                          </p>
+                          <p className="mt-2 text-xs text-gray-600">
+                            Sin suscripciones. Sin costes ocultos.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--brand-accent-dark)]">
+                            Primer evento gratis
+                          </p>
+                          <p className="mt-2 text-lg font-medium tabular-nums text-gray-400 line-through">
+                            {billingConfig.priceLabel}
+                          </p>
+                          <p className="mt-1 text-3xl font-bold text-gray-900">Gratis</p>
+                        </>
+                      )}
                     </div>
-                  ) : (
-                    <>
-                      <p className="text-center text-sm text-gray-600">{publishMessage}</p>
-                      <button
-                        type="button"
-                        disabled={publishing}
-                        onClick={() => setShowPaymentModal(true)}
-                        className={`mt-4 w-full rounded-lg px-4 py-3 text-sm font-semibold transition ring-offset-2 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${focusRingClass} ${primaryButtonClass}`}
-                      >
-                        {publishing ? 'Un momento…' : 'Quiero generar la invitación'}
-                      </button>
-                      {publishError ? (
-                        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                          {publishError}
-                        </p>
-                      ) : null}
-                    </>
-                  )}
+                    <button
+                      type="button"
+                      disabled={publishing}
+                      onClick={() =>
+                        void (publishRequiresPayment
+                          ? startPaidCheckout('main-cta')
+                          : handlePublish())
+                      }
+                      className={`mt-5 w-full rounded-lg px-4 py-3.5 text-sm font-semibold transition ring-offset-2 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${focusRingClass} ${primaryButtonClass}`}
+                    >
+                      {publishing ? 'Un momento…' : 'Publicar y compartir'}
+                    </button>
+                    <p className="mt-2.5 text-center text-[11px] leading-snug text-gray-400">
+                      {publishRequiresPayment
+                        ? 'Pago seguro con Stripe'
+                        : 'Tu primer evento en MiParty va por nuestra cuenta.'}
+                    </p>
+                    {publishError ? (
+                      <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                        {publishError}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
               ) : (
                 <div className="border-t border-gray-200 pt-6">
