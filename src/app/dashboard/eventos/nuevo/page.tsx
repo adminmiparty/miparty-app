@@ -1793,9 +1793,34 @@ function NewEventPageContent() {
     pendingLeaveHrefRef.current = LEAVE_BACK_SENTINEL
   }, [])
 
-  const discardLeaveAndNavigate = useCallback(() => {
+  const discardLeaveAndNavigate = useCallback(async () => {
+    if (draftEventId) {
+      setDraftSaveBusy(true)
+      setError(null)
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setError(userError?.message ?? 'No se pudo obtener tu sesión.')
+        setDraftSaveBusy(false)
+        return
+      }
+      const { error: deleteError } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', draftEventId)
+        .eq('user_id', user.id)
+        .eq('status', EVENT_STATUS_DRAFT)
+      setDraftSaveBusy(false)
+      if (deleteError) {
+        setError(deleteError.message)
+        return
+      }
+    }
+
     completePendingLeaveNavigation()
-  }, [completePendingLeaveNavigation])
+  }, [draftEventId, supabase, completePendingLeaveNavigation])
 
   useEffect(() => {
     if (childrenLoading || draftHydrating) return
@@ -2440,7 +2465,7 @@ function NewEventPageContent() {
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-gray-600">
               {draftEventId
-                ? 'Puedes guardar los cambios en tu borrador y terminarlo más tarde.'
+                ? 'Puedes guardar los cambios en tu borrador y terminarlo más tarde. Si sales sin guardar, el borrador desaparecerá de Mi Panel.'
                 : 'Todavía no has terminado el evento. Puedes guardarlo como borrador y terminarlo más tarde.'}
             </p>
             <div className="mt-5 flex flex-col gap-2">
@@ -2454,10 +2479,11 @@ function NewEventPageContent() {
               </button>
               <button
                 type="button"
-                onClick={discardLeaveAndNavigate}
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                disabled={draftSaveBusy}
+                onClick={() => void discardLeaveAndNavigate()}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
               >
-                Salir sin guardar
+                {draftSaveBusy ? 'Eliminando…' : 'Salir sin guardar'}
               </button>
               <button
                 type="button"
