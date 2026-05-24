@@ -4,11 +4,13 @@ import AuthPageBrand from '@/components/AuthPageBrand'
 import AuthPageShell, { authCardClassName } from '@/components/AuthPageShell'
 import Link from 'next/link'
 import { Eye, EyeOff } from 'lucide-react'
-import { FormEvent, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { FormEvent, useEffect, useState } from 'react'
 import { brand } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
 
 export default function SignupPage() {
+  const router = useRouter()
   const supabase = createClient()
 
   const [firstName, setFirstName] = useState('')
@@ -21,6 +23,16 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null)
   const [signupSuccess, setSignupSuccess] = useState(false)
   const [signupAutoLogin, setSignupAutoLogin] = useState(false)
+
+  useEffect(() => {
+    if (!signupSuccess) return
+
+    const timeoutId = window.setTimeout(() => {
+      router.push(signupAutoLogin ? '/dashboard' : '/login')
+    }, 3000)
+
+    return () => clearTimeout(timeoutId)
+  }, [signupSuccess, signupAutoLogin, router])
 
   const handleGoogleSignup = async () => {
     setError(null)
@@ -82,9 +94,6 @@ export default function SignupPage() {
   }
 
   if (signupSuccess) {
-    const successMessage = signupAutoLogin
-      ? 'Cuenta creada. Bienvenido/a a MiParty.'
-      : 'Cuenta creada. Ya puedes entrar en MiParty.'
     const successHref = signupAutoLogin ? '/dashboard' : '/login'
     const successCta = signupAutoLogin ? 'Ir a MiParty' : 'Iniciar sesion'
 
@@ -93,13 +102,14 @@ export default function SignupPage() {
         <section className={`${authCardClassName} text-center`}>
           <p className="text-3xl sm:text-4xl" aria-hidden="true">🎉</p>
           <h1 className="mt-3 text-xl font-bold text-gray-900 sm:text-2xl">Cuenta creada</h1>
-          <p className="mt-2 text-sm text-gray-600">{successMessage}</p>
+          <p className="mt-2 text-sm text-gray-600">Bienvenido/a a MiParty</p>
           <Link
             href={successHref}
             className={`mt-6 inline-flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.formSubmit}`}
           >
             {successCta}
           </Link>
+          <p className="mt-3 text-xs text-gray-400">Te redirigimos en unos segundos...</p>
         </section>
       </AuthPageShell>
     )
