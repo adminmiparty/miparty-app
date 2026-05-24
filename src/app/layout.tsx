@@ -24,6 +24,29 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: 'MiParty — Organiza el cumple perfecto',
   description: 'Crea tu invitación, comparte el enlace y gestiona las respuestas en un solo lugar.',
+  openGraph: {
+    title: 'MiParty — Organiza el cumple perfecto',
+    description: 'Crea tu invitación, comparte el enlace y gestiona las respuestas en un solo lugar.',
+    url: 'https://miparty.net',
+    siteName: 'MiParty',
+    images: [
+      {
+        url: 'https://miparty.net/landing-hero.png',
+        width: 1200,
+        height: 630,
+        alt: 'MiParty — Organiza cumpleaños sin el caos',
+      },
+    ],
+    locale: 'es_ES',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'MiParty — Organiza el cumple perfecto',
+    description: 'Crea tu invitación, comparte el enlace y gestiona las respuestas en un solo lugar.',
+    images: ['https://miparty.net/landing-hero.png'],
+  },
+  metadataBase: new URL('https://miparty.net'),
 }
 
 export default function RootLayout({
