@@ -47,6 +47,10 @@ export const metadata: Metadata = {
     images: ['https://miparty.net/landing-hero.png'],
   },
   metadataBase: new URL('https://miparty.net'),
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
+  },
 }
 
 export default function RootLayout({
