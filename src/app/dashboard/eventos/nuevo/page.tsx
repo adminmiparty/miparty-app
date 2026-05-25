@@ -30,6 +30,7 @@ import {
 import { EVENT_STATUS_ACTIVE, EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
 import {
   eventFormBrandUi,
+  eventFlowPageContentClass,
   eventFormPageMainClass,
   eventFormSubmitButtonClass,
   resolveThemeOrBrand,
@@ -2710,7 +2711,7 @@ function NewEventPageContent() {
         </div>
       ) : null}
 
-      <div className="mx-auto w-full max-w-sm px-4 py-6 pb-8">
+      <div className={eventFlowPageContentClass}>
         {!formContentReady ? (
           <p className="py-12 text-center text-sm text-gray-500" aria-busy="true">
             Cargando…

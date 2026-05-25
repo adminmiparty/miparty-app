@@ -118,6 +118,11 @@ export const eventFormBrandUi = {
   },
 } as const
 
+/** Shared column for Paso 1/2, editar, and invitation preview (aligns with max-w-sm cards). */
+export const eventFlowShellClass = 'mx-auto w-full max-w-sm px-4'
+
+export const eventFlowPageContentClass = `${eventFlowShellClass} py-6 pb-8`
+
 export function eventFormPageMainClass(
   selected: SelectedInvitationTheme,
   pageBgMap: Record<string, string>

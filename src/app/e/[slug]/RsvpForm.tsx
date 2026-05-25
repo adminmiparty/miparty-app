@@ -8,6 +8,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
 import { brand } from '@/lib/brand'
+import { eventFlowShellClass } from '@/lib/eventFormTheme'
 import { getTheme } from '@/lib/themes'
 
 const previewBrandMap: Record<
@@ -53,7 +54,7 @@ export function InvitationPreviewTopBar({
     <div
       className={`sticky top-0 z-50 w-full border-b border-gray-200 ${theme.bg}/95 shadow-sm backdrop-blur-sm`}
     >
-      <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-3">
+      <div className={`flex items-center justify-between gap-3 py-3 ${eventFlowShellClass}`}>
         <Link
           href={backHref}
           className={`max-w-[min(100%,16rem)] text-sm font-medium leading-snug ${brand.navText} ${brand.navTextHover}`}
@@ -77,7 +78,7 @@ export function InvitationPreviewBottomBar({
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur-sm">
-      <div className="pointer-events-auto mx-auto w-full max-w-md px-4 py-3">
+      <div className={`pointer-events-auto py-3 ${eventFlowShellClass}`}>
         <Link
           href={backHref}
           className={`block w-full rounded-xl px-4 py-3 text-center text-sm font-semibold text-gray-900 transition ${buttonClass}`}

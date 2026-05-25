@@ -12,6 +12,7 @@ import {
 import { brand } from '@/lib/brand'
 import { EVENT_STATUS_ACTIVE, EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
 import { createClient } from '@/lib/supabase/server'
+import { eventFlowPageContentClass, eventFlowShellClass } from '@/lib/eventFormTheme'
 import { getTheme, type ThemeKey } from '@/lib/themes'
 import EventRecap from './EventRecap'
 import RsvpForm, { InvitationPreviewBottomBar, InvitationPreviewTopBar } from './RsvpForm'
@@ -262,10 +263,15 @@ export default async function PublicEventPage({
       {isPreview ? (
         <InvitationPreviewTopBar publicSlug={slug} themeKey={previewNavTheme} />
       ) : (
-        <AppNav backHref="/" backLabel="⬅️ Inicio" />
+        <AppNav backHref="/" backLabel="⬅️ Inicio" eventFlowLayout />
       )}
-      <div className={`px-4 ${isPreview ? 'pb-28 pt-4' : 'py-8'}`}>
-        <div className="mx-auto w-full max-w-md space-y-4">
+      <div
+        className={
+          isPreview
+            ? `${eventFlowShellClass} space-y-4 pb-28 pt-4`
+            : `${eventFlowPageContentClass} space-y-4`
+        }
+      >
         <div
           id="invitation-recap"
           className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xl"
@@ -324,7 +330,6 @@ export default async function PublicEventPage({
           theme={theme}
           themeKey={event.invitation_theme}
         />
-        </div>
       </div>
       {isPreview ? (
         <InvitationPreviewBottomBar publicSlug={slug} themeKey={previewNavTheme} />

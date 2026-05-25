@@ -10,6 +10,7 @@ import { es } from 'date-fns/locale'
 import { brand } from '@/lib/brand'
 import {
   buildPathWithTheme,
+  eventFlowPageContentClass,
   eventFormBrandUi,
   eventFormPageMainClass,
   resolveThemeOrBrand,
@@ -547,7 +548,7 @@ export default function EventSharePage() {
         }
       />
 
-      <div className="mx-auto w-full max-w-sm px-4 py-6 pb-8">
+      <div className={eventFlowPageContentClass}>
         <section className={`rounded-2xl border p-5 shadow-xl ${cardClass}`}>
           {confirmingCheckoutReturn ? (
             <div className="py-10 text-center">

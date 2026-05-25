@@ -17,6 +17,7 @@ import {
   type EventType,
 } from '@/lib/eventType'
 import {
+  eventFlowPageContentClass,
   eventFormBrandUi,
   eventFormPageMainClass,
   eventFormSubmitButtonClass,
@@ -1486,13 +1487,14 @@ export default function EditEventPage() {
   }
 
   return (
-    <main className={`${pageMainClass} px-4 py-8`}>
+    <main className={pageMainClass}>
       <AppNav
         backHref={`/dashboard/eventos/${slug}`}
         backLabel="⬅️ Volver"
+        eventFlowLayout
       />
 
-      <div className="mx-auto w-full max-w-md pb-8 pt-4">
+      <div className={eventFlowPageContentClass}>
         <section className={`rounded-2xl border p-5 shadow-xl ${activePreviewTheme.card}`}>
           <div className="mb-5">
             <h1 className="text-2xl font-bold text-gray-900">Editar evento</h1>
