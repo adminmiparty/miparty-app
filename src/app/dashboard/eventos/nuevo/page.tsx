@@ -2571,6 +2571,7 @@ function NewEventPageContent() {
   }
 
   const formContentReady = !childrenLoading && !draftHydrating
+  const isResumingDraft = Boolean(draftIdParam?.trim() || draftEventId)
 
   const siblingsForModal = useMemo(() => {
     const trimmedNombre = childName.trim()
@@ -2683,6 +2684,7 @@ function NewEventPageContent() {
           progressAccentClass={progressAccentClass}
           progressTrackClass={progressTrackClass}
           progressCardBorderClass={eventFormBrandUi.progressCardBorder}
+          step1Label={isResumingDraft ? 'Editar evento' : undefined}
         />
 
         <section className={`rounded-2xl border p-5 shadow-xl ${activePreviewTheme.card}`}>
@@ -3717,7 +3719,13 @@ function NewEventPageContent() {
               disabled={loading}
               className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${submitButtonClass}`}
             >
-              {loading ? 'Creando evento...' : 'Crear evento'}
+              {loading
+                ? isResumingDraft
+                  ? 'Guardando…'
+                  : 'Creando evento...'
+                : isResumingDraft
+                  ? 'Guardar y continuar'
+                  : 'Crear evento'}
             </button>
           </form>
         </section>

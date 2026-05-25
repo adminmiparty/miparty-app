@@ -1671,10 +1671,12 @@ export default function RsvpEditPage() {
             <h2 className="text-base font-semibold text-gray-900">Actualiza los detalles</h2>
 
             <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-gray-900">Datos del invitado</p>
+                <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label htmlFor="edit-childName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                    Nombre del niño/a *
+                    Nombre *
                   </label>
                   <input
                     id="edit-childName"
@@ -1698,6 +1700,7 @@ export default function RsvpEditPage() {
                     required
                     className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ${activeTheme.accent} transition focus:border-gray-300 focus:ring-2`}
                   />
+                </div>
                 </div>
               </div>
 
@@ -1736,9 +1739,11 @@ export default function RsvpEditPage() {
                 </div>
               ) : null}
 
-              <div>
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-gray-900">Respuesta enviada por</p>
+                <div>
                 <label htmlFor="edit-parentName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                  Tu nombre *
+                  Nombre *
                 </label>
                 <input
                   id="edit-parentName"
@@ -1852,6 +1857,7 @@ export default function RsvpEditPage() {
                   </div>
                 </div>
               ) : null}
+              </div>
 
               <div>
                 <label htmlFor="edit-extraNotes" className="mb-1.5 block text-sm font-medium text-gray-900">

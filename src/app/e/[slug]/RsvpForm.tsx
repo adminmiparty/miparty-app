@@ -21,13 +21,7 @@ const previewBrandMap: Record<
   purple: 'text-purple-500',
 }
 
-export function InvitationPreviewTopBar({
-  publicSlug,
-  themeKey,
-}: {
-  publicSlug: string
-  themeKey: string | null
-}) {
+function useInvitationPreviewExit(publicSlug: string, themeKey: string | null) {
   const searchParams = useSearchParams()
   const fromParam = searchParams.get('from')
   const theme = getTheme(themeKey)
@@ -38,7 +32,22 @@ export function InvitationPreviewTopBar({
   const shareHref = `/dashboard/eventos/${publicSlug}/compartir?theme=${encodeURIComponent(t)}`
   const dashboardHref = `/dashboard/eventos/${publicSlug}`
   const backHref = fromParam === 'dashboard' ? dashboardHref : shareHref
+  const backLabel =
+    fromParam === 'dashboard'
+      ? '⬅️ Volver'
+      : '⬅️ Volver al paso 2 — Compartir invitación'
   const brandClass = previewBrandMap[t] ?? previewBrandMap.yellow
+  return { backHref, backLabel, theme, brandClass, buttonClass: `${theme.button} ${theme.buttonHover}` }
+}
+
+export function InvitationPreviewTopBar({
+  publicSlug,
+  themeKey,
+}: {
+  publicSlug: string
+  themeKey: string | null
+}) {
+  const { backHref, backLabel, theme, brandClass } = useInvitationPreviewExit(publicSlug, themeKey)
 
   return (
     <div
@@ -47,11 +56,34 @@ export function InvitationPreviewTopBar({
       <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-3">
         <Link
           href={backHref}
-          className={`text-sm font-medium ${brand.navText} ${brand.navTextHover}`}
+          className={`max-w-[min(100%,16rem)] text-sm font-medium leading-snug ${brand.navText} ${brand.navTextHover}`}
         >
-          ⬅️ Volver
+          {backLabel}
         </Link>
-        <p className={`text-sm font-semibold ${brandClass}`}>MiParty</p>
+        <p className={`shrink-0 text-sm font-semibold ${brandClass}`}>MiParty</p>
+      </div>
+    </div>
+  )
+}
+
+export function InvitationPreviewBottomBar({
+  publicSlug,
+  themeKey,
+}: {
+  publicSlug: string
+  themeKey: string | null
+}) {
+  const { backHref, buttonClass } = useInvitationPreviewExit(publicSlug, themeKey)
+
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur-sm">
+      <div className="pointer-events-auto mx-auto w-full max-w-md px-4 py-3">
+        <Link
+          href={backHref}
+          className={`block w-full rounded-xl px-4 py-3 text-center text-sm font-semibold text-gray-900 transition ${buttonClass}`}
+        >
+          Volver y terminar evento
+        </Link>
       </div>
     </div>
   )
@@ -251,6 +283,25 @@ function splitDialPhone(full: string): {
 
 function capitalizeFirst(str: string) {
   return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
+function attendanceSelectionFeedback(
+  status: AttendanceStatus,
+  rsvpDeadline: string | null
+): string {
+  if (status === 'confirmed') {
+    return '🎉 ¡Genial! Confirma los detalles abajo.'
+  }
+  if (status === 'declined') {
+    return 'Gracias por avisar 🙌'
+  }
+  if (status === 'maybe') {
+    if (rsvpDeadline) {
+      return `Sin problema 👍 puedes decidir más tarde.\nEsperamos tu respuesta hasta el ${capitalizeFirst(rsvpDeadline)}.`
+    }
+    return 'Sin problema 👍 puedes decidir más tarde.'
+  }
+  return ''
 }
 
 const calendarProviderLogos = {
@@ -456,20 +507,14 @@ function RsvpFormInner({
   }, [attendance])
 
   const helperText = useMemo(() => {
-    if (attendance === 'confirmed') {
-      return '🎉 ¡Genial! Confirma los detalles abajo.'
-    }
-    if (attendance === 'declined') {
-      return 'Gracias por avisar 🙌'
-    }
-    if (attendance === 'maybe') {
-      if (rsvpDeadline) {
-        return `Sin problema 👍 puedes decidir más tarde.\nEsperamos tu respuesta hasta el ${capitalizeFirst(rsvpDeadline)}.`
-      }
-      return 'Sin problema 👍 puedes decidir más tarde.'
-    }
-    return ''
+    if (!attendance) return ''
+    return attendanceSelectionFeedback(attendance, rsvpDeadline ?? null)
   }, [attendance, rsvpDeadline])
+
+  const submittedFeedbackText = useMemo(() => {
+    if (!submittedStatus) return ''
+    return attendanceSelectionFeedback(submittedStatus, rsvpDeadline ?? null)
+  }, [submittedStatus, rsvpDeadline])
 
   const placeholderText = useMemo(() => {
     if (attendance === 'confirmed') {
@@ -2539,7 +2584,7 @@ END:VCALENDAR`
       <>
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
         <p className="whitespace-pre-line text-center text-sm font-medium text-gray-800">
-          {'Gracias por avisar 🙌\n¡Esperamos veros en la próxima!'}
+          {submittedFeedbackText}
         </p>
         {renderResponseSummary()}
         {renderJustSignedUpProfileCta()}
@@ -2571,9 +2616,10 @@ END:VCALENDAR`
       <>
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
         <p className="whitespace-pre-line text-center text-sm font-medium text-gray-800">
-          {
-            'Gracias 🙌\nGuarda el enlace que aparece abajo para actualizar tu respuesta cuando lo tengas claro.'
-          }
+          {submittedFeedbackText}
+        </p>
+        <p className="mt-2 whitespace-pre-line text-center text-xs text-gray-600">
+          Guarda el enlace que aparece abajo para actualizar tu respuesta cuando lo tengas claro.
         </p>
         {renderResponseSummary()}
         {renderJustSignedUpProfileCta()}
@@ -2778,16 +2824,20 @@ END:VCALENDAR`
       ) : null}
 
 
-      <div className="flex h-10 items-center justify-center py-2 text-center text-gray-500">
-        <p className={`whitespace-pre-line ${attendance === 'maybe' ? 'text-xs' : 'text-sm'}`}>{helperText}</p>
-      </div>
+      {isPreview && attendance && helperText ? (
+        <div className="flex min-h-10 items-center justify-center py-2 text-center text-gray-500">
+          <p className={`whitespace-pre-line ${attendance === 'maybe' ? 'text-xs' : 'text-sm'}`}>{helperText}</p>
+        </div>
+      ) : null}
 
       {attendance ? (
-        <form ref={formFieldsRef} onSubmit={handleSubmit} className="mt-4 space-y-3">
-          <div className="grid grid-cols-2 gap-2">
+        <form ref={formFieldsRef} onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-gray-900">Datos del invitado</p>
+            <div className="grid grid-cols-2 gap-2">
             <div>
               <label htmlFor="childName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                Nombre del niño/a *
+                Nombre *
               </label>
               <input
                 id="childName"
@@ -2831,6 +2881,7 @@ END:VCALENDAR`
                 className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ${activeTheme.accent} transition placeholder:text-gray-400 focus:border-gray-300 focus:ring-2`}
               />
             </div>
+            </div>
           </div>
 
           {attendance === 'confirmed' && hasFoodOptions && foodOptions.length > 0 ? (
@@ -2868,7 +2919,9 @@ END:VCALENDAR`
             </div>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-gray-900">Respuesta enviada por</p>
+            <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="parentFirstName" className="mb-1.5 block text-sm font-medium text-gray-900">
                 Nombre *
@@ -2895,7 +2948,7 @@ END:VCALENDAR`
             </div>
             <div>
               <label htmlFor="parentLastName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                Apellidos *
+                Apellido(s) *
               </label>
               <input
                 id="parentLastName"
@@ -2916,6 +2969,7 @@ END:VCALENDAR`
                 }}
                 className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ${activeTheme.accent} transition focus:border-gray-300 focus:ring-2`}
               />
+            </div>
             </div>
           </div>
 

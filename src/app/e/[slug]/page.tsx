@@ -14,7 +14,7 @@ import { EVENT_STATUS_ACTIVE, EVENT_STATUS_DRAFT } from '@/lib/eventLifecycle'
 import { createClient } from '@/lib/supabase/server'
 import { getTheme, type ThemeKey } from '@/lib/themes'
 import EventRecap from './EventRecap'
-import RsvpForm, { InvitationPreviewTopBar } from './RsvpForm'
+import RsvpForm, { InvitationPreviewBottomBar, InvitationPreviewTopBar } from './RsvpForm'
 
 function pickPreviewNavTheme(urlTheme: string | null | undefined, invitationTheme: string | null): ThemeKey {
   const u = urlTheme?.trim()
@@ -264,7 +264,7 @@ export default async function PublicEventPage({
       ) : (
         <AppNav backHref="/" backLabel="⬅️ Inicio" />
       )}
-      <div className={`px-4 ${isPreview ? 'pb-8 pt-4' : 'py-8'}`}>
+      <div className={`px-4 ${isPreview ? 'pb-28 pt-4' : 'py-8'}`}>
         <div className="mx-auto w-full max-w-md space-y-4">
         <div
           id="invitation-recap"
@@ -326,6 +326,9 @@ export default async function PublicEventPage({
         />
         </div>
       </div>
+      {isPreview ? (
+        <InvitationPreviewBottomBar publicSlug={slug} themeKey={previewNavTheme} />
+      ) : null}
     </main>
   )
 }
