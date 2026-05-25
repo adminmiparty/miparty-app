@@ -100,6 +100,8 @@ type PostRsvpPersist = {
   attendance: AttendanceStatus
   editToken: string | null
   parentName: string
+  parentFirst: string
+  parentLast: string
   parentPhone: string
   childFirst: string
   childLast: string
@@ -114,12 +116,19 @@ function resolveProfileNameParts(
   trimmedParentName: string,
   googleFullName: string | null | undefined
 ): { firstName: string; lastName: string } {
-  const nameParts = trimmedParentName
-    ? trimmedParentName.split(/\s+/).filter(Boolean)
-    : (googleFullName ?? '').split(/\s+/).filter(Boolean)
+  const source = trimmedParentName
+    ? trimmedParentName.trim()
+    : (googleFullName ?? '').trim()
+  if (!source) {
+    return { firstName: '', lastName: '' }
+  }
+  const lastSpace = source.lastIndexOf(' ')
+  if (lastSpace === -1) {
+    return { firstName: source, lastName: '' }
+  }
   return {
-    firstName: nameParts[0] || '',
-    lastName: nameParts.slice(1).join(' ') || '',
+    firstName: source.slice(0, lastSpace).trim(),
+    lastName: source.slice(lastSpace + 1).trim(),
   }
 }
 
@@ -321,6 +330,18 @@ function RsvpFormInner({
   const [parentName, setParentName] = useState('')
   const [parentFirstName, setParentFirstName] = useState('')
   const [parentLastName, setParentLastName] = useState('')
+  const parentFirstNameRef = useRef('')
+  const parentLastNameRef = useRef('')
+  const childFirstRef = useRef('')
+  const childLastRef = useRef('')
+
+  const syncChildNameFields = (first: string, last: string) => {
+    setChildName(first)
+    setChildLastName(last)
+    childFirstRef.current = first
+    childLastRef.current = last
+  }
+
   const [parentEmail, setParentEmail] = useState('')
   const [parentCountryCode, setParentCountryCode] = useState<string>('+34')
   const [parentCustomCode, setParentCustomCode] = useState('')
@@ -573,18 +594,25 @@ function RsvpFormInner({
       oauthLinkDoneRef.current = true
 
       if (parsed) {
-        if (parsed.parentName) {
-          const parentParts = parsed.parentName.trim().split(/\s+/).filter(Boolean)
-          setParentFirstName(parentParts[0] ?? '')
-          setParentLastName(parentParts.slice(1).join(' '))
+        if (parsed.parentFirst || parsed.parentLast) {
+          const first = parsed.parentFirst ?? ''
+          const last = parsed.parentLast ?? ''
+          setParentFirstName(first)
+          setParentLastName(last)
+          parentFirstNameRef.current = first
+          parentLastNameRef.current = last
+        } else if (parsed.parentName?.trim()) {
+          const { firstName, lastName } = resolveProfileNameParts(parsed.parentName.trim(), null)
+          setParentFirstName(firstName)
+          setParentLastName(lastName)
+          parentFirstNameRef.current = firstName
+          parentLastNameRef.current = lastName
         }
-        if (parsed.childName) {
+        if (parsed.childFirst || parsed.childLast) {
+          syncChildNameFields(parsed.childFirst ?? '', parsed.childLast ?? '')
+        } else if (parsed.childName?.trim()) {
           const childParts = parsed.childName.trim().split(/\s+/).filter(Boolean)
-          setChildName(childParts[0] ?? '')
-          setChildLastName(childParts.slice(1).join(' ') || '')
-        } else if (parsed.childFirst) {
-          setChildName(parsed.childFirst)
-          setChildLastName(parsed.childLast ?? '')
+          syncChildNameFields(childParts[0] ?? '', childParts.slice(1).join(' ') || '')
         }
         const phoneValue = parsed.phone ?? parsed.parentPhone
         if (phoneValue) {
@@ -643,7 +671,11 @@ function RsvpFormInner({
             storedParentName,
             storedChildName,
             storedPhone,
-            parsed?.rsvpId || undefined
+            parsed?.rsvpId || undefined,
+            parsed?.parentFirst || undefined,
+            parsed?.parentLast || undefined,
+            parsed?.childFirst || '',
+            parsed?.childLast || ''
           )
           console.log('prefillWelcomeForm completed')
           setModalView('welcome')
@@ -662,11 +694,9 @@ function RsvpFormInner({
           .maybeSingle()
 
         if (profile) {
-          const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
-          if (fullName) {
-            const parentParts = fullName.split(/\s+/).filter(Boolean)
-            setParentFirstName(parentParts[0] ?? '')
-            setParentLastName(parentParts.slice(1).join(' '))
+          if (profile.first_name || profile.last_name) {
+            setParentFirstName(profile.first_name ?? '')
+            setParentLastName(profile.last_name ?? '')
           }
           if (profile.phone) {
             const phoneParts = splitDialPhone(String(profile.phone))
@@ -754,13 +784,34 @@ function RsvpFormInner({
   }
 
   const persistCurrentFormToSession = () => {
-    const trimmedParentName = parentName.trim()
-    const trimmedChildName = childName.trim()
-    const trimmedChildLastName = childLastName.trim()
+    const parentFirstEl = document.getElementById('parentFirstName') as HTMLInputElement | null
+    const parentLastEl = document.getElementById('parentLastName') as HTMLInputElement | null
+    const childFirstEl = document.getElementById('childName') as HTMLInputElement | null
+    const childLastEl = document.getElementById('childLastName') as HTMLInputElement | null
+
+    const trimmedParentFirst = (
+      parentFirstEl?.value ??
+      parentFirstNameRef.current ??
+      parentFirstName
+    ).trim()
+    const trimmedParentLast = (
+      parentLastEl?.value ??
+      parentLastNameRef.current ??
+      parentLastName
+    ).trim()
+    const trimmedChildFirst = (childFirstEl?.value ?? childFirstRef.current ?? childName).trim()
+    const trimmedChildLast = (childLastEl?.value ?? childLastRef.current ?? childLastName).trim()
+
+    parentFirstNameRef.current = trimmedParentFirst
+    parentLastNameRef.current = trimmedParentLast
+    childFirstRef.current = trimmedChildFirst
+    childLastRef.current = trimmedChildLast
+
+    const trimmedParentName = `${trimmedParentFirst} ${trimmedParentLast}`.trim()
     const combinedChildName =
-      trimmedChildLastName.length > 0
-        ? `${trimmedChildName} ${trimmedChildLastName}`.trim()
-        : trimmedChildName
+      trimmedChildLast.length > 0
+        ? `${trimmedChildFirst} ${trimmedChildLast}`.trim()
+        : trimmedChildFirst
     const trimmedParentPhoneNumber = parentPhoneNumber.trim()
     const finalParentDial = resolveDialCode(parentCountryCode, parentCustomCode)
     const finalPhone =
@@ -780,9 +831,11 @@ function RsvpFormInner({
       attendance: attendance ?? existing.attendance ?? 'confirmed',
       editToken: existing.editToken ?? submittedEditToken,
       parentName: trimmedParentName,
+      parentFirst: trimmedParentFirst,
+      parentLast: trimmedParentLast,
       parentPhone: finalPhone || existing.parentPhone || '',
-      childFirst: trimmedChildName,
-      childLast: trimmedChildLastName,
+      childFirst: trimmedChildFirst,
+      childLast: trimmedChildLast,
       childName: combinedChildName,
       phone: finalPhone,
       foodPreference,
@@ -861,15 +914,32 @@ function RsvpFormInner({
     }
     const uid = data.user?.id ?? data.session?.user?.id
     if (uid) {
-      const { firstName, lastName } = resolveProfileNameParts(parentName.trim(), null)
+      const trimmedFirst = parentFirstNameRef.current.trim()
+      const trimmedLast = parentLastNameRef.current.trim()
       await sb.from('users').upsert({
         id: uid,
-        first_name: firstName || null,
-        last_name: lastName || null,
+        first_name: trimmedFirst || null,
+        last_name: trimmedLast || null,
         signup_source: 'rsvp_toggle',
       })
       setJustSignedUp(true)
-      await prefillWelcomeForm(undefined, parentName.trim(), undefined, '', uid)
+      const childFirstEl = document.getElementById('childName') as HTMLInputElement | null
+      const childLastEl = document.getElementById('childLastName') as HTMLInputElement | null
+      const childFirstValue = (childFirstEl?.value ?? childFirstRef.current).trim()
+      const childLastValue = (childLastEl?.value ?? childLastRef.current).trim()
+      childFirstRef.current = childFirstValue
+      childLastRef.current = childLastValue
+      await prefillWelcomeForm(
+        undefined,
+        undefined,
+        undefined,
+        '',
+        undefined,
+        parentFirstNameRef.current,
+        parentLastNameRef.current,
+        childFirstValue,
+        childLastValue
+      )
       setModalView('welcome')
       setShowSignupModal(true)
       setIsLoggedIn(true)
@@ -938,7 +1008,11 @@ function RsvpFormInner({
       trimmedParentName,
       undefined,
       trimmedParentPhone,
-      submittedRsvpId
+      submittedRsvpId,
+      parentFirstName,
+      parentLastName,
+      trimmedChildName,
+      trimmedChildLastName
     )
     setModalView('welcome')
   }
@@ -1023,15 +1097,22 @@ function RsvpFormInner({
     nameSource?: string,
     childNameSource?: string,
     phoneSource?: string,
-    rsvpId?: string | null
+    rsvpId?: string | null,
+    firstName?: string,
+    lastName?: string,
+    childFirst?: string,
+    childLast?: string
   ) => {
     console.log('prefillWelcomeForm started with:', {
       nameSource,
       childNameSource,
       phoneSource,
+      firstName,
+      lastName,
+      childFirst,
+      childLast,
     })
     try {
-      const trimmedParentName = (nameSource ?? parentName).trim()
       let user = authUser ?? null
       if (!user) {
         const {
@@ -1040,25 +1121,40 @@ function RsvpFormInner({
         user = fetchedUser
         console.log('Got user:', user?.email)
       }
-      const googleFullName =
-        typeof user?.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : null
-      const { firstName, lastName } = resolveProfileNameParts(trimmedParentName, googleFullName)
-      setWelcomeFirstName(firstName)
-      setWelcomeLastName(lastName)
+      if (firstName !== undefined) {
+        setWelcomeFirstName(firstName.trim())
+        setWelcomeLastName((lastName ?? '').trim())
+      } else {
+        const trimmedParentName = (nameSource ?? parentName).trim()
+        const googleFullName =
+          typeof user?.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : null
+        const { firstName: resolvedFirst, lastName: resolvedLast } = resolveProfileNameParts(
+          trimmedParentName,
+          googleFullName
+        )
+        setWelcomeFirstName(resolvedFirst)
+        setWelcomeLastName(resolvedLast)
+      }
       console.log('Name set, fetching child...')
 
-      let combinedChildName = childNameSource?.trim() ?? ''
-      if (!combinedChildName) {
-        const trimmedChildName = childName.trim()
-        const trimmedChildLastName = childLastName.trim()
-        combinedChildName =
-          trimmedChildLastName.length > 0
-            ? `${trimmedChildName} ${trimmedChildLastName}`
-            : trimmedChildName
+      const hasExplicitChildName = childFirst !== undefined
+      if (hasExplicitChildName) {
+        setWelcomeChildFirstName(childFirst.trim())
+        setWelcomeChildLastName((childLast ?? '').trim())
+      } else {
+        let combinedChildName = childNameSource?.trim() ?? ''
+        if (!combinedChildName) {
+          const trimmedChildName = childName.trim()
+          const trimmedChildLastName = childLastName.trim()
+          combinedChildName =
+            trimmedChildLastName.length > 0
+              ? `${trimmedChildName} ${trimmedChildLastName}`
+              : trimmedChildName
+        }
+        const childParts = combinedChildName.split(/\s+/).filter(Boolean)
+        setWelcomeChildFirstName(childParts[0] ?? '')
+        setWelcomeChildLastName(childParts.slice(1).join(' '))
       }
-      const childParts = combinedChildName.split(/\s+/).filter(Boolean)
-      setWelcomeChildFirstName(childParts[0] ?? '')
-      setWelcomeChildLastName(childParts.slice(1).join(' '))
       setWelcomeChildBirthDay('')
       setWelcomeChildBirthMonth('')
       setWelcomeChildBirthYear('')
@@ -1120,7 +1216,7 @@ function RsvpFormInner({
         }
       }
 
-      if (recentChild) {
+      if (recentChild && !hasExplicitChildName) {
         setWelcomeChildFirstName(recentChild.name ?? '')
         setWelcomeChildLastName(recentChild.last_name || '')
         if (recentChild.birth_date) {
@@ -1284,11 +1380,9 @@ function RsvpFormInner({
       .maybeSingle()
 
     if (profile) {
-      const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
-      if (fullName) {
-        const parentParts = fullName.split(/\s+/).filter(Boolean)
-        setParentFirstName(parentParts[0] ?? '')
-        setParentLastName(parentParts.slice(1).join(' '))
+      if (profile.first_name || profile.last_name) {
+        setParentFirstName(profile.first_name ?? '')
+        setParentLastName(profile.last_name ?? '')
       }
       if (profile.phone) {
         const phoneParts = splitDialPhone(String(profile.phone))
@@ -1385,6 +1479,8 @@ function RsvpFormInner({
         attendance,
         editToken: duplicatePrompt.edit_token ?? null,
         parentName: trimmedParentName,
+        parentFirst: parentFirstName.trim(),
+        parentLast: parentLastName.trim(),
         parentPhone: trimmedParentPhone,
         childFirst: trimmedChildName,
         childLast: trimmedChildLastName,
@@ -1555,6 +1651,8 @@ function RsvpFormInner({
           attendance,
           editToken: token,
           parentName: trimmedParentName,
+          parentFirst: parentFirstName.trim(),
+          parentLast: parentLastName.trim(),
           parentPhone: trimmedParentPhone,
           childFirst: trimmedChildName,
           childLast: trimmedChildLastName,
@@ -2697,7 +2795,9 @@ END:VCALENDAR`
                 type="text"
                 autoComplete="off"
                 value={childName}
-                onChange={(event) => setChildName(event.target.value)}
+                onChange={(event) => {
+                  syncChildNameFields(event.target.value, childLastRef.current)
+                }}
                 required
                 onInvalid={(e) => {
                   (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
@@ -2717,7 +2817,9 @@ END:VCALENDAR`
                 id="childLastName"
                 type="text"
                 value={childLastName}
-                onChange={(event) => setChildLastName(event.target.value)}
+                onChange={(event) => {
+                  syncChildNameFields(childFirstRef.current, event.target.value)
+                }}
                 required
                 onInvalid={(e) => {
                   (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
@@ -2776,7 +2878,11 @@ END:VCALENDAR`
                 type="text"
                 autoComplete="given-name"
                 value={parentFirstName}
-                onChange={(event) => setParentFirstName(event.target.value)}
+                onChange={(event) => {
+                  const v = event.target.value
+                  setParentFirstName(v)
+                  parentFirstNameRef.current = v
+                }}
                 required
                 onInvalid={(e) => {
                   (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
@@ -2796,7 +2902,11 @@ END:VCALENDAR`
                 type="text"
                 autoComplete="family-name"
                 value={parentLastName}
-                onChange={(event) => setParentLastName(event.target.value)}
+                onChange={(event) => {
+                  const v = event.target.value
+                  setParentLastName(v)
+                  parentLastNameRef.current = v
+                }}
                 required
                 onInvalid={(e) => {
                   (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
