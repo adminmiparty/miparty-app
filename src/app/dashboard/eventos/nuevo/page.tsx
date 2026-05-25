@@ -293,6 +293,33 @@ const EXTRA_INTERNATIONAL_PREFIXES_LONGEST_FIRST = Array.from(
   ])
 ).sort((a, b) => b.length - a.length)
 
+const FORM_FIELD_REQUIRED_MESSAGE = 'Por favor, completa este campo.'
+
+function isFormValidatableField(
+  target: EventTarget | null
+): target is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement
+  )
+}
+
+function handleFormFieldInvalid(event: { target: EventTarget | null }) {
+  const target = event.target
+  if (!isFormValidatableField(target)) return
+  target.setCustomValidity(FORM_FIELD_REQUIRED_MESSAGE)
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  window.setTimeout(() => target.focus({ preventScroll: true }), 400)
+}
+
+function handleFormFieldInput(event: { target: EventTarget | null }) {
+  const target = event.target
+  if (isFormValidatableField(target)) {
+    target.setCustomValidity('')
+  }
+}
+
 function sanitizeDialPrefix(raw: string): string {
   const digitsPlus = raw.replace(/[^\d+]/g, '')
   if (digitsPlus.length === 0) return ''
@@ -2589,6 +2616,18 @@ function NewEventPageContent() {
         backLabel="⬅️ Mi panel"
         onBackClick={handleBackNavigation}
         onInternalNavigate={handleNavLinkClick}
+        centerSlot={
+          formContentReady ? (
+            <EventCreationSteps
+              variant="nav"
+              step={1}
+              progressAccentClass={progressAccentClass}
+              progressTrackClass={progressTrackClass}
+              progressCardBorderClass={eventFormBrandUi.progressCardBorder}
+              step1Label={isResumingDraft ? 'Editar evento' : undefined}
+            />
+          ) : null
+        }
       />
 
       {showLeaveDraftModal ? (
@@ -2679,14 +2718,6 @@ function NewEventPageContent() {
         ) : null}
         {formContentReady ? (
         <>
-        <EventCreationSteps
-          step={1}
-          progressAccentClass={progressAccentClass}
-          progressTrackClass={progressTrackClass}
-          progressCardBorderClass={eventFormBrandUi.progressCardBorder}
-          step1Label={isResumingDraft ? 'Editar evento' : undefined}
-        />
-
         <section className={`rounded-2xl border p-5 shadow-xl ${activePreviewTheme.card}`}>
           <div className="mb-5">
             <p className="text-sm text-gray-500">Completa los datos y crea tu evento en minutos.</p>
@@ -2694,14 +2725,8 @@ function NewEventPageContent() {
 
           <form
             onSubmit={handleSubmit}
-            onInvalidCapture={(e) => {
-              ;(e.target as HTMLInputElement | HTMLTextAreaElement).setCustomValidity(
-                'Por favor, completa este campo.'
-              )
-            }}
-            onInputCapture={(e) => {
-              ;(e.target as HTMLInputElement | HTMLTextAreaElement).setCustomValidity('')
-            }}
+            onInvalidCapture={handleFormFieldInvalid}
+            onInputCapture={handleFormFieldInput}
             className="space-y-6"
           >
             <EventTypeSelector

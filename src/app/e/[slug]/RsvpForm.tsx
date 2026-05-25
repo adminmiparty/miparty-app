@@ -35,7 +35,7 @@ function useInvitationPreviewExit(publicSlug: string, themeKey: string | null) {
   const backLabel =
     fromParam === 'dashboard'
       ? '⬅️ Volver'
-      : '⬅️ Volver al paso 2 — Compartir invitación'
+      : '⬅️ Volver y compartir invitación'
   const brandClass = previewBrandMap[t] ?? previewBrandMap.yellow
   return { backHref, backLabel, theme, brandClass, buttonClass: `${theme.button} ${theme.buttonHover}` }
 }

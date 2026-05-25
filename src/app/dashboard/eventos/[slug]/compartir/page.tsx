@@ -536,16 +536,18 @@ export default function EventSharePage() {
             : `/dashboard/eventos/${slug}/editar${editShareQuery}`
         }
         backLabel="⬅️ Volver al Paso 1"
+        centerSlot={
+          <EventCreationSteps
+            variant="nav"
+            step={2}
+            progressAccentClass={progressAccentClass}
+            progressTrackClass={progressTrackClass}
+            progressCardBorderClass={eventFormBrandUi.progressCardBorder}
+          />
+        }
       />
 
       <div className="mx-auto w-full max-w-sm px-4 py-6 pb-8">
-        <EventCreationSteps
-          step={2}
-          progressAccentClass={progressAccentClass}
-          progressTrackClass={progressTrackClass}
-          progressCardBorderClass={eventFormBrandUi.progressCardBorder}
-        />
-
         <section className={`rounded-2xl border p-5 shadow-xl ${cardClass}`}>
           {confirmingCheckoutReturn ? (
             <div className="py-10 text-center">
@@ -718,7 +720,7 @@ export default function EventSharePage() {
                   href={`/e/${event.public_slug}?preview=true&from=share${effectiveTheme ? `&theme=${effectiveTheme}` : ''}`}
                   className={secondaryOutlineClass}
                 >
-                  Ver cómo la verán tus invitados
+                  Visualizar la invitación
                 </a>
               </div>
 
