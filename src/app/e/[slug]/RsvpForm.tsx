@@ -380,6 +380,7 @@ function RsvpFormInner({
   const [welcomeChild2BirthMonth, setWelcomeChild2BirthMonth] = useState('')
   const [welcomeChild2BirthYear, setWelcomeChild2BirthYear] = useState('')
   const [welcomeChildBirthError, setWelcomeChildBirthError] = useState(false)
+  const [welcomeParentBirthError, setWelcomeParentBirthError] = useState(false)
   const [welcomePhoneError, setWelcomePhoneError] = useState('')
   const [submittedRsvpId, setSubmittedRsvpId] = useState<string | null>(null)
   const submittedRsvpIdRef = useRef<string | null>(null)
@@ -853,6 +854,10 @@ function RsvpFormInner({
         last_name: lastName || null,
         signup_source: 'rsvp_toggle',
       })
+      setJustSignedUp(true)
+      await prefillWelcomeForm(undefined, parentName.trim(), undefined, '', uid)
+      setModalView('welcome')
+      setShowSignupModal(true)
       setIsLoggedIn(true)
       setLoggedInUserId(uid)
     } else {
@@ -1211,6 +1216,13 @@ function RsvpFormInner({
 
   const handleSaveWelcomeProfile = async () => {
     if (!validateWelcomeChildBirthDate()) return
+    const hasCompleteParentBirthDate =
+      Boolean(welcomeBirthDay) && Boolean(welcomeBirthMonth) && Boolean(welcomeBirthYear)
+    if (!hasCompleteParentBirthDate) {
+      setWelcomeParentBirthError(true)
+      return
+    }
+    setWelcomeParentBirthError(false)
     const fullWelcomePhone = `${welcomePhoneCode}${welcomePhone}`.trim()
     if (!welcomePhone.trim()) {
       setWelcomePhoneError('El teléfono es obligatorio')
@@ -1763,14 +1775,14 @@ END:VCALENDAR`
           </div>
 
           <div>
-            <div className="mb-1.5 flex items-center gap-1.5">
-              <span className="text-sm font-medium text-gray-900">Tu fecha de nacimiento</span>
-              <span className="text-xs text-gray-400">(opcional)</span>
-            </div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-900">Tu fecha de nacimiento</label>
             <div className="grid grid-cols-3 gap-2">
               <select
                 value={welcomeBirthDay}
-                onChange={(e) => setWelcomeBirthDay(e.target.value)}
+                onChange={(e) => {
+                  setWelcomeBirthDay(e.target.value)
+                  setWelcomeParentBirthError(false)
+                }}
                 className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
                 aria-label="Día"
               >
@@ -1783,7 +1795,10 @@ END:VCALENDAR`
               </select>
               <select
                 value={welcomeBirthMonth}
-                onChange={(e) => setWelcomeBirthMonth(e.target.value)}
+                onChange={(e) => {
+                  setWelcomeBirthMonth(e.target.value)
+                  setWelcomeParentBirthError(false)
+                }}
                 className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
                 aria-label="Mes"
               >
@@ -1799,7 +1814,10 @@ END:VCALENDAR`
               </select>
               <select
                 value={welcomeBirthYear}
-                onChange={(e) => setWelcomeBirthYear(e.target.value)}
+                onChange={(e) => {
+                  setWelcomeBirthYear(e.target.value)
+                  setWelcomeParentBirthError(false)
+                }}
                 className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
                 aria-label="Año"
               >
@@ -1811,6 +1829,9 @@ END:VCALENDAR`
                 ))}
               </select>
             </div>
+            {welcomeParentBirthError ? (
+              <p className="mt-1 text-xs text-red-500">Tu fecha de nacimiento es obligatoria</p>
+            ) : null}
           </div>
         </div>
 
