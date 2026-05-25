@@ -319,6 +319,8 @@ function RsvpFormInner({
   const [childName, setChildName] = useState('')
   const [childLastName, setChildLastName] = useState('')
   const [parentName, setParentName] = useState('')
+  const [parentFirstName, setParentFirstName] = useState('')
+  const [parentLastName, setParentLastName] = useState('')
   const [parentEmail, setParentEmail] = useState('')
   const [parentCountryCode, setParentCountryCode] = useState<string>('+34')
   const [parentCustomCode, setParentCustomCode] = useState('')
@@ -495,6 +497,10 @@ function RsvpFormInner({
   }, [parentDialOpen])
 
   useEffect(() => {
+    setParentName(`${parentFirstName} ${parentLastName}`.trim())
+  }, [parentFirstName, parentLastName])
+
+  useEffect(() => {
     submittedRsvpIdRef.current = submittedRsvpId
   }, [submittedRsvpId])
 
@@ -567,7 +573,11 @@ function RsvpFormInner({
       oauthLinkDoneRef.current = true
 
       if (parsed) {
-        if (parsed.parentName) setParentName(parsed.parentName)
+        if (parsed.parentName) {
+          const parentParts = parsed.parentName.trim().split(/\s+/).filter(Boolean)
+          setParentFirstName(parentParts[0] ?? '')
+          setParentLastName(parentParts.slice(1).join(' '))
+        }
         if (parsed.childName) {
           const childParts = parsed.childName.trim().split(/\s+/).filter(Boolean)
           setChildName(childParts[0] ?? '')
@@ -653,7 +663,11 @@ function RsvpFormInner({
 
         if (profile) {
           const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
-          if (fullName) setParentName(fullName)
+          if (fullName) {
+            const parentParts = fullName.split(/\s+/).filter(Boolean)
+            setParentFirstName(parentParts[0] ?? '')
+            setParentLastName(parentParts.slice(1).join(' '))
+          }
           if (profile.phone) {
             const phoneParts = splitDialPhone(String(profile.phone))
             setParentCountryCode(phoneParts.countryCode)
@@ -1271,7 +1285,11 @@ function RsvpFormInner({
 
     if (profile) {
       const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
-      if (fullName) setParentName(fullName)
+      if (fullName) {
+        const parentParts = fullName.split(/\s+/).filter(Boolean)
+        setParentFirstName(parentParts[0] ?? '')
+        setParentLastName(parentParts.slice(1).join(' '))
+      }
       if (profile.phone) {
         const phoneParts = splitDialPhone(String(profile.phone))
         setParentCountryCode(phoneParts.countryCode)
@@ -2748,24 +2766,47 @@ END:VCALENDAR`
             </div>
           ) : null}
 
-          <div>
-            <label htmlFor="parentName" className="mb-1.5 block text-sm font-medium text-gray-900">
-              Tu nombre *
-            </label>
-            <input
-              id="parentName"
-              type="text"
-              value={parentName}
-              onChange={(event) => setParentName(event.target.value)}
-              required
-              onInvalid={(e) => {
-                (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
-              }}
-              onInput={(e) => {
-                (e.target as HTMLInputElement).setCustomValidity('')
-              }}
-              className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ${activeTheme.accent} transition focus:border-gray-300 focus:ring-2`}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="parentFirstName" className="mb-1.5 block text-sm font-medium text-gray-900">
+                Nombre *
+              </label>
+              <input
+                id="parentFirstName"
+                type="text"
+                autoComplete="given-name"
+                value={parentFirstName}
+                onChange={(event) => setParentFirstName(event.target.value)}
+                required
+                onInvalid={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
+                }}
+                onInput={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('')
+                }}
+                className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ${activeTheme.accent} transition focus:border-gray-300 focus:ring-2`}
+              />
+            </div>
+            <div>
+              <label htmlFor="parentLastName" className="mb-1.5 block text-sm font-medium text-gray-900">
+                Apellidos *
+              </label>
+              <input
+                id="parentLastName"
+                type="text"
+                autoComplete="family-name"
+                value={parentLastName}
+                onChange={(event) => setParentLastName(event.target.value)}
+                required
+                onInvalid={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('Por favor, completa este campo.')
+                }}
+                onInput={(e) => {
+                  (e.target as HTMLInputElement).setCustomValidity('')
+                }}
+                className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ${activeTheme.accent} transition focus:border-gray-300 focus:ring-2`}
+              />
+            </div>
           </div>
 
           {attendance === 'confirmed' ? (
