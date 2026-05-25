@@ -2247,7 +2247,7 @@ END:VCALENDAR`
                 🎉
               </p>
               <h3 className="mt-2 text-center text-lg font-bold text-gray-900">
-                ¡Estás a punto de confirmar tu asistencia a {eventTitle}!
+                ¡Estás a punto de enviar tu respuesta para el {eventTitle}!
               </h3>
               <p className="mt-2 text-center text-sm text-gray-600">Pero antes, crea tu cuenta gratis y:</p>
               <ul className="mt-3 space-y-3">
