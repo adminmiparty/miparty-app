@@ -1414,6 +1414,43 @@ export default function DashboardHomePage() {
               }
             : null
         )
+        const birthDateMissing =
+          !userProfile?.birth_date ||
+          (typeof userProfile.birth_date === 'string' && !userProfile.birth_date.trim())
+        if (!userProfile || !phone || birthDateMissing) {
+          let first = userProfile?.first_name?.trim() ?? ''
+          let last = userProfile?.last_name?.trim() ?? ''
+          if (!first && !last) {
+            const full = dbDisplayName || parentFullNameFromUser(user)
+            const split = splitFullName(full)
+            first = split.first
+            last = split.last
+          }
+          setProfileFirstName(first)
+          setProfileLastName(last)
+          const birth = isoToBirthParts(userProfile?.birth_date ?? null)
+          setProfileBirthDay(birth.day)
+          setProfileBirthMonth(birth.month)
+          setProfileBirthYear(birth.year)
+          const email = user.email ?? ''
+          setProfileEmail(email)
+          setProfileEmailInitial(email)
+          const profilePhone = userProfile?.phone ?? phone ?? ''
+          setProfileInitialPhone(profilePhone)
+          const dial = splitDialPhone(profilePhone)
+          setProfileCountryCode(dial.countryCode)
+          setProfileCustomCode(dial.customCode)
+          setProfilePhoneNumber(dial.number)
+          setProfileIsGoogle(isGoogleUser(user))
+          setShowPasswordSection(false)
+          setProfileNewPassword('')
+          setProfileConfirmPassword('')
+          setPasswordError(null)
+          setPasswordSuccess(false)
+          setProfileError(null)
+          setProfilePhoneNotice(false)
+          setShowProfileModal(true)
+        }
         setUserFirstName(userFirstDisplayName(user))
         setParentProfile({
           email: user.email ?? '',
@@ -1934,6 +1971,18 @@ export default function DashboardHomePage() {
     if (!userId) return
     setProfileError(null)
     setProfileSaving(true)
+
+    if (!profilePhoneNumber.trim()) {
+      setProfileError('El teléfono es obligatorio.')
+      setProfileSaving(false)
+      return
+    }
+
+    if (!profileBirthDay || !profileBirthMonth || !profileBirthYear) {
+      setProfileError('La fecha de nacimiento es obligatoria.')
+      setProfileSaving(false)
+      return
+    }
 
     const trimmedFirst = profileFirstName.trim()
     const trimmedLast = profileLastName.trim()

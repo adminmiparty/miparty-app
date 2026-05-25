@@ -28,11 +28,11 @@ export default function SignupPage() {
     if (!signupSuccess) return
 
     const timeoutId = window.setTimeout(() => {
-      router.push(signupAutoLogin ? '/dashboard' : '/login')
+      router.push('/onboarding')
     }, 3000)
 
     return () => clearTimeout(timeoutId)
-  }, [signupSuccess, signupAutoLogin, router])
+  }, [signupSuccess, router])
 
   const handleGoogleSignup = async () => {
     setError(null)
@@ -41,7 +41,7 @@ export default function SignupPage() {
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
 
@@ -94,7 +94,7 @@ export default function SignupPage() {
   }
 
   if (signupSuccess) {
-    const successHref = signupAutoLogin ? '/dashboard' : '/login'
+    const successHref = '/onboarding'
     const successCta = signupAutoLogin ? 'Ir a MiParty' : 'Iniciar sesion'
 
     return (

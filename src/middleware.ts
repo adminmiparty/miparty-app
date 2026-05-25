@@ -52,6 +52,31 @@ export async function middleware(request: NextRequest) {
     return redirectResponse
   }
 
+  if (
+    user &&
+    (pathname === '/dashboard' || pathname.startsWith('/dashboard/'))
+  ) {
+    const { data: profile } = await supabase
+      .from('users')
+      .select('onboarding_completed_at, signup_source')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const signupSource = profile?.signup_source ?? ''
+    const needsOnboarding =
+      !profile?.onboarding_completed_at && !signupSource.startsWith('rsvp_')
+
+    if (needsOnboarding) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/onboarding'
+      const redirectResponse = NextResponse.redirect(url)
+      supabaseResponse.cookies.getAll().forEach(({ name, value }) => {
+        redirectResponse.cookies.set(name, value)
+      })
+      return redirectResponse
+    }
+  }
+
   if (user && (pathname === '/login' || pathname === '/registro')) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
