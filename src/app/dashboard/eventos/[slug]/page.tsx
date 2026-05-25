@@ -903,13 +903,13 @@ export default function EventControlCenterPage() {
 
   return (
     <main className={`min-h-screen bg-gradient-to-b ${pageBg}`}>
-      <ConfettiBurst active={showPublishConfetti} />
       <PublishedSuccessModal
         open={showPublishedSuccess}
         variant={searchParams.get('published') === 'free' ? 'free' : 'paid'}
         onClose={dismissPublishedSuccess}
         onShareInvitation={handlePublishedShareClick}
       />
+      <ConfettiBurst active={showPublishConfetti} />
       <AppNav backHref="/dashboard" backLabel="⬅️ Mi panel" />
 
       {checkoutVerifyError ? (

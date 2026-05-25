@@ -26,6 +26,7 @@ export type DraftPersistInput = {
     rsvp_deadline_days: number | null
     birthday_number: number | null
     organizer_phone: string
+    organizer_name: string | null
     enable_food_options: boolean
     organizer_notes: string | null
     invitation_theme: string | null

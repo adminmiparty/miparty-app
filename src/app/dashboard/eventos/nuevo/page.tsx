@@ -55,6 +55,27 @@ type Child = {
   last_name: string | null
   short_name: string | null
   allergies: string | null
+  phone: string | null
+}
+
+const ORGANIZER_ACCOUNT_VALUE = '__organizer_account__'
+const ORGANIZER_NEW_CONTACT_VALUE = '__organizer_new__'
+
+function applyPhoneToOrganizerFields(
+  phone: string,
+  setCountry: (v: string) => void,
+  setCustom: (v: string) => void,
+  setNumber: (v: string) => void
+) {
+  const trimmed = phone.trim()
+  if (!trimmed) {
+    setNumber('')
+    return
+  }
+  const parts = splitDialPhone(trimmed)
+  setCountry(parts.countryCode)
+  setCustom(parts.customCode)
+  setNumber(parts.number)
 }
 
 function getSiblingsForBirthdayChild(familyChildren: Child[], selectedChildName: string) {
@@ -705,7 +726,12 @@ function NewEventPageContent() {
   const [showChildLimitModal, setShowChildLimitModal] = useState(false)
   const [showSiblingsModal, setShowSiblingsModal] = useState(false)
   const [selectedSiblings, setSelectedSiblings] = useState<string[]>([])
-  const [organizerFirstName, setOrganizerFirstName] = useState('')
+  const [accountFirstName, setAccountFirstName] = useState('')
+  const [accountLastName, setAccountLastName] = useState('')
+  const [selectedOrganizerContactId, setSelectedOrganizerContactId] = useState(ORGANIZER_ACCOUNT_VALUE)
+  const [organizerContactFirstName, setOrganizerContactFirstName] = useState('')
+  const [organizerContactLastName, setOrganizerContactLastName] = useState('')
+  const [saveContactToMiGente, setSaveContactToMiGente] = useState(false)
   const [organizerDialOpen, setOrganizerDialOpen] = useState(false)
   const [bizumDialOpen, setBizumDialOpen] = useState(false)
   const organizerDialRef = useRef<HTMLDivElement>(null)
@@ -920,7 +946,6 @@ function NewEventPageContent() {
     [children, selectedChildId]
   )
   const isNewChildSelection = selectedChildId === NEW_CHILD_VALUE
-  const showChildDetailFields = selectedChildId !== ''
   const parsedEventDate = useMemo(() => formatDisplayToIsoDate(eventDate), [eventDate])
   const selectedEventDate = useMemo(() => {
     if (!parsedEventDate) {
@@ -954,6 +979,65 @@ function NewEventPageContent() {
 
   const eventPersonHeading = useMemo(() => getEventPersonHeading(eventType), [eventType])
 
+  const accountOrganizerLabel = useMemo(() => {
+    const full = [accountFirstName, accountLastName].filter(Boolean).join(' ').trim()
+    return full || 'Mi cuenta'
+  }, [accountFirstName, accountLastName])
+
+  const isNewOrganizerContact = selectedOrganizerContactId === ORGANIZER_NEW_CONTACT_VALUE
+
+  const resolveOrganizerName = useCallback(() => {
+    if (selectedOrganizerContactId === ORGANIZER_ACCOUNT_VALUE) {
+      return [accountFirstName, accountLastName].filter(Boolean).join(' ').trim()
+    }
+    if (selectedOrganizerContactId === ORGANIZER_NEW_CONTACT_VALUE) {
+      return [organizerContactFirstName.trim(), organizerContactLastName.trim()].filter(Boolean).join(' ')
+    }
+    const child = children.find((item) => item.id === selectedOrganizerContactId)
+    return child ? getChildDropdownDisplayName(child) : ''
+  }, [
+    selectedOrganizerContactId,
+    accountFirstName,
+    accountLastName,
+    organizerContactFirstName,
+    organizerContactLastName,
+    children,
+  ])
+
+  const handleOrganizerContactSelect = useCallback(
+    (contactId: string) => {
+      setSelectedOrganizerContactId(contactId)
+      if (contactId === ORGANIZER_ACCOUNT_VALUE) {
+        setOrganizerContactFirstName('')
+        setOrganizerContactLastName('')
+        setSaveContactToMiGente(false)
+        return
+      }
+      if (contactId === ORGANIZER_NEW_CONTACT_VALUE) {
+        setOrganizerContactFirstName('')
+        setOrganizerContactLastName('')
+        setOrganizerPhoneNumber('')
+        setOrganizerCountryCode('+34')
+        setOrganizerCustomCode('')
+        setSaveContactToMiGente(false)
+        return
+      }
+      setOrganizerContactFirstName('')
+      setOrganizerContactLastName('')
+      setSaveContactToMiGente(false)
+      const child = children.find((item) => item.id === contactId)
+      if (child?.phone?.trim()) {
+        applyPhoneToOrganizerFields(
+          child.phone,
+          setOrganizerCountryCode,
+          setOrganizerCustomCode,
+          setOrganizerPhoneNumber
+        )
+      }
+    },
+    [children]
+  )
+
   useEffect(() => {
     let isMounted = true
 
@@ -976,12 +1060,14 @@ function NewEventPageContent() {
 
       const { data: userProfile } = await supabase
         .from('users')
-        .select('phone, first_name')
+        .select('phone, first_name, last_name')
         .eq('id', user.id)
         .maybeSingle()
 
       if (isMounted) {
-        setOrganizerFirstName(userProfile?.first_name?.trim() ?? '')
+        setAccountFirstName(userProfile?.first_name?.trim() ?? '')
+        setAccountLastName(userProfile?.last_name?.trim() ?? '')
+        setSelectedOrganizerContactId(ORGANIZER_ACCOUNT_VALUE)
         setOrganizerProfilePhoneLoaded(true)
         const profilePhone =
           userProfile?.phone != null && String(userProfile.phone).trim() !== ''
@@ -989,16 +1075,18 @@ function NewEventPageContent() {
             : ''
         setHasSavedProfilePhone(profilePhone !== '')
         if (profilePhone !== '') {
-          const parts = splitDialPhone(profilePhone)
-          setOrganizerCountryCode(parts.countryCode)
-          setOrganizerCustomCode(parts.customCode)
-          setOrganizerPhoneNumber(parts.number)
+          applyPhoneToOrganizerFields(
+            profilePhone,
+            setOrganizerCountryCode,
+            setOrganizerCustomCode,
+            setOrganizerPhoneNumber
+          )
         }
       }
 
       const { data, error: childrenError } = await supabase
         .from('children')
-        .select('id, name, last_name, short_name, birth_date, allergies')
+        .select('id, name, last_name, short_name, birth_date, allergies, phone')
         .eq('user_id', user.id)
         .order('name', { ascending: true })
 
@@ -1630,6 +1718,10 @@ function NewEventPageContent() {
       organizerCountryCode,
       organizerCustomCode,
       organizerPhoneNumber,
+      selectedOrganizerContactId,
+      organizerContactFirstName,
+      organizerContactLastName,
+      saveContactToMiGente,
       rsvpDeadlineDays,
       birthdayNumber,
       birthdayNumberUserEdited,
@@ -1675,6 +1767,10 @@ function NewEventPageContent() {
     organizerCountryCode,
     organizerCustomCode,
     organizerPhoneNumber,
+    selectedOrganizerContactId,
+    organizerContactFirstName,
+    organizerContactLastName,
+    saveContactToMiGente,
     rsvpDeadlineDays,
     birthdayNumber,
     birthdayNumberUserEdited,
@@ -1972,6 +2068,7 @@ function NewEventPageContent() {
         rsvp_deadline_days: rsvpDeadlineDaysValue,
         birthday_number: birthdayNumberValue,
         organizer_phone: organizerPhonePersist,
+        organizer_name: resolveOrganizerName() || null,
         enable_food_options: isFoodActive ? foodEnabled : false,
         organizer_notes: showNotes ? notes.trim() || null : null,
         invitation_theme: themeToDraftStorage(
@@ -2083,6 +2180,11 @@ function NewEventPageContent() {
       return
     }
 
+    if (selectedOrganizerContactId === ORGANIZER_NEW_CONTACT_VALUE && !organizerContactFirstName.trim()) {
+      setError('El nombre del contacto es obligatorio.')
+      return
+    }
+
     const finalOrganizerDial = resolveDialCode(organizerCountryCode, organizerCustomCode)
     if (organizerCountryCode === 'otro' && finalOrganizerDial.length <= 1) {
       setError('Indica el prefijo internacional (ej. +44).')
@@ -2189,13 +2291,39 @@ function NewEventPageContent() {
     }
 
     const fullOrganizerPhone = `${params.fullOrganizerDial}${params.trimmedOrganizerPhone}`
-    if (!hasSavedProfilePhone && savePhoneForFuture) {
+    const organizerName = resolveOrganizerName()
+
+    if (
+      selectedOrganizerContactId === ORGANIZER_ACCOUNT_VALUE &&
+      !hasSavedProfilePhone &&
+      savePhoneForFuture
+    ) {
       const { error: saveProfilePhoneError } = await supabase
         .from('users')
         .upsert({ id: user.id, phone: fullOrganizerPhone })
 
       if (saveProfilePhoneError) {
         setError(saveProfilePhoneError.message)
+        setLoading(false)
+        return
+      }
+    }
+
+    if (selectedOrganizerContactId === ORGANIZER_NEW_CONTACT_VALUE && saveContactToMiGente) {
+      if (children.length >= 6) {
+        setShowChildLimitModal(true)
+        setLoading(false)
+        return
+      }
+      const { error: insertContactError } = await supabase.from('children').insert({
+        user_id: user.id,
+        name: organizerContactFirstName.trim(),
+        last_name: organizerContactLastName.trim() || null,
+        phone: fullOrganizerPhone,
+        relation: 'familiar',
+      })
+      if (insertContactError) {
+        setError(insertContactError.message)
         setLoading(false)
         return
       }
@@ -2228,6 +2356,7 @@ function NewEventPageContent() {
       rsvp_deadline_days: params.rsvpDeadlineDaysValue,
       birthday_number: params.birthdayNumberValue,
       organizer_phone: fullOrganizerPhone,
+      organizer_name: organizerName || null,
       enable_food_options: params.isFoodActive ? foodEnabled : false,
       organizer_notes: showNotes ? notes.trim() || null : null,
       invitation_theme: themeForPersistence(invitationTheme),
@@ -2307,7 +2436,7 @@ function NewEventPageContent() {
       }
     }
 
-    const parentNameForRsvp = organizerFirstName.trim() || 'Organizador'
+    const parentNameForRsvp = organizerName.trim() || 'Organizador'
     const birthdayChild = findBirthdayChildProfile(children, params.trimmedChildName)
 
     const { count: existingRsvpHead } = await supabase
@@ -2423,10 +2552,6 @@ function NewEventPageContent() {
 
   const handleSiblingsModalContinue = () => {
     void completeEventCreation({ ...buildSubmitParams(), siblingIds: selectedSiblings })
-  }
-
-  const handleSiblingsModalBirthdayOnly = () => {
-    void completeEventCreation({ ...buildSubmitParams(), siblingIds: [] })
   }
 
   const handleInvitationThemeSelect = (key: ThemeKey) => {
@@ -2579,9 +2704,6 @@ function NewEventPageContent() {
 
               {!childrenLoading ? (
                 <div>
-                  <label htmlFor="childSelect" className="mb-1.5 block text-sm font-medium text-gray-900">
-                    Hijo/a
-                  </label>
                   <select
                     id="childSelect"
                     value={selectedChildId}
@@ -2589,7 +2711,7 @@ function NewEventPageContent() {
                     className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
                   >
                     <option value="" className="text-gray-500">
-                      Selecciona un hijo/a
+                      Selecciona
                     </option>
                     {hasChildren
                       ? children.map((child) => (
@@ -2615,14 +2737,12 @@ function NewEventPageContent() {
                 </div>
               ) : null}
 
-              {showChildDetailFields ? (
-                <>
-                  {isNewChildSelection && childrenCount < 6 ? (
+              {isNewChildSelection && childrenCount < 6 ? (
                     <>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label htmlFor="childName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                            Hijo/a *
+                            Nombre *
                           </label>
                           <input
                             id="childName"
@@ -2704,71 +2824,7 @@ function NewEventPageContent() {
                           </select>
                         </div>
                       </div>
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <label htmlFor="birthdayNumber" className="text-sm font-medium text-gray-900">
-                            ¿Cuántos cumple? 🎂
-                          </label>
-                          <input
-                            id="birthdayNumber"
-                            type="number"
-                            min={1}
-                            max={120}
-                            inputMode="numeric"
-                            value={birthdayNumber}
-                            onChange={(event) => {
-                              setBirthdayNumberUserEdited(true)
-                              setBirthdayNumber(event.target.value)
-                            }}
-                            placeholder="Ej. 5"
-                            className={`w-20 flex-shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
-                          />
-                        </div>
-                      </div>
                     </>
-                  ) : (
-                    <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-3">
-                      <div className="pointer-events-none flex items-center justify-between gap-3">
-                        <label
-                          htmlFor="childBirthDateReadOnly"
-                          className="whitespace-nowrap text-sm font-medium text-gray-900"
-                        >
-                          Fecha de nacimiento
-                        </label>
-                        <input
-                          id="childBirthDateReadOnly"
-                          readOnly
-                          tabIndex={-1}
-                          value={childBirthDate}
-                          className="w-32 shrink-0 cursor-default whitespace-nowrap rounded-lg bg-gray-100 px-3 py-1 text-center text-sm text-gray-900 outline-none ring-0 border-0 focus:border-0 focus:ring-0"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <label
-                          htmlFor="birthdayNumberReadOnly"
-                          className="whitespace-nowrap text-sm font-medium text-gray-900"
-                        >
-                          ¿Cuántos cumple? 🎂
-                        </label>
-                        <input
-                          id="birthdayNumberReadOnly"
-                          type="number"
-                          min={1}
-                          max={120}
-                          inputMode="numeric"
-                          value={birthdayNumber}
-                          onChange={(event) => {
-                            setBirthdayNumberUserEdited(true)
-                            setBirthdayNumber(event.target.value)
-                          }}
-                          placeholder="Ej. 5"
-                          className={`w-32 shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1 text-center text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </>
               ) : null}
             </div>
 
@@ -2982,7 +3038,8 @@ function NewEventPageContent() {
 
               <div>
                 <label htmlFor="mapsUrl" className="mb-1.5 block text-sm font-medium text-gray-900">
-                  URL de Google Maps (opcional)
+                  URL de Google Maps{' '}
+                  <span className="font-normal text-gray-500">(opcional)</span>
                 </label>
                 <input
                   id="mapsUrl"
@@ -2997,11 +3054,89 @@ function NewEventPageContent() {
                 </p>
               </div>
 
-              <div>
-                <label htmlFor="organizerPhone" className="mb-1.5 block text-sm font-medium text-gray-900">
-                  Número de contacto del organizador *
-                </label>
-                <p className="mb-2 text-xs text-gray-500">Los invitados podrán contactarte en este número</p>
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="organizerContactSelect" className="mb-1.5 block text-sm font-medium text-gray-900">
+                    Número de contacto del organizador *
+                  </label>
+                  <p className="mb-2 text-xs text-gray-500">Los invitados podrán contactarte en este número</p>
+                  <select
+                    id="organizerContactSelect"
+                    value={selectedOrganizerContactId}
+                    onChange={(event) => handleOrganizerContactSelect(event.target.value)}
+                    className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
+                  >
+                    <option value={ORGANIZER_ACCOUNT_VALUE}>{accountOrganizerLabel}</option>
+                    {children.map((child) => (
+                      <option key={child.id} value={child.id}>
+                        {getChildDropdownDisplayName(child)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (children.length >= 6) {
+                        setShowChildLimitModal(true)
+                        return
+                      }
+                      handleOrganizerContactSelect(ORGANIZER_NEW_CONTACT_VALUE)
+                    }}
+                    className={`mt-1 text-sm hover:underline ${accentTextClass}`}
+                  >
+                    + Añadir nuevo perfil
+                  </button>
+                </div>
+
+                {isNewOrganizerContact ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label
+                          htmlFor="organizerContactFirstName"
+                          className="mb-1.5 block text-sm font-medium text-gray-900"
+                        >
+                          Nombre *
+                        </label>
+                        <input
+                          id="organizerContactFirstName"
+                          type="text"
+                          value={organizerContactFirstName}
+                          onChange={(event) => setOrganizerContactFirstName(event.target.value)}
+                          required
+                          className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
+                          placeholder="Ej. María"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="organizerContactLastName"
+                          className="mb-1.5 block text-sm font-medium text-gray-900"
+                        >
+                          Apellido(s)
+                        </label>
+                        <input
+                          id="organizerContactLastName"
+                          type="text"
+                          value={organizerContactLastName}
+                          onChange={(event) => setOrganizerContactLastName(event.target.value)}
+                          className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
+                          placeholder="Ej. García"
+                        />
+                      </div>
+                    </div>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
+                      <input
+                        type="checkbox"
+                        checked={saveContactToMiGente}
+                        onChange={(event) => setSaveContactToMiGente(event.target.checked)}
+                        className={`h-4 w-4 rounded border-gray-300 ${activePreviewTheme.selection}`}
+                      />
+                      Añadir a Mi gente
+                    </label>
+                  </>
+                ) : null}
+
                 <div className="flex flex-wrap items-center gap-2">
                   <div
                     ref={organizerDialRef}
@@ -3097,8 +3232,11 @@ function NewEventPageContent() {
                     className={`min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                   />
                 </div>
-                {organizerProfilePhoneLoaded && !hasSavedProfilePhone && organizerPhoneNumber.trim() !== '' ? (
-                  <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-gray-800">
+                {organizerProfilePhoneLoaded &&
+                selectedOrganizerContactId === ORGANIZER_ACCOUNT_VALUE &&
+                !hasSavedProfilePhone &&
+                organizerPhoneNumber.trim() !== '' ? (
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
                     <input
                       type="checkbox"
                       checked={savePhoneForFuture}
@@ -3598,10 +3736,10 @@ function NewEventPageContent() {
             aria-labelledby="siblings-modal-title"
           >
             <h3 id="siblings-modal-title" className="text-lg font-semibold text-gray-900">
-              ¿Quién más de tu familia asistirá?
+              ¿Añadir ya a algún familiar o amigo/a?
             </h3>
             <p className="mt-2 text-sm text-gray-500">
-              Selecciona los hermanos/as que también estarán en la fiesta
+              Selecciona las personas de tu perfil que quieres incluir en la lista de asistentes
             </p>
             <ul className="mt-4 space-y-3">
               {siblingsForModal.map((sibling) => {
@@ -3635,14 +3773,6 @@ function NewEventPageContent() {
               className={`mt-6 w-full rounded-lg px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${brand.buttonPrimary}`}
             >
               {loading ? 'Guardando...' : 'Continuar'}
-            </button>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={handleSiblingsModalBirthdayOnly}
-              className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Solo el cumpleañero/a
             </button>
           </div>
         </div>

@@ -88,7 +88,7 @@ export function ConfettiBurst({ active, durationMs = 3000 }: ConfettiBurstProps)
   return (
     <canvas
       ref={canvasRef}
-      className="pointer-events-none fixed inset-0 z-[90]"
+      className="pointer-events-none fixed inset-0 z-[96]"
       aria-hidden
     />
   )

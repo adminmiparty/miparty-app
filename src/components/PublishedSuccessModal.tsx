@@ -30,13 +30,19 @@ export function PublishedSuccessModal({
   if (!open) return null
 
   return (
-    <div
-      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
-      role="presentation"
-      onClick={onClose}
-    >
+    <>
       <div
-        className="relative mx-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+        className="fixed inset-0 z-[95] bg-black/45 backdrop-blur-sm"
+        role="presentation"
+        aria-hidden
+        onClick={onClose}
+      />
+      <div
+        className="fixed inset-0 z-[97] flex items-center justify-center p-4 pointer-events-none"
+        role="presentation"
+      >
+      <div
+        className="pointer-events-auto relative mx-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="published-success-title"
@@ -87,6 +93,7 @@ export function PublishedSuccessModal({
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   )
 }
