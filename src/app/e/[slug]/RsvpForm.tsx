@@ -503,31 +503,45 @@ function RsvpFormInner({
 
   useEffect(() => {
     const sb = createClient()
-    void sb.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setIsLoggedIn(true)
-        setLoggedInUserId(user.id)
-      }
-    })
+    let subscription: { unsubscribe: () => void } | undefined
 
-    try {
-      const stored = sessionStorage.getItem(POST_RSVP_STORAGE_KEY)
-      const parsed = stored ? (JSON.parse(stored) as PostRsvpPersist) : null
-      if (parsed?.rsvpId) {
-        submittedRsvpIdRef.current = parsed.rsvpId
-        setSubmittedRsvpId(parsed.rsvpId)
-        if (parsed.attendance) {
-          setSubmittedStatus(parsed.attendance)
-          setSubmittedEditToken(parsed.editToken ?? null)
+    const run = async () => {
+      const searchParams = new URLSearchParams(window.location.search)
+      const code = searchParams.get('code')
+      if (code) {
+        await sb.auth.exchangeCodeForSession(code)
+        searchParams.delete('code')
+        const query = searchParams.toString()
+        const cleanUrl =
+          window.location.pathname + (query ? `?${query}` : '') + window.location.hash
+        window.history.replaceState({}, '', cleanUrl)
+      }
+
+      void sb.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          setIsLoggedIn(true)
+          setLoggedInUserId(user.id)
         }
-      }
-    } catch {
-      // ignore
-    }
+      })
 
-    const {
-      data: { subscription },
-    } = sb.auth.onAuthStateChange(async (event, session) => {
+      try {
+        const stored = sessionStorage.getItem(POST_RSVP_STORAGE_KEY)
+        const parsed = stored ? (JSON.parse(stored) as PostRsvpPersist) : null
+        if (parsed?.rsvpId) {
+          submittedRsvpIdRef.current = parsed.rsvpId
+          setSubmittedRsvpId(parsed.rsvpId)
+          if (parsed.attendance) {
+            setSubmittedStatus(parsed.attendance)
+            setSubmittedEditToken(parsed.editToken ?? null)
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      const {
+        data: { subscription: sub },
+      } = sb.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state change event:', event)
       console.log('Session user:', session?.user?.email)
       console.log('OAuth pending flag:', sessionStorage.getItem('miparty_oauth_pending'))
@@ -606,33 +620,62 @@ function RsvpFormInner({
       const storedChildName = parsed?.childName || ''
       const storedPhone = parsed?.phone || ''
 
-      try {
-        console.log('Calling prefillWelcomeForm...')
-        await prefillWelcomeForm(
-          session.user,
-          storedParentName,
-          storedChildName,
-          storedPhone,
-          parsed?.rsvpId || undefined
-        )
-        console.log('prefillWelcomeForm completed')
-        setModalView('welcome')
-        console.log('modalView set to welcome')
-        setShowSignupModal(true)
-        console.log('showSignupModal set to true')
-      } catch (err) {
-        console.error('Error in welcome flow:', err)
+      const isNewUser = session.user.created_at
+        ? Date.now() - new Date(session.user.created_at).getTime() < 60000
+        : false
+
+      if (isNewUser) {
+        try {
+          console.log('Calling prefillWelcomeForm...')
+          await prefillWelcomeForm(
+            session.user,
+            storedParentName,
+            storedChildName,
+            storedPhone,
+            parsed?.rsvpId || undefined
+          )
+          console.log('prefillWelcomeForm completed')
+          setModalView('welcome')
+          console.log('modalView set to welcome')
+          setShowSignupModal(true)
+          console.log('showSignupModal set to true')
+        } catch (err) {
+          console.error('Error in welcome flow:', err)
+        }
+        setJustSignedUp(true)
+      } else {
+        const { data: profile } = await sb
+          .from('users')
+          .select('first_name, last_name, phone')
+          .eq('id', session.user.id)
+          .maybeSingle()
+
+        if (profile) {
+          const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+          if (fullName) setParentName(fullName)
+          if (profile.phone) {
+            const phoneParts = splitDialPhone(String(profile.phone))
+            setParentCountryCode(phoneParts.countryCode)
+            setParentCustomCode(phoneParts.customCode)
+            setParentPhoneNumber(phoneParts.number)
+          }
+        }
       }
+
       setIsLoggedIn(true)
       setLoggedInUserId(session.user.id)
-      setJustSignedUp(true)
       setSignupToggle(false)
       sessionStorage.removeItem('miparty_oauth_pending')
       sessionStorage.removeItem('miparty_signup_source')
       sessionStorage.removeItem(POST_RSVP_STORAGE_KEY)
-    })
+      })
 
-    return () => subscription.unsubscribe()
+      subscription = sub
+    }
+
+    void run()
+
+    return () => subscription?.unsubscribe()
   }, [])
 
   useEffect(() => {
@@ -2084,7 +2127,7 @@ END:VCALENDAR`
                     placeholder="Email"
                     value={modalSignupEmail}
                     onChange={(e) => setModalSignupEmail(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
                   />
                   <div className="relative">
                     <input
@@ -2093,7 +2136,7 @@ END:VCALENDAR`
                       placeholder="Contraseña"
                       value={modalSignupPassword}
                       onChange={(e) => setModalSignupPassword(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
                     />
                     <button
                       type="button"
@@ -2152,7 +2195,7 @@ END:VCALENDAR`
                     placeholder="tu@email.com"
                     value={modalForgotEmail}
                     onChange={(e) => setModalForgotEmail(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
                   />
                   {modalForgotError ? <p className="text-xs text-red-500">{modalForgotError}</p> : null}
                   {modalForgotSent ? (
@@ -2191,7 +2234,7 @@ END:VCALENDAR`
                     placeholder="Email"
                     value={modalLoginEmail}
                     onChange={(e) => setModalLoginEmail(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
                   />
                   <div className="relative">
                     <input
@@ -2200,7 +2243,7 @@ END:VCALENDAR`
                       placeholder="Contraseña"
                       value={modalLoginPassword}
                       onChange={(e) => setModalLoginPassword(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
                     />
                     <button
                       type="button"
@@ -2489,7 +2532,7 @@ END:VCALENDAR`
                     placeholder="tu@email.com"
                     value={inlineForgotEmail}
                     onChange={(e) => setInlineForgotEmail(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
                   />
                   {inlineForgotError ? <p className="text-xs text-red-500">{inlineForgotError}</p> : null}
                   {inlineForgotSent ? (
@@ -2525,7 +2568,7 @@ END:VCALENDAR`
                     placeholder="tu@email.com"
                     value={inlineEmail}
                     onChange={(e) => setInlineEmail(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
                   />
                   <div className="relative">
                     <input
@@ -2533,7 +2576,7 @@ END:VCALENDAR`
                       placeholder="Contraseña"
                       value={inlinePassword}
                       onChange={(e) => setInlinePassword(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
                     />
                     <button
                       type="button"

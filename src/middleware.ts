@@ -58,13 +58,15 @@ export async function middleware(request: NextRequest) {
   ) {
     const { data: profile } = await supabase
       .from('users')
-      .select('onboarding_completed_at, signup_source')
+      .select('onboarding_completed_at, phone, birth_date')
       .eq('id', user.id)
       .maybeSingle()
 
-    const signupSource = profile?.signup_source ?? ''
+    const phoneMissing =
+      profile?.phone == null ||
+      (typeof profile.phone === 'string' && !profile.phone.trim())
     const needsOnboarding =
-      !profile?.onboarding_completed_at && !signupSource.startsWith('rsvp_')
+      !profile?.onboarding_completed_at && phoneMissing && profile?.birth_date == null
 
     if (needsOnboarding) {
       const url = request.nextUrl.clone()
