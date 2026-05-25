@@ -9,9 +9,11 @@ import { format, parseISO, subDays } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { brand } from '@/lib/brand'
 import {
+  buildPathWithTheme,
   eventFormBrandUi,
   eventFormPageMainClass,
   resolveThemeOrBrand,
+  restoreInvitationThemeFromDb,
   sharePageThemeFromUrl,
 } from '@/lib/eventFormTheme'
 import { createClient } from '@/lib/supabase/client'
@@ -96,6 +98,18 @@ function formatTimeRecap(start: string, pickup: string | null) {
 
 function digitsForWhatsApp(phone: string) {
   return phone.replace(/\D/g, '')
+}
+
+/** National number only (no +34 / +57 prefix) for Paso 2 recap. */
+function organizerPhoneLocalNumber(phone: string) {
+  const trimmed = phone.trim()
+  if (!trimmed) return ''
+  if (trimmed.startsWith('+57')) return trimmed.slice(3).trim()
+  if (trimmed.startsWith('+34')) return trimmed.slice(3).trim()
+  if (trimmed.startsWith('+52')) return trimmed.slice(3).trim()
+  const intlMatch = trimmed.match(/^\+\d{1,4}(.+)$/)
+  if (intlMatch) return intlMatch[1].trim()
+  return trimmed.replace(/^\+/, '').trim()
 }
 
 function formatGiftLine(event: EventShareRow): string {
@@ -193,42 +207,6 @@ export default function EventSharePage() {
 
   const urlTheme = useMemo(() => sharePageThemeFromUrl(searchParams.get('theme')), [searchParams])
 
-  const pageBgMap: Record<string, string> = {
-    yellow: 'from-yellow-50 to-white',
-    pink: 'from-pink-50 to-white',
-    blue: 'from-blue-50 to-white',
-    green: 'from-green-50 to-white',
-    purple: 'from-purple-50 to-white',
-  }
-  const pageMainClass = eventFormPageMainClass(urlTheme, pageBgMap)
-  const themeDef = urlTheme ? (themes[urlTheme] ?? themes.yellow) : null
-  const primaryButtonClass = themeDef
-    ? `${themeDef.button} ${themeDef.buttonHover} ${primaryButtonTextMap[urlTheme!] ?? primaryButtonTextMap.yellow}`
-    : brand.buttonPrimary
-  const progressAccentClass = resolveThemeOrBrand(
-    progressAccentMap,
-    urlTheme,
-    eventFormBrandUi.progressAccent
-  )
-  const progressTrackClass = resolveThemeOrBrand(
-    progressTrackMap,
-    urlTheme,
-    eventFormBrandUi.progressTrack
-  )
-  const cardClass = urlTheme
-    ? (previewThemeClasses[urlTheme]?.card ?? previewThemeClasses.yellow.card)
-    : eventFormBrandUi.previewCard
-  const linkAccent = resolveThemeOrBrand(
-    linkAccentMap,
-    urlTheme,
-    `${brand.textBrandDark} ${brand.textBrandHover}`
-  )
-  const brandClass = resolveThemeOrBrand(brandMap, urlTheme, brand.textBrand)
-  const focusRingClass = urlTheme
-    ? (focusRingMap[urlTheme] ?? focusRingMap.yellow)
-    : `focus:ring-[var(--brand-focus)]`
-  const editShareQuery = urlTheme ? `?theme=${urlTheme}&from=share` : '?from=share'
-
   const [event, setEvent] = useState<EventShareRow | null>(null)
   const [foodLabels, setFoodLabels] = useState<string[]>([])
   const [billingConfig] = useState<OrganizerBillingConfig>(() => getOrganizerBillingConfig())
@@ -240,6 +218,49 @@ export default function EventSharePage() {
   const [publishError, setPublishError] = useState<string | null>(null)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [confirmingCheckoutReturn, setConfirmingCheckoutReturn] = useState(false)
+
+  const effectiveTheme = useMemo(
+    () => urlTheme ?? (event ? restoreInvitationThemeFromDb(event.invitation_theme) : null),
+    [urlTheme, event?.invitation_theme]
+  )
+
+  const pageBgMap: Record<string, string> = {
+    yellow: 'from-yellow-50 to-white',
+    pink: 'from-pink-50 to-white',
+    blue: 'from-blue-50 to-white',
+    green: 'from-green-50 to-white',
+    purple: 'from-purple-50 to-white',
+  }
+  const pageMainClass = eventFormPageMainClass(effectiveTheme, pageBgMap)
+  const themeDef = effectiveTheme ? (themes[effectiveTheme] ?? themes.yellow) : null
+  const primaryButtonClass = themeDef
+    ? `${themeDef.button} ${themeDef.buttonHover} ${primaryButtonTextMap[effectiveTheme!] ?? primaryButtonTextMap.yellow}`
+    : brand.buttonPrimary
+  const progressAccentClass = resolveThemeOrBrand(
+    progressAccentMap,
+    effectiveTheme,
+    eventFormBrandUi.progressAccent
+  )
+  const progressTrackClass = resolveThemeOrBrand(
+    progressTrackMap,
+    effectiveTheme,
+    eventFormBrandUi.progressTrack
+  )
+  const cardClass = effectiveTheme
+    ? (previewThemeClasses[effectiveTheme]?.card ?? previewThemeClasses.yellow.card)
+    : eventFormBrandUi.previewCard
+  const linkAccent = resolveThemeOrBrand(
+    linkAccentMap,
+    effectiveTheme,
+    `${brand.textBrandDark} ${brand.textBrandHover}`
+  )
+  const brandClass = resolveThemeOrBrand(brandMap, effectiveTheme, brand.textBrand)
+  const focusRingClass = effectiveTheme
+    ? (focusRingMap[effectiveTheme] ?? focusRingMap.yellow)
+    : `focus:ring-[var(--brand-focus)]`
+  const editShareQuery = effectiveTheme
+    ? `?theme=${effectiveTheme}&from=share`
+    : '?from=share'
 
   useEffect(() => {
     if (!slug) {
@@ -493,12 +514,25 @@ export default function EventSharePage() {
     ((event.location_name != null && String(event.location_name).trim() !== '') ||
       (event.location_address != null && String(event.location_address).trim() !== ''))
 
+  const organizerContactRecap = useMemo(() => {
+    const rawPhone = event?.organizer_phone != null ? String(event.organizer_phone).trim() : ''
+    if (!rawPhone) return null
+    return {
+      fullPhone: rawPhone,
+      name: event?.organizer_name?.trim() ?? '',
+      localPhone: organizerPhoneLocalNumber(rawPhone),
+      whatsAppDigits: digitsForWhatsApp(rawPhone),
+    }
+  }, [event?.organizer_phone, event?.organizer_name])
+
   return (
     <main className={pageMainClass}>
       <AppNav
         backHref={
           isDraft && event
-            ? `/dashboard/eventos/nuevo?draftId=${event.id}`
+            ? buildPathWithTheme('/dashboard/eventos/nuevo', effectiveTheme, {
+                draftId: event.id,
+              })
             : `/dashboard/eventos/${slug}/editar${editShareQuery}`
         }
         backLabel="⬅️ Volver al Paso 1"
@@ -628,30 +662,35 @@ export default function EventSharePage() {
                   </p>
                 ) : null}
 
-                {event.organizer_phone != null && String(event.organizer_phone).trim() !== '' ? (
+                {organizerContactRecap ? (
                   <div>
                     <p className="text-sm font-medium text-gray-700">
                       <span aria-hidden>📞</span> Contacto
                     </p>
-                    {event.organizer_name?.trim() ? (
-                      <p className="mt-1 text-sm text-gray-900">{event.organizer_name.trim()}</p>
-                    ) : null}
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <div className="mt-1 flex flex-nowrap items-center gap-x-2 text-sm text-gray-900">
+                      {organizerContactRecap.name ? (
+                        <span className="font-medium text-gray-900">{organizerContactRecap.name}</span>
+                      ) : null}
                       <a
-                        href={`tel:${String(event.organizer_phone).trim()}`}
-                        className={`text-sm font-medium underline ${linkAccent}`}
+                        href={`tel:${organizerContactRecap.fullPhone}`}
+                        className={`font-medium underline ${linkAccent}`}
                       >
-                        {String(event.organizer_phone).trim()}
+                        {organizerContactRecap.localPhone}
                       </a>
-                      {digitsForWhatsApp(String(event.organizer_phone)).length >= 8 ? (
+                      {organizerContactRecap.whatsAppDigits.length >= 8 ? (
                         <a
-                          href={`https://wa.me/${digitsForWhatsApp(String(event.organizer_phone))}`}
+                          href={`https://wa.me/${organizerContactRecap.whatsAppDigits}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex shrink-0 text-green-500 transition hover:text-[#25D366]"
                           aria-label="WhatsApp"
                         >
-                          <svg viewBox="0 0 24 24" fill="currentColor" className="h-7 w-7" aria-hidden>
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            className="h-5 w-5"
+                            aria-hidden
+                          >
                             <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
                           </svg>
                         </a>
@@ -676,7 +715,7 @@ export default function EventSharePage() {
                   Editar evento
                 </Link>
                 <a
-                  href={`/e/${event.public_slug}?preview=true&from=share${urlTheme ? `&theme=${urlTheme}` : ''}`}
+                  href={`/e/${event.public_slug}?preview=true&from=share${effectiveTheme ? `&theme=${effectiveTheme}` : ''}`}
                   className={secondaryOutlineClass}
                 >
                   Ver cómo la verán tus invitados

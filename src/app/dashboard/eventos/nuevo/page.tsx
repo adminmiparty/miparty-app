@@ -35,6 +35,7 @@ import {
   resolveThemeOrBrand,
   isInvitationThemeKey,
   themeForPersistence,
+  restoreInvitationThemeFromDb,
   themeFromDraftRow,
   themeFromDraftStorage,
   themeToDraftStorage,
@@ -1541,19 +1542,9 @@ function NewEventPageContent() {
         setInvitationImageUrl(null)
       }
 
-      const draftTheme = themeFromDraftStorage(eventRow.invitation_theme)
-      invitationThemeUserPickedRef.current = draftTheme !== null
-      setInvitationTheme(draftTheme)
-
-      const storedTheme = eventRow.invitation_theme?.trim() ?? ''
-      if (storedTheme && !storedTheme.startsWith('u:')) {
-        void supabase
-          .from('events')
-          .update({ invitation_theme: null })
-          .eq('id', eventRow.id)
-          .eq('user_id', user.id)
-          .eq('status', EVENT_STATUS_DRAFT)
-      }
+      const restoredTheme = restoreInvitationThemeFromDb(eventRow.invitation_theme)
+      invitationThemeUserPickedRef.current = restoredTheme !== null
+      setInvitationTheme(restoredTheme)
 
       setDraftEventId(eventRow.id)
       setFormHydrationEpoch((e) => e + 1)

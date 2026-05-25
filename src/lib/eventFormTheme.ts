@@ -33,15 +33,47 @@ export function themeToDraftStorage(
   return `${DRAFT_THEME_USER_PREFIX}${selected}`
 }
 
-/** Restore theme from a draft row (handles `u:yellow` etc.; bare `yellow` is treated as unset). */
+/** In-progress draft autosave (`u:green` only). Bare keys are not treated as a user pick. */
 export function themeFromDraftStorage(stored: string | null | undefined): SelectedInvitationTheme {
   if (!stored?.trim()) return null
   if (stored.startsWith(DRAFT_THEME_USER_PREFIX)) {
     const key = stored.slice(DRAFT_THEME_USER_PREFIX.length)
     return isInvitationThemeKey(key) ? key : null
   }
-  // Legacy draft rows stored themeForPersistence() defaults without a user swatch.
   return null
+}
+
+/** Restore theme when resuming Paso 1 after "Crear evento" (`green`) or from `u:green` drafts. */
+export function restoreInvitationThemeFromDb(
+  stored: string | null | undefined
+): SelectedInvitationTheme {
+  if (!stored?.trim()) return null
+  if (stored.startsWith(DRAFT_THEME_USER_PREFIX)) {
+    const key = stored.slice(DRAFT_THEME_USER_PREFIX.length)
+    return isInvitationThemeKey(key) ? key : null
+  }
+  return parseInvitationThemeParam(stored)
+}
+
+export function themeSearchParam(theme: SelectedInvitationTheme): string {
+  return theme ? `theme=${encodeURIComponent(theme)}` : ''
+}
+
+export function buildPathWithTheme(
+  path: string,
+  theme: SelectedInvitationTheme,
+  extraParams?: Record<string, string>
+): string {
+  const [pathname, query = ''] = path.split('?')
+  const params = new URLSearchParams(query)
+  for (const [key, value] of Object.entries(extraParams ?? {})) {
+    params.set(key, value)
+  }
+  if (theme) {
+    params.set('theme', theme)
+  }
+  const serialized = params.toString()
+  return serialized ? `${pathname}?${serialized}` : pathname
 }
 
 /** Restore theme from a published/duplicate source row (normal theme keys). */

@@ -23,6 +23,8 @@ import {
   isInvitationThemeKey,
   parseInvitationThemeParam,
   resolveThemeOrBrand,
+  buildPathWithTheme,
+  restoreInvitationThemeFromDb,
   themeForPersistence,
   type SelectedInvitationTheme,
 } from '@/lib/eventFormTheme'
@@ -896,7 +898,14 @@ export default function EditEventPage() {
       }
 
       if (eventRow.status === EVENT_STATUS_DRAFT) {
-        router.replace(`/dashboard/eventos/nuevo?draftId=${eventRow.id}`)
+        const restoredTheme =
+          parseInvitationThemeParam(themeParam) ??
+          restoreInvitationThemeFromDb(eventRow.invitation_theme)
+        router.replace(
+          buildPathWithTheme('/dashboard/eventos/nuevo', restoredTheme, {
+            draftId: eventRow.id,
+          })
+        )
         return
       }
 
@@ -1061,11 +1070,10 @@ export default function EditEventPage() {
         setInvitationImageUrl(null)
       }
 
-      if (isInvitationThemeKey(eventRow.invitation_theme)) {
-        setInvitationTheme(eventRow.invitation_theme)
-      } else {
-        setInvitationTheme(null)
-      }
+      const restoredTheme =
+        restoreInvitationThemeFromDb(eventRow.invitation_theme) ??
+        parseInvitationThemeParam(themeParam)
+      setInvitationTheme(restoredTheme)
 
       setChildrenLoading(false)
     }
