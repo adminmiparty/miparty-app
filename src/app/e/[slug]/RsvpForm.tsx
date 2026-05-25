@@ -7,8 +7,10 @@ import { Eye, EyeOff } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
+import AppNav from '@/components/AppNav'
+import EventCreationSteps from '@/components/EventCreationSteps'
 import { brand } from '@/lib/brand'
-import { eventFlowShellClass } from '@/lib/eventFormTheme'
+import { eventFlowShellClass, eventFormBrandUi } from '@/lib/eventFormTheme'
 import { getTheme } from '@/lib/themes'
 
 const previewBrandMap: Record<
@@ -25,7 +27,6 @@ const previewBrandMap: Record<
 function useInvitationPreviewExit(publicSlug: string, themeKey: string | null) {
   const searchParams = useSearchParams()
   const fromParam = searchParams.get('from')
-  const theme = getTheme(themeKey)
   const t =
     themeKey === 'yellow' || themeKey === 'pink' || themeKey === 'blue' || themeKey === 'green' || themeKey === 'purple'
       ? themeKey
@@ -37,8 +38,7 @@ function useInvitationPreviewExit(publicSlug: string, themeKey: string | null) {
     fromParam === 'dashboard'
       ? '⬅️ Volver'
       : '⬅️ Volver y compartir invitación'
-  const brandClass = previewBrandMap[t] ?? previewBrandMap.yellow
-  return { backHref, backLabel, theme, brandClass, buttonClass: `${theme.button} ${theme.buttonHover}` }
+  return { backHref, backLabel }
 }
 
 export function InvitationPreviewTopBar({
@@ -48,22 +48,22 @@ export function InvitationPreviewTopBar({
   publicSlug: string
   themeKey: string | null
 }) {
-  const { backHref, backLabel, theme, brandClass } = useInvitationPreviewExit(publicSlug, themeKey)
+  const { backHref, backLabel } = useInvitationPreviewExit(publicSlug, themeKey)
 
   return (
-    <div
-      className={`sticky top-0 z-50 w-full border-b border-gray-200 ${theme.bg}/95 shadow-sm backdrop-blur-sm`}
-    >
-      <div className={`flex items-center justify-between gap-3 py-3 ${eventFlowShellClass}`}>
-        <Link
-          href={backHref}
-          className={`max-w-[min(100%,16rem)] text-sm font-medium leading-snug ${brand.navText} ${brand.navTextHover}`}
-        >
-          {backLabel}
-        </Link>
-        <p className={`shrink-0 text-sm font-semibold ${brandClass}`}>MiParty</p>
-      </div>
-    </div>
+    <AppNav
+      backHref={backHref}
+      backLabel={backLabel}
+      centerSlot={
+        <EventCreationSteps
+          variant="nav"
+          step={2}
+          progressAccentClass={eventFormBrandUi.progressAccent}
+          progressTrackClass={eventFormBrandUi.progressTrack}
+          progressCardBorderClass={eventFormBrandUi.progressCardBorder}
+        />
+      }
+    />
   )
 }
 
@@ -74,14 +74,14 @@ export function InvitationPreviewBottomBar({
   publicSlug: string
   themeKey: string | null
 }) {
-  const { backHref, buttonClass } = useInvitationPreviewExit(publicSlug, themeKey)
+  const { backHref } = useInvitationPreviewExit(publicSlug, themeKey)
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur-sm">
       <div className={`pointer-events-auto py-3 ${eventFlowShellClass}`}>
         <Link
           href={backHref}
-          className={`block w-full rounded-xl px-4 py-3 text-center text-sm font-semibold text-gray-900 transition ${buttonClass}`}
+          className={`block w-full rounded-xl px-4 py-3 text-center text-sm font-semibold transition ${brand.buttonPrimary}`}
         >
           Volver y terminar evento
         </Link>
