@@ -10,9 +10,10 @@ type EventTypeSelectorProps = {
 
 const CUMPLEANOS_OPTION = EVENT_TYPE_OPTIONS.find((o) => o.value === 'cumpleanos')!
 const OTHER_OPTIONS = EVENT_TYPE_OPTIONS.filter((o) => o.value !== 'cumpleanos')
+const GRID_BUTTON_MIN_H = 'min-h-[4.75rem]'
 
 function optionButtonClass(selected: boolean, selectedRingClass: string, extra = '') {
-  return `rounded-xl border px-3 py-3 text-left transition ${extra} ${
+  return `${GRID_BUTTON_MIN_H} rounded-xl border px-3 py-3 transition ${extra} ${
     selected
       ? `border-[var(--brand-border-accent)] bg-[var(--brand-primary-light)] text-gray-900 shadow-sm ring-2 ring-offset-1 ${selectedRingClass}`
       : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
@@ -28,17 +29,23 @@ export function EventTypeSelector({
 
   return (
     <div className="space-y-3">
-      <h2 className="text-base font-semibold text-gray-900">¿Qué quieres celebrar?</h2>
+      <h2 className="text-base font-semibold text-gray-900">¿Qué evento quieres celebrar?</h2>
       <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
           onClick={() => onChange('cumpleanos')}
           aria-pressed={cumpleanosSelected}
-          className={optionButtonClass(cumpleanosSelected, selectedRingClass, 'col-span-2 flex min-h-[3.25rem] items-center justify-between gap-3')}
+          className={optionButtonClass(
+            cumpleanosSelected,
+            selectedRingClass,
+            'col-span-2 flex items-center justify-center'
+          )}
         >
-          <span className="text-sm font-medium sm:text-base">{CUMPLEANOS_OPTION.label}</span>
-          <span className="text-xl leading-none" aria-hidden>
-            {CUMPLEANOS_OPTION.emoji}
+          <span className="inline-flex items-center justify-center gap-2 text-sm font-medium sm:text-base">
+            <span className="text-xl leading-none" aria-hidden>
+              {CUMPLEANOS_OPTION.emoji}
+            </span>
+            <span>{CUMPLEANOS_OPTION.label}</span>
           </span>
         </button>
         {OTHER_OPTIONS.map((option) => {
@@ -49,7 +56,7 @@ export function EventTypeSelector({
               type="button"
               onClick={() => onChange(option.value)}
               aria-pressed={selected}
-              className={`flex min-h-[4.75rem] flex-col items-center justify-center gap-1.5 text-center ${optionButtonClass(selected, selectedRingClass)}`}
+              className={`flex flex-col items-center justify-center gap-1.5 text-center ${optionButtonClass(selected, selectedRingClass)}`}
             >
               <span className="text-xl leading-none" aria-hidden>
                 {option.emoji}

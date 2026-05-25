@@ -21,7 +21,7 @@ export const EVENT_TYPE_OPTIONS: EventTypeOption[] = [
   { value: 'comunion', emoji: '✝️', label: 'Primera Comunión' },
   { value: 'bautizo', emoji: '👶', label: 'Bautizo' },
   { value: 'reunion_familiar', emoji: '🍽️', label: 'Reunión familiar' },
-  { value: 'reunion_amigos', emoji: '🎉', label: 'Reunión con amigos' },
+  { value: 'reunion_amigos', emoji: '🎉', label: 'Reunión de amigos' },
   { value: 'graduacion', emoji: '🎓', label: 'Graduación' },
   { value: 'otro', emoji: '✨', label: 'Otro' },
 ]

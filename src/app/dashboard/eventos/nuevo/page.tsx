@@ -59,7 +59,22 @@ type Child = {
 }
 
 const ORGANIZER_ACCOUNT_VALUE = '__organizer_account__'
-const ORGANIZER_NEW_CONTACT_VALUE = '__organizer_new__'
+const ORGANIZER_OTHER_PERSON_VALUE = '__organizer_other__'
+
+function isAdultMiGenteProfile(birthDate: string | null | undefined, today = new Date()) {
+  const birth = birthDate?.trim()
+  if (!birth || !/^\d{4}-\d{2}-\d{2}$/.test(birth)) {
+    return true
+  }
+  const [y, mo, d] = birth.split('-').map((value) => Number.parseInt(value, 10))
+  const birthDay = new Date(y, mo - 1, d)
+  let age = today.getFullYear() - birthDay.getFullYear()
+  const monthDiff = today.getMonth() - birthDay.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDay.getDate())) {
+    age -= 1
+  }
+  return age >= 18
+}
 
 function applyPhoneToOrganizerFields(
   phone: string,
@@ -984,13 +999,18 @@ function NewEventPageContent() {
     return full || 'Mi cuenta'
   }, [accountFirstName, accountLastName])
 
-  const isNewOrganizerContact = selectedOrganizerContactId === ORGANIZER_NEW_CONTACT_VALUE
+  const organizerContactAdults = useMemo(
+    () => children.filter((child) => isAdultMiGenteProfile(child.birth_date)),
+    [children]
+  )
+
+  const isOtherOrganizerContact = selectedOrganizerContactId === ORGANIZER_OTHER_PERSON_VALUE
 
   const resolveOrganizerName = useCallback(() => {
     if (selectedOrganizerContactId === ORGANIZER_ACCOUNT_VALUE) {
       return [accountFirstName, accountLastName].filter(Boolean).join(' ').trim()
     }
-    if (selectedOrganizerContactId === ORGANIZER_NEW_CONTACT_VALUE) {
+    if (selectedOrganizerContactId === ORGANIZER_OTHER_PERSON_VALUE) {
       return [organizerContactFirstName.trim(), organizerContactLastName.trim()].filter(Boolean).join(' ')
     }
     const child = children.find((item) => item.id === selectedOrganizerContactId)
@@ -1013,7 +1033,7 @@ function NewEventPageContent() {
         setSaveContactToMiGente(false)
         return
       }
-      if (contactId === ORGANIZER_NEW_CONTACT_VALUE) {
+      if (contactId === ORGANIZER_OTHER_PERSON_VALUE) {
         setOrganizerContactFirstName('')
         setOrganizerContactLastName('')
         setOrganizerPhoneNumber('')
@@ -2180,7 +2200,7 @@ function NewEventPageContent() {
       return
     }
 
-    if (selectedOrganizerContactId === ORGANIZER_NEW_CONTACT_VALUE && !organizerContactFirstName.trim()) {
+    if (selectedOrganizerContactId === ORGANIZER_OTHER_PERSON_VALUE && !organizerContactFirstName.trim()) {
       setError('El nombre del contacto es obligatorio.')
       return
     }
@@ -2309,7 +2329,7 @@ function NewEventPageContent() {
       }
     }
 
-    if (selectedOrganizerContactId === ORGANIZER_NEW_CONTACT_VALUE && saveContactToMiGente) {
+    if (selectedOrganizerContactId === ORGANIZER_OTHER_PERSON_VALUE && saveContactToMiGente) {
       if (children.length >= 6) {
         setShowChildLimitModal(true)
         setLoading(false)
@@ -3057,9 +3077,8 @@ function NewEventPageContent() {
               <div className="space-y-3">
                 <div>
                   <label htmlFor="organizerContactSelect" className="mb-1.5 block text-sm font-medium text-gray-900">
-                    Número de contacto del organizador *
+                    Persona de contacto para los invitados *
                   </label>
-                  <p className="mb-2 text-xs text-gray-500">Los invitados podrán contactarte en este número</p>
                   <select
                     id="organizerContactSelect"
                     value={selectedOrganizerContactId}
@@ -3067,74 +3086,51 @@ function NewEventPageContent() {
                     className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:ring-2 ${inputFocusClass}`}
                   >
                     <option value={ORGANIZER_ACCOUNT_VALUE}>{accountOrganizerLabel}</option>
-                    {children.map((child) => (
+                    {organizerContactAdults.map((child) => (
                       <option key={child.id} value={child.id}>
                         {getChildDropdownDisplayName(child)}
                       </option>
                     ))}
+                    <option value={ORGANIZER_OTHER_PERSON_VALUE}>Otra persona</option>
                   </select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (children.length >= 6) {
-                        setShowChildLimitModal(true)
-                        return
-                      }
-                      handleOrganizerContactSelect(ORGANIZER_NEW_CONTACT_VALUE)
-                    }}
-                    className={`mt-1 text-sm hover:underline ${accentTextClass}`}
-                  >
-                    + Añadir nuevo perfil
-                  </button>
                 </div>
 
-                {isNewOrganizerContact ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label
-                          htmlFor="organizerContactFirstName"
-                          className="mb-1.5 block text-sm font-medium text-gray-900"
-                        >
-                          Nombre *
-                        </label>
-                        <input
-                          id="organizerContactFirstName"
-                          type="text"
-                          value={organizerContactFirstName}
-                          onChange={(event) => setOrganizerContactFirstName(event.target.value)}
-                          required
-                          className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
-                          placeholder="Ej. María"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          htmlFor="organizerContactLastName"
-                          className="mb-1.5 block text-sm font-medium text-gray-900"
-                        >
-                          Apellido(s)
-                        </label>
-                        <input
-                          id="organizerContactLastName"
-                          type="text"
-                          value={organizerContactLastName}
-                          onChange={(event) => setOrganizerContactLastName(event.target.value)}
-                          className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
-                          placeholder="Ej. García"
-                        />
-                      </div>
-                    </div>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
+                {isOtherOrganizerContact ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label
+                        htmlFor="organizerContactFirstName"
+                        className="mb-1.5 block text-sm font-medium text-gray-900"
+                      >
+                        Nombre *
+                      </label>
                       <input
-                        type="checkbox"
-                        checked={saveContactToMiGente}
-                        onChange={(event) => setSaveContactToMiGente(event.target.checked)}
-                        className={`h-4 w-4 rounded border-gray-300 ${activePreviewTheme.selection}`}
+                        id="organizerContactFirstName"
+                        type="text"
+                        value={organizerContactFirstName}
+                        onChange={(event) => setOrganizerContactFirstName(event.target.value)}
+                        required
+                        className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
+                        placeholder="Ej. María"
                       />
-                      Añadir a Mi gente
-                    </label>
-                  </>
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="organizerContactLastName"
+                        className="mb-1.5 block text-sm font-medium text-gray-900"
+                      >
+                        Apellido(s)
+                      </label>
+                      <input
+                        id="organizerContactLastName"
+                        type="text"
+                        value={organizerContactLastName}
+                        onChange={(event) => setOrganizerContactLastName(event.target.value)}
+                        className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
+                        placeholder="Ej. García"
+                      />
+                    </div>
+                  </div>
                 ) : null}
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -3232,6 +3228,17 @@ function NewEventPageContent() {
                     className={`min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}
                   />
                 </div>
+                {isOtherOrganizerContact ? (
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
+                    <input
+                      type="checkbox"
+                      checked={saveContactToMiGente}
+                      onChange={(event) => setSaveContactToMiGente(event.target.checked)}
+                      className={`h-4 w-4 rounded border-gray-300 ${activePreviewTheme.selection}`}
+                    />
+                    Añadir a esta persona a Mi gente
+                  </label>
+                ) : null}
                 {organizerProfilePhoneLoaded &&
                 selectedOrganizerContactId === ORGANIZER_ACCOUNT_VALUE &&
                 !hasSavedProfilePhone &&
