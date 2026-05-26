@@ -12,8 +12,11 @@ type TikTokContentItem = {
   content_id: string
 }
 
-type TikTokEventProps = Record<string, string | number | boolean> & {
+type TikTokEventPropValue = string | number | boolean | TikTokContentItem[]
+
+type TikTokEventProps = {
   contents?: TikTokContentItem[]
+  [key: string]: TikTokEventPropValue | undefined
 }
 
 interface TikTokPixel {
