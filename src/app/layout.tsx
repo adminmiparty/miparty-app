@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import BugReportWidget from "@/components/BugReportWidget";
 import MetaPixel from "@/components/MetaPixel";
+import TikTokPixel from "@/components/TikTokPixel";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -72,6 +73,7 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.className} min-h-full flex flex-col`}>
         <MetaPixel />
+        <TikTokPixel />
         {children}
         <Analytics />
         <SpeedInsights />
