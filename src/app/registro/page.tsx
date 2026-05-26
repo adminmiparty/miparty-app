@@ -7,6 +7,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useState } from 'react'
 import { brand } from '@/lib/brand'
+import { mirrorMetaConversionToServer } from '@/lib/meta-conversions-mirror'
 import { trackCompleteRegistration, trackLead } from '@/lib/meta-pixel'
 import { createClient } from '@/lib/supabase/client'
 
@@ -96,6 +97,11 @@ export default function SignupPage() {
     setSignupAutoLogin(Boolean(data.session))
     setSignupSuccess(true)
     trackCompleteRegistration()
+    mirrorMetaConversionToServer({
+      eventName: 'CompleteRegistration',
+      eventSourceUrl: window.location.href,
+      eventId: uid ? `registration-${uid}` : undefined,
+    })
     setLoadingSignup(false)
   }
 

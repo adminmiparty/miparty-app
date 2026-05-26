@@ -45,6 +45,7 @@ import {
 import { X } from 'lucide-react'
 import MetaPixelPageView from '@/components/MetaPixelPageView'
 import { createClient } from '@/lib/supabase/client'
+import { mirrorMetaConversionToServer } from '@/lib/meta-conversions-mirror'
 import { trackLead, trackSchedule } from '@/lib/meta-pixel'
 import { themes, type ThemeKey } from '@/lib/themes'
 import 'react-day-picker/style.css'
@@ -2529,6 +2530,11 @@ function NewEventPageContent() {
     allowUnsavedLeaveRef.current = true
     clearDirtyBaseline()
     trackSchedule()
+    mirrorMetaConversionToServer({
+      eventName: 'Schedule',
+      eventSourceUrl: window.location.href,
+      eventId: `schedule-${insertedEvent.id}`,
+    })
     const shareThemeQuery = invitationTheme ? `?theme=${invitationTheme}` : ''
     router.push(`/dashboard/eventos/${insertedEvent.public_slug}/compartir${shareThemeQuery}`)
   }

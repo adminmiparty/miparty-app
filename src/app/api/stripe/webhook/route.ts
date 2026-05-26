@@ -3,6 +3,7 @@ import type Stripe from 'stripe'
 import { logPaymentConfigFlags, readServerEnv } from '@/lib/envServer'
 import { activateOrganizedEventAfterPayment } from '@/lib/organizerPublish'
 import { initStripe } from '@/lib/stripe/server'
+import { sendMetaPurchaseEvent } from '@/lib/meta-conversions-api'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
@@ -61,6 +62,19 @@ export async function POST(request: Request) {
         .eq('stripe_checkout_session_id', session.id)
 
       await activateOrganizedEventAfterPayment(admin, eventId, userId)
+
+      const customerEmail =
+        typeof session.customer_details?.email === 'string'
+          ? session.customer_details.email
+          : typeof session.customer_email === 'string'
+            ? session.customer_email
+            : undefined
+
+      sendMetaPurchaseEvent({
+        stripeSessionId: session.id,
+        eventSourceUrl: 'https://miparty.net/dashboard/eventos',
+        userEmail: customerEmail,
+      })
     }
   }
 

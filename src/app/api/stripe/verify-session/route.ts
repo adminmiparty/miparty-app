@@ -5,6 +5,7 @@ import { EVENT_STATUS_ACTIVE } from '@/lib/eventLifecycle'
 import { isStripeCheckoutPaid } from '@/lib/stripe/checkoutSession'
 import { initStripe } from '@/lib/stripe/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { metaRequestContext, sendMetaPurchaseEvent } from '@/lib/meta-conversions-api'
 import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
@@ -86,6 +87,17 @@ export async function GET(request: Request) {
     .maybeSingle()
 
   const published = eventRow?.status === EVENT_STATUS_ACTIVE
+
+  if (paid && published) {
+    const metaContext = metaRequestContext(request, '/dashboard/eventos')
+    sendMetaPurchaseEvent({
+      stripeSessionId: sessionId,
+      eventSourceUrl: metaContext.eventSourceUrl,
+      userEmail: user.email ?? undefined,
+      clientIpAddress: metaContext.clientIpAddress,
+      clientUserAgent: metaContext.clientUserAgent,
+    })
+  }
 
   return NextResponse.json({
     paid,
