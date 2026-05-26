@@ -364,6 +364,7 @@ function dialCodeShortLabel(code: string): string {
 }
 
 const NEW_CHILD_VALUE = '__new__'
+const ORGANIZER_SELF_VALUE = 'organizer_self'
 const SPANISH_MONTHS = [
   'Enero',
   'Febrero',
@@ -776,6 +777,7 @@ function NewEventPageContent() {
   const [selectedSiblings, setSelectedSiblings] = useState<string[]>([])
   const [accountFirstName, setAccountFirstName] = useState('')
   const [accountLastName, setAccountLastName] = useState('')
+  const [accountBirthDate, setAccountBirthDate] = useState<string | null>(null)
   const [selectedOrganizerContactId, setSelectedOrganizerContactId] = useState(ORGANIZER_ACCOUNT_VALUE)
   const [organizerContactFirstName, setOrganizerContactFirstName] = useState('')
   const [organizerContactLastName, setOrganizerContactLastName] = useState('')
@@ -1113,13 +1115,19 @@ function NewEventPageContent() {
 
       const { data: userProfile } = await supabase
         .from('users')
-        .select('phone, first_name, last_name')
+        .select('phone, first_name, last_name, birth_date')
         .eq('id', user.id)
         .maybeSingle()
 
       if (isMounted) {
         setAccountFirstName(userProfile?.first_name?.trim() ?? '')
         setAccountLastName(userProfile?.last_name?.trim() ?? '')
+        const profileBirthDate = userProfile?.birth_date
+        setAccountBirthDate(
+          profileBirthDate != null && String(profileBirthDate).trim() !== ''
+            ? String(profileBirthDate).split('T')[0]
+            : null
+        )
         setSelectedOrganizerContactId(ORGANIZER_ACCOUNT_VALUE)
         setOrganizerProfilePhoneLoaded(true)
         const profilePhone =
@@ -1631,6 +1639,15 @@ function NewEventPageContent() {
     if (id === NEW_CHILD_VALUE) {
       setChildName('')
       handleChildBirthDateChange('', '', '')
+      return
+    }
+
+    if (id === ORGANIZER_SELF_VALUE) {
+      setChildName(accountFirstName)
+      setChildLastName(accountLastName)
+      syncChildBirthDateFromDisplayValue(
+        accountBirthDate ? formatIsoToDisplayDate(accountBirthDate) : ''
+      )
       return
     }
 
@@ -2767,6 +2784,11 @@ function NewEventPageContent() {
                     <option value="" className="text-gray-500">
                       Selecciona
                     </option>
+                    {accountFirstName.trim() !== '' ? (
+                      <option value={ORGANIZER_SELF_VALUE}>
+                        {[accountFirstName, accountLastName].filter(Boolean).join(' ').trim()} (Yo)
+                      </option>
+                    ) : null}
                     {hasChildren
                       ? children.map((child) => (
                           <option key={child.id} value={child.id}>
