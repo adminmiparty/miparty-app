@@ -6,6 +6,7 @@ import { isStripeCheckoutPaid } from '@/lib/stripe/checkoutSession'
 import { initStripe } from '@/lib/stripe/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { metaRequestContext, sendMetaPurchaseEvent } from '@/lib/meta-conversions-api'
+import { sendTikTokPurchaseEvent, tiktokRequestContext } from '@/lib/tiktok-events-api'
 import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
@@ -96,6 +97,15 @@ export async function GET(request: Request) {
       userEmail: user.email ?? undefined,
       clientIpAddress: metaContext.clientIpAddress,
       clientUserAgent: metaContext.clientUserAgent,
+    })
+
+    const tiktokContext = tiktokRequestContext(request, '/dashboard/eventos')
+    sendTikTokPurchaseEvent({
+      stripeSessionId: sessionId,
+      eventSourceUrl: tiktokContext.eventSourceUrl,
+      userEmail: user.email ?? undefined,
+      clientIpAddress: tiktokContext.clientIpAddress,
+      clientUserAgent: tiktokContext.clientUserAgent,
     })
   }
 

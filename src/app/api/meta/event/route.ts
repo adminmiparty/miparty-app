@@ -5,6 +5,7 @@ import {
   sendMetaEvent,
   type MetaPixelEventName,
 } from '@/lib/meta-conversions-api'
+import { sendTikTokEvent } from '@/lib/tiktok-events-api'
 import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
@@ -50,6 +51,20 @@ export async function POST(request: Request) {
       value: body.value,
       currency: body.currency?.trim(),
     })
+
+    if (typedEventName === 'CompleteRegistration' || typedEventName === 'Schedule' || typedEventName === 'Purchase') {
+      await sendTikTokEvent({
+        eventName: typedEventName,
+        eventSourceUrl,
+        eventId: body.eventId?.trim(),
+        userEmail: user?.email ?? undefined,
+        userPhone: body.userPhone?.trim(),
+        clientIpAddress: requestContext.clientIpAddress,
+        clientUserAgent: requestContext.clientUserAgent,
+        value: typedEventName === 'Purchase' ? body.value : undefined,
+        currency: typedEventName === 'Purchase' ? body.currency?.trim() : undefined,
+      })
+    }
   } catch {
     // Silent — never break client flows.
   }

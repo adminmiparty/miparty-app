@@ -4,6 +4,7 @@ import { logPaymentConfigFlags, readServerEnv } from '@/lib/envServer'
 import { activateOrganizedEventAfterPayment } from '@/lib/organizerPublish'
 import { initStripe } from '@/lib/stripe/server'
 import { sendMetaPurchaseEvent } from '@/lib/meta-conversions-api'
+import { sendTikTokPurchaseEvent } from '@/lib/tiktok-events-api'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
@@ -71,6 +72,12 @@ export async function POST(request: Request) {
             : undefined
 
       sendMetaPurchaseEvent({
+        stripeSessionId: session.id,
+        eventSourceUrl: 'https://miparty.net/dashboard/eventos',
+        userEmail: customerEmail,
+      })
+
+      sendTikTokPurchaseEvent({
         stripeSessionId: session.id,
         eventSourceUrl: 'https://miparty.net/dashboard/eventos',
         userEmail: customerEmail,

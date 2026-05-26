@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { metaRequestContext, sendMetaEvent } from '@/lib/meta-conversions-api'
+import { sendTikTokEvent, tiktokRequestContext } from '@/lib/tiktok-events-api'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
@@ -47,6 +48,16 @@ export async function GET(request: Request) {
             userEmail: user.email ?? undefined,
             clientIpAddress: metaContext.clientIpAddress,
             clientUserAgent: metaContext.clientUserAgent,
+          })
+
+          const tiktokContext = tiktokRequestContext(request, '/registro')
+          void sendTikTokEvent({
+            eventName: 'CompleteRegistration',
+            eventSourceUrl: tiktokContext.eventSourceUrl,
+            eventId: `registration-${user.id}`,
+            userEmail: user.email ?? undefined,
+            clientIpAddress: tiktokContext.clientIpAddress,
+            clientUserAgent: tiktokContext.clientUserAgent,
           })
         }
       }
