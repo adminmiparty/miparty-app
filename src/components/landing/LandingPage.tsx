@@ -3,6 +3,10 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import LandingFooter from '@/components/LandingFooter'
 import LandingHeader from '@/components/LandingHeader'
+import {
+  LandingPageViewTracker,
+  trackLandingCrearEventoClick,
+} from '@/components/landing/LandingMetaTracking'
 import { brand } from '@/lib/brand'
 
 type FeatureItem = {
@@ -322,6 +326,7 @@ function PreviewWhatsApp() {
 export default function LandingPage() {
   return (
     <div className={`min-h-screen ${brand.pageBg}`}>
+      <LandingPageViewTracker />
       <LandingHeader />
 
       <main>
@@ -525,6 +530,9 @@ export default function LandingPage() {
                   {plan.ctaHref ? (
                     <Link
                       href={plan.ctaHref}
+                      onClick={
+                        plan.ctaLabel === 'Crear evento' ? trackLandingCrearEventoClick : undefined
+                      }
                       className={`mt-5 inline-flex justify-center rounded-full px-4 py-2.5 text-sm font-semibold transition ${brand.buttonPrimary} hover:bg-[var(--brand-primary-hover)]`}
                     >
                       {plan.ctaLabel}

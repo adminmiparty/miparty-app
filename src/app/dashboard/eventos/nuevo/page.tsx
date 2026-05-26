@@ -43,7 +43,9 @@ import {
   type SelectedInvitationTheme,
 } from '@/lib/eventFormTheme'
 import { X } from 'lucide-react'
+import MetaPixelPageView from '@/components/MetaPixelPageView'
 import { createClient } from '@/lib/supabase/client'
+import { trackLead, trackSchedule } from '@/lib/meta-pixel'
 import { themes, type ThemeKey } from '@/lib/themes'
 import 'react-day-picker/style.css'
 
@@ -761,6 +763,7 @@ function NewEventPageContent() {
   const [showDraftLimitModal, setShowDraftLimitModal] = useState(false)
   const [draftSaveBusy, setDraftSaveBusy] = useState(false)
   const pendingLeaveHrefRef = useRef<string>(LEAVE_BACK_SENTINEL)
+  const eventCreationStartedTrackedRef = useRef(false)
   const allowUnsavedLeaveRef = useRef(false)
   const historyTrapPushedRef = useRef(false)
   const [formBaselineVersion, setFormBaselineVersion] = useState(0)
@@ -2525,8 +2528,15 @@ function NewEventPageContent() {
     }
     allowUnsavedLeaveRef.current = true
     clearDirtyBaseline()
+    trackSchedule()
     const shareThemeQuery = invitationTheme ? `?theme=${invitationTheme}` : ''
     router.push(`/dashboard/eventos/${insertedEvent.public_slug}/compartir${shareThemeQuery}`)
+  }
+
+  const trackEventCreationStartedOnce = () => {
+    if (eventCreationStartedTrackedRef.current) return
+    eventCreationStartedTrackedRef.current = true
+    trackLead('event_creation_started')
   }
 
   const buildSubmitParams = () => {
@@ -2719,6 +2729,7 @@ function NewEventPageContent() {
         ) : null}
         {formContentReady ? (
         <>
+        <MetaPixelPageView />
         <section className={`rounded-2xl border p-5 shadow-xl ${activePreviewTheme.card}`}>
           <div className="mb-5">
             <p className="text-sm text-gray-500">Completa los datos y crea tu evento en minutos.</p>
@@ -2726,6 +2737,7 @@ function NewEventPageContent() {
 
           <form
             onSubmit={handleSubmit}
+            onFocusCapture={trackEventCreationStartedOnce}
             onInvalidCapture={handleFormFieldInvalid}
             onInputCapture={handleFormFieldInput}
             className="space-y-6"

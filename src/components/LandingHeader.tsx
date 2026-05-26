@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { type MouseEvent } from 'react'
 import AccountMenu from '@/components/AccountMenu'
+import { trackLandingCrearCuentaClick } from '@/components/landing/LandingMetaTracking'
 import { brand } from '@/lib/brand'
 
 function scrollToTopIfHome(event: MouseEvent<HTMLAnchorElement>) {
@@ -62,7 +63,11 @@ export default function LandingHeader() {
               >
                 Iniciar sesión
               </Link>
-              <Link href="/registro" className={brand.landingPrimaryPill}>
+              <Link
+                href="/registro"
+                onClick={trackLandingCrearCuentaClick}
+                className={brand.landingPrimaryPill}
+              >
                 Crear cuenta
               </Link>
             </div>

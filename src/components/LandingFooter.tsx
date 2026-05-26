@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { trackLandingCrearCuentaClick } from '@/components/landing/LandingMetaTracking'
 import { brand } from '@/lib/brand'
 
 export default function LandingFooter() {
@@ -47,6 +48,7 @@ export default function LandingFooter() {
               </Link>
               <Link
                 href="/registro"
+                onClick={trackLandingCrearCuentaClick}
                 className="text-[var(--brand-text-secondary)] transition hover:text-[var(--brand-text)]"
               >
                 Crear cuenta

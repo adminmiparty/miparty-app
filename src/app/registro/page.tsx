@@ -7,6 +7,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useState } from 'react'
 import { brand } from '@/lib/brand'
+import { trackCompleteRegistration, trackLead } from '@/lib/meta-pixel'
 import { createClient } from '@/lib/supabase/client'
 
 export default function SignupPage() {
@@ -23,6 +24,10 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null)
   const [signupSuccess, setSignupSuccess] = useState(false)
   const [signupAutoLogin, setSignupAutoLogin] = useState(false)
+
+  useEffect(() => {
+    trackLead('crear_cuenta')
+  }, [])
 
   useEffect(() => {
     if (!signupSuccess) return
@@ -90,6 +95,7 @@ export default function SignupPage() {
 
     setSignupAutoLogin(Boolean(data.session))
     setSignupSuccess(true)
+    trackCompleteRegistration()
     setLoadingSignup(false)
   }
 

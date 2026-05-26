@@ -10,6 +10,7 @@ import type { User } from '@supabase/supabase-js'
 import AppNav from '@/components/AppNav'
 import EventCreationSteps from '@/components/EventCreationSteps'
 import { brand } from '@/lib/brand'
+import { trackLead, trackRsvpAttendanceLead, trackViewContent } from '@/lib/meta-pixel'
 import { eventFlowShellClass, eventFormBrandUi } from '@/lib/eventFormTheme'
 import { getTheme } from '@/lib/themes'
 
@@ -796,6 +797,17 @@ function RsvpFormInner({
   }, [])
 
   useEffect(() => {
+    if (!isPreview) {
+      trackViewContent()
+    }
+  }, [isPreview])
+
+  useEffect(() => {
+    if (!showSignupModal || isPreview || modalView !== 'signup') return
+    trackLead('rsvp_conversion_modal_shown')
+  }, [showSignupModal, modalView, isPreview])
+
+  useEffect(() => {
     if (attendance === 'confirmed' && hasFoodOptions && foodOptions.length === 1) {
       setFoodPreference(foodOptions[0]?.label ?? '')
       return
@@ -1508,6 +1520,7 @@ function RsvpFormInner({
 
     setSubmittedEditToken(duplicatePrompt.edit_token ?? null)
     setSubmittedStatus(attendance)
+    trackRsvpAttendanceLead(attendance)
     setSubmittedData({
       childName: combinedChildName,
       parentName: trimmedParentName,
@@ -1634,6 +1647,7 @@ function RsvpFormInner({
         phone: trimmedParentPhone || null,
       })
       setSubmittedStatus(attendance)
+      trackRsvpAttendanceLead(attendance)
       if (!isLoggedIn && !signupToggle && !isPreview) {
         setShowSignupModal(true)
         setModalView('signup')
@@ -1680,6 +1694,7 @@ function RsvpFormInner({
     const token = inserted?.edit_token ?? null
     setSubmittedEditToken(token)
     setSubmittedStatus(attendance)
+    trackRsvpAttendanceLead(attendance)
     setSubmittedData({
       childName: combinedChildName,
       parentName: trimmedParentName,
@@ -2335,7 +2350,10 @@ END:VCALENDAR`
                   </div>
                   <button
                     type="button"
-                    onClick={() => void handleEmailSignupModal()}
+                    onClick={() => {
+                      trackLead('rsvp_conversion_modal_crear_cuenta')
+                      void handleEmailSignupModal()
+                    }}
                     className="inline-flex w-full items-center justify-center rounded-lg bg-gray-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800"
                   >
                     Crear cuenta
@@ -3145,7 +3163,11 @@ END:VCALENDAR`
                   type="button"
                   role="switch"
                   aria-checked={signupToggle}
-                  onClick={() => setSignupToggle(!signupToggle)}
+                  onClick={() => {
+                    const next = !signupToggle
+                    setSignupToggle(next)
+                    if (next) trackLead('rsvp_signup_interest')
+                  }}
                   className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                     signupToggle ? 'bg-green-500' : 'bg-gray-200'
                   }`}
@@ -3196,7 +3218,10 @@ END:VCALENDAR`
                   <button
                     type="button"
                     disabled={isPreview}
-                    onClick={() => void handleEmailSignupInline()}
+                    onClick={() => {
+                      trackLead('rsvp_crear_cuenta')
+                      void handleEmailSignupInline()
+                    }}
                     className="inline-flex w-full items-center justify-center rounded-lg border border-gray-900 bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Crear cuenta

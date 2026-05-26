@@ -18,6 +18,11 @@ import {
   sharePageThemeFromUrl,
 } from '@/lib/eventFormTheme'
 import { createClient } from '@/lib/supabase/client'
+import {
+  trackInitiateCheckout,
+  trackPurchase,
+  trackViewContent,
+} from '@/lib/meta-pixel'
 import { postStripeCheckout } from '@/lib/stripe/checkoutClient'
 import { verifyCheckoutReturnWithRetry } from '@/lib/stripe/verifyCheckoutReturn'
 import {
@@ -355,6 +360,12 @@ export default function EventSharePage() {
   }, [slug, supabase, router, billingConfig])
 
   useEffect(() => {
+    if (!loading && event) {
+      trackViewContent()
+    }
+  }, [loading, event])
+
+  useEffect(() => {
     const checkout = searchParams.get('checkout')
     const sessionId = searchParams.get('session_id')
     if (checkout !== 'success' || !sessionId) return
@@ -384,6 +395,7 @@ export default function EventSharePage() {
         return
       }
 
+      trackPurchase(1.99, 'EUR')
       router.replace(`/dashboard/eventos/${result.slug}?published=paid`)
     }
 
@@ -430,6 +442,7 @@ export default function EventSharePage() {
 
       if (publishData.requiresPayment) {
         setPublishing(false)
+        trackInitiateCheckout()
         setShowPaymentModal(true)
         return
       }

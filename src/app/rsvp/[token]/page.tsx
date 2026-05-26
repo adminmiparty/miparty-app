@@ -9,11 +9,15 @@ import { useParams } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import MetaPixelPageView from '@/components/MetaPixelPageView'
 import { brand } from '@/lib/brand'
+import { trackLead, trackRsvpAttendanceLead } from '@/lib/meta-pixel'
 import { isActiveEventStatus } from '@/lib/eventLifecycle'
 import { getTheme } from '@/lib/themes'
 
 type AttendanceStatus = 'confirmed' | 'declined' | 'maybe'
+
+type ConversionModalView = 'signup' | 'login'
 
 type LoadedEventForEdit = {
   id: string
@@ -333,6 +337,20 @@ export default function RsvpEditPage() {
   const [showSignupPassword, setShowSignupPassword] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [signupToggle, setSignupToggle] = useState(false)
+  const [showConversionModal, setShowConversionModal] = useState(false)
+  const [conversionModalView, setConversionModalView] = useState<ConversionModalView>('signup')
+  const [modalSignupEmail, setModalSignupEmail] = useState('')
+  const [modalSignupPassword, setModalSignupPassword] = useState('')
+  const [modalLoginEmail, setModalLoginEmail] = useState('')
+  const [modalLoginPassword, setModalLoginPassword] = useState('')
+  const [showModalSignupPassword, setShowModalSignupPassword] = useState(false)
+  const [showModalLoginPassword, setShowModalLoginPassword] = useState(false)
+  const [modalShowEmailFields, setModalShowEmailFields] = useState(false)
+  const [signupFlowError, setSignupFlowError] = useState<string | null>(null)
+  const [showModalForgotPassword, setShowModalForgotPassword] = useState(false)
+  const [modalForgotEmail, setModalForgotEmail] = useState('')
+  const [modalForgotSent, setModalForgotSent] = useState(false)
+  const [modalForgotError, setModalForgotError] = useState('')
   const [showWelcomeModal, setShowWelcomeModal] = useState(false)
   const [welcomeModalView, setWelcomeModalView] = useState<'welcome' | 'success'>('welcome')
   const [welcomeFirstName, setWelcomeFirstName] = useState('')
@@ -553,11 +571,17 @@ export default function RsvpEditPage() {
         signup_source: 'rsvp_edit_page',
       })
       setIsLoggedIn(true)
+      setShowConversionModal(false)
       void prefillAndOpenWelcomeModal()
     })
 
     return () => subscription.unsubscribe()
   }, [token])
+
+  useEffect(() => {
+    if (!showConversionModal || conversionModalView !== 'signup') return
+    trackLead('rsvp_conversion_modal_shown')
+  }, [showConversionModal, conversionModalView])
 
   useEffect(() => {
     if (!parentDialOpen) return
@@ -828,16 +852,106 @@ export default function RsvpEditPage() {
   }
 
   const handleGoogleSignup = async () => {
+    sessionStorage.setItem('miparty_oauth_pending', '1')
+    sessionStorage.setItem('miparty_signup_source', 'rsvp_toggle')
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.href },
     })
   }
 
-  const renderGoogleSignupButton = () => (
+  const handleConversionGoogleSignup = async () => {
+    sessionStorage.setItem('miparty_oauth_pending', '1')
+    sessionStorage.setItem('miparty_signup_source', 'rsvp_modal')
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.href },
+    })
+  }
+
+  const handleEmailSignupModal = async () => {
+    setSignupFlowError(null)
+    const email = modalSignupEmail.trim()
+    const password = modalSignupPassword
+    if (!email || !password) {
+      setSignupFlowError('Introduce email y contraseña.')
+      return
+    }
+    const { data, error: signErr } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: parentName.trim(),
+        },
+      },
+    })
+    if (signErr) {
+      setSignupFlowError(signErr.message)
+      return
+    }
+    const uid = data.user?.id ?? data.session?.user?.id
+    if (!uid) {
+      setSignupFlowError('No se pudo completar el registro. Inténtalo de nuevo.')
+      return
+    }
+    const trimmedParentName = parentName.trim()
+    const nameParts = trimmedParentName.split(/\s+/).filter(Boolean)
+    await supabase.from('users').upsert({
+      id: uid,
+      first_name: nameParts[0] || null,
+      last_name: nameParts.slice(1).join(' ') || null,
+      signup_source: 'rsvp_modal',
+    })
+    await supabase.from('rsvps').update({ user_id: uid }).eq('edit_token', token)
+    setIsLoggedIn(true)
+    setShowConversionModal(false)
+    await prefillAndOpenWelcomeModal()
+  }
+
+  const handleLoginAndLinkModal = async () => {
+    setSignupFlowError(null)
+    const email = modalLoginEmail.trim()
+    const password = modalLoginPassword
+    if (!email || !password) {
+      setSignupFlowError('Introduce email y contraseña.')
+      return
+    }
+    const { data, error: signErr } = await supabase.auth.signInWithPassword({ email, password })
+    if (signErr) {
+      setSignupFlowError(signErr.message)
+      return
+    }
+    if (!data.user) {
+      setSignupFlowError('No se pudo iniciar sesión.')
+      return
+    }
+    await supabase.from('rsvps').update({ user_id: data.user.id }).eq('edit_token', token)
+    setIsLoggedIn(true)
+    setShowConversionModal(false)
+    await prefillAndOpenWelcomeModal()
+  }
+
+  const handleModalForgotPassword = async () => {
+    setModalForgotError('')
+    if (!modalForgotEmail.trim()) {
+      setModalForgotError('Introduce tu email')
+      return
+    }
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(modalForgotEmail, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    })
+    if (resetError) {
+      setModalForgotError('No se pudo enviar el enlace. Inténtalo de nuevo.')
+      return
+    }
+    setModalForgotSent(true)
+  }
+
+  const renderGoogleSignupButton = (onGoogleClick: () => void) => (
     <button
       type="button"
-      onClick={() => void handleGoogleSignup()}
+      onClick={() => void onGoogleClick()}
       className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
     >
       <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden>
@@ -894,7 +1008,7 @@ export default function RsvpEditPage() {
         <p className="mb-3 text-center text-sm text-gray-600">
           ¿Tú también organizas fiestas? Regístrate y gestiona todo desde un solo lugar.
         </p>
-        {renderGoogleSignupButton()}
+        {renderGoogleSignupButton(handleGoogleSignup)}
         <div className="my-2 flex items-center gap-2">
           <div className="flex-1 border-t border-gray-200" />
           <span className="text-xs text-gray-400">o</span>
@@ -934,7 +1048,10 @@ export default function RsvpEditPage() {
             </div>
             <button
               type="button"
-              onClick={() => void handleEmailSignup()}
+              onClick={() => {
+                trackLead('rsvp_crear_cuenta')
+                void handleEmailSignup()
+              }}
               className="w-full rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white"
             >
               Crear cuenta
@@ -1052,10 +1169,18 @@ export default function RsvpEditPage() {
     setDetailsFormVisible(false)
     showSavedResponseToast()
     setHasSavedOnce(true)
+    trackRsvpAttendanceLead(attendance)
+    if (!isLoggedIn && !signupToggle) {
+      setConversionModalView('signup')
+      setModalShowEmailFields(false)
+      setSignupFlowError(null)
+      setShowConversionModal(true)
+    }
     setLoading(false)
   }
 
   const rsvpTopNav = <AppNav brandHref="/" />
+  const eventTitle = eventData?.title?.trim() || 'este evento'
 
   const neutralPageBg = 'from-white to-white'
   const pageBg = loadState === 'ready' ? getTheme(resolvedThemeKey).pageBg : neutralPageBg
@@ -1092,6 +1217,262 @@ export default function RsvpEditPage() {
       return 'border-emerald-300 bg-emerald-100 text-emerald-900'
     if (status === 'declined') return 'border-red-200 bg-red-50 text-red-800'
     return 'border-amber-200 bg-amber-100 text-amber-950'
+  }
+
+  const renderPostConversionModal = () => {
+    if (!showConversionModal) return null
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
+        <div className="relative mx-4 max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+          <button
+            type="button"
+            className="absolute right-3 top-2 text-2xl leading-none text-gray-400 hover:text-gray-700"
+            aria-label="Cerrar"
+            onClick={() => setShowConversionModal(false)}
+          >
+            ×
+          </button>
+
+          {conversionModalView === 'signup' ? (
+            <div className="pt-2">
+              <p className="text-center text-2xl" aria-hidden>
+                🎉
+              </p>
+              <h3 className="mt-2 text-center text-lg font-bold text-gray-900">
+                ¡Has guardado tu respuesta para el {eventTitle}!
+              </h3>
+              <p className="mt-2 text-center text-sm text-gray-600">Pero antes, crea tu cuenta gratis y:</p>
+              <ul className="mt-3 space-y-3">
+                <li className="flex gap-2">
+                  <span className="mt-0.5 shrink-0 text-base leading-none text-green-600" aria-hidden>
+                    ✓
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Olvídate del caos de los grupos de WhatsApp</p>
+                    <p className="mt-0.5 text-xs text-gray-500">Todas las confirmaciones en un solo lugar</p>
+                  </div>
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-0.5 shrink-0 text-base leading-none text-green-600" aria-hidden>
+                    ✓
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Ten claridad de quién viene</p>
+                    <p className="mt-0.5 text-xs text-gray-500">Sin perseguir a nadie el día antes</p>
+                  </div>
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-0.5 shrink-0 text-base leading-none text-green-600" aria-hidden>
+                    ✓
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Alergias e intolerancias bajo control</p>
+                    <p className="mt-0.5 text-xs text-gray-500">Nunca más un susto en la mesa</p>
+                  </div>
+                </li>
+                <li className="rounded-lg border border-yellow-200 bg-yellow-50 p-2">
+                  <div className="flex gap-2">
+                    <span className="mt-0.5 shrink-0 text-base leading-none text-green-600" aria-hidden>
+                      ✓
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-yellow-800">
+                        Tu primer evento completamente gratis 🎁
+                      </p>
+                      <p className="mt-0.5 text-xs text-yellow-600">Sin tarjeta de crédito. Sin compromisos.</p>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+              <div className="mt-4">{renderGoogleSignupButton(handleConversionGoogleSignup)}</div>
+              <p className="mt-2 text-center text-xs text-gray-500">o</p>
+              {!modalShowEmailFields ? (
+                <button
+                  type="button"
+                  onClick={() => setModalShowEmailFields(true)}
+                  className="inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
+                >
+                  Usar mi email
+                </button>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="Email"
+                    value={modalSignupEmail}
+                    onChange={(e) => setModalSignupEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  />
+                  <div className="relative">
+                    <input
+                      type={showModalSignupPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      placeholder="Contraseña"
+                      value={modalSignupPassword}
+                      onChange={(e) => setModalSignupPassword(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowModalSignupPassword(!showModalSignupPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+                    >
+                      {showModalSignupPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      trackLead('rsvp_conversion_modal_crear_cuenta')
+                      void handleEmailSignupModal()
+                    }}
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-gray-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800"
+                  >
+                    Crear cuenta
+                  </button>
+                </div>
+              )}
+              <div className="mt-2 flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConversionModalView('login')
+                    setSignupFlowError(null)
+                  }}
+                  className="text-sm text-gray-500 underline hover:text-gray-700"
+                >
+                  Ya tengo cuenta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowConversionModal(false)}
+                  className="text-xs text-gray-400 hover:text-gray-600"
+                >
+                  No gracias, continuar
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {conversionModalView === 'login' ? (
+            <div className="pt-2">
+              <h3 className="text-center text-lg font-bold text-gray-900">Inicia sesión</h3>
+              <p className="mt-1 text-center text-sm text-gray-600">Vincula tu confirmación a tu cuenta</p>
+              {showModalForgotPassword ? (
+                <div className="mt-4 space-y-3">
+                  <p className="text-sm text-gray-600">
+                    Escribe tu email y te enviaremos un enlace para restablecer tu contraseña.
+                  </p>
+                  <input
+                    type="email"
+                    placeholder="tu@email.com"
+                    value={modalForgotEmail}
+                    onChange={(e) => setModalForgotEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  />
+                  {modalForgotError ? <p className="text-xs text-red-500">{modalForgotError}</p> : null}
+                  {modalForgotSent ? (
+                    <p className="text-center text-sm text-green-600">
+                      ✅ Enlace enviado. Revisa tu bandeja de entrada.
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handleModalForgotPassword()}
+                      className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${brand.buttonPrimary}`}
+                    >
+                      Enviar enlace
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowModalForgotPassword(false)
+                      setModalForgotSent(false)
+                      setModalForgotError('')
+                      setModalForgotEmail('')
+                    }}
+                    className="w-full text-xs text-gray-400 underline hover:text-gray-600"
+                  >
+                    ← Volver al inicio de sesión
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  {renderGoogleSignupButton(handleConversionGoogleSignup)}
+                  <p className="text-center text-xs text-gray-500">o</p>
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="Email"
+                    value={modalLoginEmail}
+                    onChange={(e) => setModalLoginEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                  />
+                  <div className="relative">
+                    <input
+                      type={showModalLoginPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      placeholder="Contraseña"
+                      value={modalLoginPassword}
+                      onChange={(e) => setModalLoginPassword(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowModalLoginPassword(!showModalLoginPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+                    >
+                      {showModalLoginPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowModalForgotPassword(true)}
+                    className="mt-1 w-full text-right text-xs text-gray-400 underline hover:text-gray-600"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleLoginAndLinkModal()}
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-gray-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800"
+                  >
+                    Iniciar sesión
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setConversionModalView('signup')
+                  setSignupFlowError(null)
+                }}
+                className="mt-3 text-sm font-medium text-gray-600 hover:text-gray-900"
+              >
+                ← Volver
+              </button>
+            </div>
+          ) : null}
+
+          {signupFlowError ? (
+            <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-center text-xs text-red-700">
+              {signupFlowError}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    )
   }
 
   const renderWelcomeModal = () => {
@@ -1464,8 +1845,10 @@ export default function RsvpEditPage() {
   }
   return (
     <main className={`relative min-h-screen bg-gradient-to-b ${pageBg}`}>
+      <MetaPixelPageView />
       {rsvpTopNav}
       {renderWelcomeModal()}
+      {renderPostConversionModal()}
       <div className="px-4 py-6 pb-10 sm:py-8">
       {saveToastVisible ? (
         <div
@@ -1888,7 +2271,11 @@ export default function RsvpEditPage() {
                     type="button"
                     role="switch"
                     aria-checked={signupToggle}
-                    onClick={() => setSignupToggle(!signupToggle)}
+                    onClick={() => {
+                      const next = !signupToggle
+                      setSignupToggle(next)
+                      if (next) trackLead('rsvp_signup_interest')
+                    }}
                     className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
                       signupToggle ? 'bg-green-500' : 'bg-gray-200'
                     }`}
@@ -1904,7 +2291,7 @@ export default function RsvpEditPage() {
 
               {!isLoggedIn && signupToggle ? (
                 <div className="space-y-2">
-                  {renderGoogleSignupButton()}
+                  {renderGoogleSignupButton(handleGoogleSignup)}
                   <p className="text-center text-xs text-gray-500">o</p>
                   <input
                     type="email"
@@ -1933,7 +2320,10 @@ export default function RsvpEditPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => void handleEmailSignup()}
+                    onClick={() => {
+                      trackLead('rsvp_crear_cuenta')
+                      void handleEmailSignup()
+                    }}
                     className="inline-flex w-full items-center justify-center rounded-lg border border-gray-900 bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"
                   >
                     Crear cuenta
