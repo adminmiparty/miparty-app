@@ -355,7 +355,7 @@ export default function EventControlCenterPage() {
   const [loadError, setLoadError] = useState(false)
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
-  const [activeFilters, setActiveFilters] = useState<string[]>(['confirmed', 'declined', 'maybe'])
+  const [activeFilters, setActiveFilters] = useState<string[]>([])
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false)
   const copyInviteLinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -1081,9 +1081,11 @@ export default function EventControlCenterPage() {
                   type="button"
                   onClick={() => toggleFilter('confirmed')}
                   className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm transition-transform hover:scale-105 hover:shadow ${
-                    activeFilters.includes('confirmed')
-                      ? `opacity-100 ring-2 ring-offset-2 ring-offset-white ${statRingActiveClass} shadow-md`
-                      : 'opacity-50'
+                    activeFilters.length === 0
+                      ? 'opacity-100'
+                      : activeFilters.includes('confirmed')
+                        ? `opacity-100 ring-2 ring-offset-2 ring-offset-white ${statRingActiveClass} shadow-md`
+                        : 'opacity-50'
                   }`}
                 >
                   <p className="text-xs text-gray-600">✅ Confirmados</p>
@@ -1093,9 +1095,11 @@ export default function EventControlCenterPage() {
                   type="button"
                   onClick={() => toggleFilter('declined')}
                   className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm transition-transform hover:scale-105 hover:shadow ${
-                    activeFilters.includes('declined')
-                      ? `opacity-100 ring-2 ring-offset-2 ring-offset-white ${statRingActiveClass} shadow-md`
-                      : 'opacity-50'
+                    activeFilters.length === 0
+                      ? 'opacity-100'
+                      : activeFilters.includes('declined')
+                        ? `opacity-100 ring-2 ring-offset-2 ring-offset-white ${statRingActiveClass} shadow-md`
+                        : 'opacity-50'
                   }`}
                 >
                   <p className="text-xs text-gray-600">❌ No pueden</p>
@@ -1105,9 +1109,11 @@ export default function EventControlCenterPage() {
                   type="button"
                   onClick={() => toggleFilter('maybe')}
                   className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm transition-transform hover:scale-105 hover:shadow ${
-                    activeFilters.includes('maybe')
-                      ? `opacity-100 ring-2 ring-offset-2 ring-offset-white ${statRingActiveClass} shadow-md`
-                      : 'opacity-50'
+                    activeFilters.length === 0
+                      ? 'opacity-100'
+                      : activeFilters.includes('maybe')
+                        ? `opacity-100 ring-2 ring-offset-2 ring-offset-white ${statRingActiveClass} shadow-md`
+                        : 'opacity-50'
                   }`}
                 >
                   <p className="text-xs text-gray-600">🤔 Aún no saben</p>
