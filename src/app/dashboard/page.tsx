@@ -8,6 +8,7 @@ import DraftEventListRow from '@/components/DraftEventListRow'
 import GoogleGIcon from '@/components/GoogleGIcon'
 import { ChildrenSection, type DashboardChildRow } from '@/components/ChildrenSection'
 import { brand } from '@/lib/brand'
+import { sanitizePhoneInput, validatePhoneNumber } from '@/lib/phone'
 import { formatEventDayMonthShort } from '@/lib/dates'
 import {
   buildGoogleMapsSearchUrl,
@@ -1718,6 +1719,13 @@ export default function DashboardHomePage() {
       return
     }
 
+    const partnerPhoneValidation = validatePhoneNumber(partnerPhoneNumber, partnerCountryCode)
+    if (!partnerPhoneValidation.valid && partnerPhoneValidation.error !== null) {
+      setPartnerModalError(partnerPhoneValidation.error)
+      setPartnerSaving(false)
+      return
+    }
+
     const dial = resolveDialCode(partnerCountryCode, partnerCustomDialCode)
     if (partnerCountryCode === 'otro' && dial.length <= 1 && partnerPhoneNumber.trim()) {
       setPartnerModalError('Indica un prefijo internacional válido.')
@@ -1974,6 +1982,13 @@ export default function DashboardHomePage() {
 
     if (!profilePhoneNumber.trim()) {
       setProfileError('El teléfono es obligatorio.')
+      setProfileSaving(false)
+      return
+    }
+
+    const profilePhoneValidation = validatePhoneNumber(profilePhoneNumber, profileCountryCode)
+    if (!profilePhoneValidation.valid && profilePhoneValidation.error !== null) {
+      setProfileError(profilePhoneValidation.error)
       setProfileSaving(false)
       return
     }
@@ -3002,7 +3017,7 @@ export default function DashboardHomePage() {
                       inputMode="tel"
                       autoComplete="tel-national"
                       value={profilePhoneNumber}
-                      onChange={(e) => setProfilePhoneNumber(e.target.value)}
+                      onChange={(e) => setProfilePhoneNumber(sanitizePhoneInput(e.target.value))}
                       placeholder="Ej. 612345678"
                       className="input-base min-w-0 flex-1 placeholder:text-gray-400"
                     />
@@ -3324,7 +3339,7 @@ export default function DashboardHomePage() {
                     inputMode="tel"
                     autoComplete="tel-national"
                     value={partnerPhoneNumber}
-                    onChange={(event) => setPartnerPhoneNumber(event.target.value)}
+                    onChange={(event) => setPartnerPhoneNumber(sanitizePhoneInput(event.target.value))}
                     placeholder="Ej. 612345678"
                     className="input-base min-w-0 flex-1 placeholder:text-gray-400"
                   />

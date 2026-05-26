@@ -10,6 +10,7 @@ import type { User } from '@supabase/supabase-js'
 import AppNav from '@/components/AppNav'
 import EventCreationSteps from '@/components/EventCreationSteps'
 import { brand } from '@/lib/brand'
+import { sanitizePhoneInput, validatePhoneNumber } from '@/lib/phone'
 import { trackLead, trackRsvpAttendanceLead, trackViewContent } from '@/lib/meta-pixel'
 import {
   trackLead as trackTikTokLead,
@@ -1402,6 +1403,13 @@ function RsvpFormInner({
       setWelcomePhoneError('El teléfono es obligatorio')
       return
     }
+
+    const welcomePhoneValidation = validatePhoneNumber(welcomePhone, welcomePhoneCode)
+    if (!welcomePhoneValidation.valid && welcomePhoneValidation.error !== null) {
+      setWelcomePhoneError(welcomePhoneValidation.error)
+      return
+    }
+
     await persistWelcomeProfile()
     setModalView('welcome_success')
   }
@@ -1589,6 +1597,13 @@ function RsvpFormInner({
       setError('Indica el prefijo internacional (ej. +44).')
       return
     }
+
+    const phoneValidation = validatePhoneNumber(parentPhoneNumber, parentCountryCode)
+    if (!phoneValidation.valid && phoneValidation.error !== null) {
+      setError(phoneValidation.error)
+      return
+    }
+
     const trimmedParentPhone =
       trimmedParentPhoneNumber.length > 0 ? `${finalParentDial}${trimmedParentPhoneNumber}` : ''
     const trimmedFoodPreference = foodPreference.trim()
@@ -1945,7 +1960,7 @@ END:VCALENDAR`
                 inputMode="tel"
                 value={welcomePhone}
                 onChange={(e) => {
-                  setWelcomePhone(e.target.value)
+                  setWelcomePhone(sanitizePhoneInput(e.target.value))
                   setWelcomePhoneError('')
                 }}
                 placeholder="Ej. 612345678"
@@ -3093,7 +3108,7 @@ END:VCALENDAR`
                   id="parentPhone"
                   type="tel"
                   value={parentPhoneNumber}
-                  onChange={(event) => setParentPhoneNumber(event.target.value)}
+                  onChange={(event) => setParentPhoneNumber(sanitizePhoneInput(event.target.value))}
                   required
                   placeholder="Ej. 612345678"
                   onInvalid={(e) => {

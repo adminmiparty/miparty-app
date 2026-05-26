@@ -11,6 +11,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import MetaPixelPageView from '@/components/MetaPixelPageView'
 import { brand } from '@/lib/brand'
+import { sanitizePhoneInput, validatePhoneNumber } from '@/lib/phone'
 import { trackLead, trackRsvpAttendanceLead } from '@/lib/meta-pixel'
 import { trackLead as trackTikTokLead } from '@/lib/tiktok-pixel'
 import { isActiveEventStatus } from '@/lib/eventLifecycle'
@@ -1115,6 +1116,12 @@ export default function RsvpEditPage() {
     }
     if (attendance === 'confirmed' && hasFoodOptions && !trimmedFoodPreference) {
       setError('Selecciona una opción de comida.')
+      return
+    }
+
+    const phoneValidation = validatePhoneNumber(parentPhoneNumber, parentCountryCode)
+    if (!phoneValidation.valid && phoneValidation.error !== null) {
+      setError(phoneValidation.error)
       return
     }
 
@@ -2236,7 +2243,7 @@ export default function RsvpEditPage() {
                       id="edit-parentPhone"
                       type="tel"
                       value={parentPhoneNumber}
-                      onChange={(e) => setParentPhoneNumber(e.target.value)}
+                      onChange={(e) => setParentPhoneNumber(sanitizePhoneInput(e.target.value))}
                       required
                       placeholder="Ej. 612345678"
                       className={`min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${inputFocusClass}`}

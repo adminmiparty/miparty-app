@@ -2,6 +2,7 @@
 
 import AuthPageShell, { authCardClassName } from '@/components/AuthPageShell'
 import { brand } from '@/lib/brand'
+import { sanitizePhoneInput, validatePhoneNumber } from '@/lib/phone'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useRef, useState } from 'react'
@@ -215,6 +216,12 @@ export default function OnboardingPage() {
       return
     }
 
+    const phoneValidation = validatePhoneNumber(phoneNumber, countryCode)
+    if (!phoneValidation.valid && phoneValidation.error !== null) {
+      setError(phoneValidation.error)
+      return
+    }
+
     if (!birthDay || !birthMonth || !birthYear) {
       setError('Introduce tu fecha de nacimiento')
       return
@@ -374,7 +381,7 @@ export default function OnboardingPage() {
                 inputMode="tel"
                 autoComplete="tel-national"
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                onChange={(e) => setPhoneNumber(sanitizePhoneInput(e.target.value))}
                 placeholder="Ej. 612345678"
                 className={`min-w-0 flex-1 ${brand.formInput}`}
               />

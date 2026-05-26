@@ -3,6 +3,7 @@
 import AppNav from '@/components/AppNav'
 import GoogleGIcon from '@/components/GoogleGIcon'
 import { brand } from '@/lib/brand'
+import { sanitizePhoneInput, validatePhoneNumber } from '@/lib/phone'
 import { createClient } from '@/lib/supabase/client'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -193,6 +194,13 @@ export default function ProfilePage() {
     const google =
       user.app_metadata?.provider === 'google' ||
       (user.identities?.some((identity) => identity.provider === 'google') ?? false)
+
+    const phoneValidation = validatePhoneNumber(phoneNumber, countryCode)
+    if (!phoneValidation.valid && phoneValidation.error !== null) {
+      setError(phoneValidation.error)
+      setSaving(false)
+      return
+    }
 
     const dial = resolveDialCode(countryCode, customDialCode)
     if (countryCode === 'otro' && dial.length <= 1 && phoneNumber.trim()) {
@@ -412,7 +420,7 @@ export default function ProfilePage() {
                     inputMode="tel"
                     autoComplete="tel-national"
                     value={phoneNumber}
-                    onChange={(event) => setPhoneNumber(event.target.value)}
+                    onChange={(event) => setPhoneNumber(sanitizePhoneInput(event.target.value))}
                     placeholder="Ej. 612345678"
                     className={`min-w-0 flex-1 ${brand.formInput}`}
                   />
