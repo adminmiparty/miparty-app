@@ -1,13 +1,15 @@
 'use client'
 
+import { ClickableAvatar } from '@/components/ClickableAvatar'
 import { brand } from '@/lib/brand'
+import { avatarStoragePathFromUrl, removeAvatarFile, safeImageExtension, uploadAvatarFile } from '@/lib/avatarStorage'
 import {
   formatPersonRelationLine,
   normalizePersonRelation,
   type PersonRelation,
 } from '@/lib/personRelation'
-import { Camera, X } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { X } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 export type DashboardChildRow = {
@@ -36,11 +38,6 @@ const avatarColors = [
   'bg-purple-100 text-purple-700',
 ]
 
-function avatarStoragePathFromUrl(url: string): string | null {
-  const match = url.match(/\/avatars\/(.+?)(?:\?|$)/)
-  return match?.[1] ?? null
-}
-
 type ChildrenSectionProps = {
   userId: string
   initialChildren: DashboardChildRow[]
@@ -48,6 +45,7 @@ type ChildrenSectionProps = {
   onAddChild: () => void
   onChildCardPress: (child: DashboardChildRow) => void
   childActionTargetId?: string | null
+  onChildrenChange?: (children: DashboardChildRow[]) => void
 }
 
 export function ChildrenSection({
@@ -57,15 +55,11 @@ export function ChildrenSection({
   onAddChild,
   onChildCardPress,
   childActionTargetId = null,
+  onChildrenChange,
 }: ChildrenSectionProps) {
   const supabase = createClient()
   const [children, setChildren] = useState<DashboardChildRow[]>(initialChildren)
-  const [uploadingId, setUploadingId] = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [pickChildId, setPickChildId] = useState<string | null>(null)
-  const [photoActionChildId, setPhotoActionChildId] = useState<string | null>(null)
   const [showLimitModal, setShowLimitModal] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const todayDate = useCallback(() => {
     const t = new Date()
@@ -76,113 +70,61 @@ export function ChildrenSection({
     setChildren(initialChildren)
   }, [initialChildren])
 
-  const displayed = children.slice(0, 6)
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    const childId = pickChildId
-    e.target.value = ''
-    setPickChildId(null)
-    if (!file || !childId || !file.type.startsWith('image/')) {
-      return
-    }
-
-    const ext = file.name.split('.').pop()?.toLowerCase()
-    const safeExt = ext && ext.length <= 5 && /^[a-z0-9]+$/.test(ext) ? ext : 'jpg'
-    const path = `children/${childId}.${safeExt}`
-
-    setUploadingId(childId)
-    try {
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, {
-        upsert: true,
-        contentType: file.type,
-      })
-      if (uploadError) {
-        return
-      }
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from('avatars').getPublicUrl(path)
-      const publicUrlWithCache = `${publicUrl}?t=${Date.now()}`
-
-      const { error: updateError } = await supabase
-        .from('children')
-        .update({ avatar_url: publicUrlWithCache })
-        .eq('id', childId)
-        .eq('user_id', userId)
-
-      if (updateError) {
-        return
-      }
-
-      setChildren((prev) =>
-        prev.map((c) => (c.id === childId ? { ...c, avatar_url: publicUrlWithCache } : c))
-      )
-    } finally {
-      setUploadingId(null)
-    }
-  }
-
-  const openPicker = (childId: string) => {
-    setPickChildId(childId)
-    requestAnimationFrame(() => {
-      fileInputRef.current?.click()
+  const updateChildren = (updater: (prev: DashboardChildRow[]) => DashboardChildRow[]) => {
+    setChildren((prev) => {
+      const next = updater(prev)
+      onChildrenChange?.(next)
+      return next
     })
   }
 
-  const handleAvatarPress = (child: DashboardChildRow, hasPhoto: boolean) => {
-    if (uploadingId === child.id || deletingId === child.id) {
-      return
+  const handleChildAvatarUpload = async (childId: string, file: File) => {
+    const ext = safeImageExtension(file.name)
+    const path = `children/${childId}.${ext}`
+    const result = await uploadAvatarFile(supabase, path, file)
+    if ('error' in result) {
+      return null
     }
-    if (hasPhoto) {
-      setPhotoActionChildId(child.id)
-      return
+
+    const { error: updateError } = await supabase
+      .from('children')
+      .update({ avatar_url: result.publicUrl })
+      .eq('id', childId)
+      .eq('user_id', userId)
+
+    if (updateError) {
+      return null
     }
-    openPicker(child.id)
+
+    updateChildren((prev) =>
+      prev.map((c) => (c.id === childId ? { ...c, avatar_url: result.publicUrl } : c))
+    )
+    return result.publicUrl
   }
 
-  const handleDeletePhoto = async (childId: string) => {
+  const handleChildAvatarDelete = async (childId: string) => {
     const child = children.find((c) => c.id === childId)
     const avatarUrl = child?.avatar_url?.trim()
     if (!avatarUrl) {
-      setPhotoActionChildId(null)
       return
     }
 
-    setDeletingId(childId)
-    try {
-      const storagePath = avatarStoragePathFromUrl(avatarUrl)
-      if (storagePath) {
-        await supabase.storage.from('avatars').remove([storagePath])
-      }
+    await removeAvatarFile(supabase, avatarUrl)
 
-      const { error: updateError } = await supabase
-        .from('children')
-        .update({ avatar_url: null })
-        .eq('id', childId)
-        .eq('user_id', userId)
+    const { error: updateError } = await supabase
+      .from('children')
+      .update({ avatar_url: null })
+      .eq('id', childId)
+      .eq('user_id', userId)
 
-      if (updateError) {
-        return
-      }
-
-      setChildren((prev) =>
-        prev.map((c) => (c.id === childId ? { ...c, avatar_url: null } : c))
-      )
-      setPhotoActionChildId(null)
-    } finally {
-      setDeletingId(null)
+    if (updateError) {
+      return
     }
+
+    updateChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, avatar_url: null } : c)))
   }
 
-  const handleReplacePhoto = (childId: string) => {
-    setPhotoActionChildId(null)
-    openPicker(childId)
-  }
-
-  const photoActionChild = photoActionChildId
-    ? children.find((c) => c.id === photoActionChildId)
-    : null
+  const displayed = children.slice(0, 6)
 
   const handleAddClick = () => {
     if (children.length >= 6) {
@@ -194,15 +136,6 @@ export function ChildrenSection({
 
   return (
     <section className="mb-5 sm:mb-8">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        aria-hidden
-        onChange={(e) => void handleFileChange(e)}
-      />
-
       {isLoading ? (
         <>
           <div className="mb-3 flex items-center justify-between gap-2">
@@ -253,9 +186,6 @@ export function ChildrenSection({
                 child.birth_date,
                 todayDate()
               )
-              const uploading = uploadingId === child.id
-              const deleting = deletingId === child.id
-              const hasPhoto = Boolean(child.avatar_url?.trim())
               const initials = getInitials(child.name, child.last_name ?? '')
               const avatarColorClass = avatarColors[index % avatarColors.length]
               const isCardActive = childActionTargetId === child.id
@@ -278,41 +208,13 @@ export function ChildrenSection({
                     isCardActive ? `shadow-[var(--shadow-card-hover)] ${brand.cardActiveRing}` : ''
                   }`}
                 >
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleAvatarPress(child, hasPhoto)
-                    }}
-                    disabled={uploading || deleting}
-                    className="group/avatar relative h-16 w-16 shrink-0 cursor-pointer border-0 bg-transparent p-0 disabled:opacity-50"
-                    aria-label={hasPhoto ? 'Opciones de foto' : 'Añadir foto'}
-                  >
-                    {hasPhoto ? (
-                      <img
-                        src={child.avatar_url!}
-                        alt=""
-                        className="avatar-soft h-16 w-16 rounded-full border border-dashed border-gray-300"
-                      />
-                    ) : (
-                      <div
-                        className={`avatar-soft flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-semibold ${avatarColorClass}`}
-                      >
-                        {initials || '?'}
-                      </div>
-                    )}
-                    <div
-                      className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/30 transition-opacity ${
-                        uploading || deleting ? 'opacity-100' : 'opacity-0 group-hover/avatar:opacity-100'
-                      }`}
-                    >
-                      {uploading || deleting ? (
-                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                      ) : (
-                        <Camera className="h-3 w-3 text-white" strokeWidth={2} aria-hidden />
-                      )}
-                    </div>
-                  </button>
+                  <ClickableAvatar
+                    imageUrl={child.avatar_url}
+                    initials={initials || '?'}
+                    initialsClassName={avatarColorClass}
+                    onUpload={(file) => handleChildAvatarUpload(child.id, file)}
+                    onDelete={() => handleChildAvatarDelete(child.id)}
+                  />
                   <div className="flex min-w-0 flex-1 flex-col items-start justify-start gap-1">
                     <p
                       className="text-sm font-medium leading-snug text-gray-800 break-words sm:truncate"
@@ -335,55 +237,6 @@ export function ChildrenSection({
           </div>
         </>
       )}
-
-      {photoActionChild ? (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
-          onClick={() => {
-            if (deletingId !== photoActionChild.id) {
-              setPhotoActionChildId(null)
-            }
-          }}
-        >
-          <div
-            className="w-full max-w-[16rem] rounded-xl bg-white p-4 shadow-xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="child-photo-action-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 id="child-photo-action-title" className="text-sm font-semibold text-gray-900">
-              Foto
-            </h3>
-            <div className="mt-3 flex flex-col gap-2">
-              <button
-                type="button"
-                disabled={deletingId === photoActionChild.id}
-                onClick={() => void handleReplacePhoto(photoActionChild.id)}
-                className={`rounded-lg px-3 py-2 text-sm font-medium ${brand.buttonSecondary}`}
-              >
-                Cambiar foto
-              </button>
-              <button
-                type="button"
-                disabled={deletingId === photoActionChild.id}
-                onClick={() => void handleDeletePhoto(photoActionChild.id)}
-                className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-              >
-                {deletingId === photoActionChild.id ? 'Eliminando…' : 'Eliminar foto'}
-              </button>
-              <button
-                type="button"
-                disabled={deletingId === photoActionChild.id}
-                onClick={() => setPhotoActionChildId(null)}
-                className="rounded-lg px-3 py-2 text-sm text-gray-500 transition hover:bg-gray-50 disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {showLimitModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">

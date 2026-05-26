@@ -6,7 +6,14 @@
 import AppNav from '@/components/AppNav'
 import DraftEventListRow from '@/components/DraftEventListRow'
 import GoogleGIcon from '@/components/GoogleGIcon'
+import { ClickableAvatar } from '@/components/ClickableAvatar'
 import { ChildrenSection, type DashboardChildRow } from '@/components/ChildrenSection'
+import {
+  avatarStoragePathFromUrl,
+  removeAvatarFile,
+  safeImageExtension,
+  uploadAvatarFile,
+} from '@/lib/avatarStorage'
 import { brand } from '@/lib/brand'
 import { sanitizePhoneInput, validatePhoneNumber } from '@/lib/phone'
 import { formatEventDayMonthShort } from '@/lib/dates'
@@ -117,6 +124,7 @@ type FamilyMemberPartner = {
   last_name: string | null
   phone: string | null
   birth_date: string | null
+  avatar_url: string | null
 }
 
 const partnerAvatarColors = [
@@ -208,10 +216,6 @@ function userFirstDisplayName(user: User): string {
     if (first) return first
   }
   return ''
-}
-
-function isValidUrl(url: string) {
-  return url.startsWith('http://') || url.startsWith('https://')
 }
 
 function pickAvatarUrl(value: unknown): string | null {
@@ -901,7 +905,6 @@ export default function DashboardHomePage() {
   const [error, setError] = useState<string | null>(null)
   const [showProximos, setShowProximos] = useState(true)
   const [showPasados, setShowPasados] = useState(false)
-  const [avatarError, setAvatarError] = useState(false)
   const [partner, setPartner] = useState<FamilyMemberPartner | null>(null)
   const [showAddPartnerModal, setShowAddPartnerModal] = useState(false)
   const [partnerFirstName, setPartnerFirstName] = useState('')
@@ -1007,7 +1010,7 @@ export default function DashboardHomePage() {
     async (uid: string) => {
       const { data: familyMembers } = await supabase
         .from('family_members')
-        .select('id, full_name, last_name, phone, birth_date')
+        .select('id, full_name, last_name, phone, birth_date, avatar_url')
         .eq('user_id', uid)
         .order('created_at', { ascending: true })
 
@@ -1389,7 +1392,7 @@ export default function DashboardHomePage() {
 
       const { data: userProfile } = await supabase
         .from('users')
-        .select('first_name, last_name, phone, birth_date')
+        .select('first_name, last_name, phone, birth_date, avatar_url')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -1453,10 +1456,11 @@ export default function DashboardHomePage() {
           setShowProfileModal(true)
         }
         setUserFirstName(userFirstDisplayName(user))
+        const customAvatar = pickAvatarUrl(userProfile?.avatar_url)
         setParentProfile({
           email: user.email ?? '',
           fullName: dbDisplayName || parentFullNameFromUser(user),
-          avatarUrl: parentAvatarFromUser(user),
+          avatarUrl: customAvatar ?? parentAvatarFromUser(user),
           phone,
         })
       }
@@ -1475,7 +1479,7 @@ export default function DashboardHomePage() {
           .order('created_at', { ascending: true }),
         supabase
           .from('family_members')
-          .select('id, full_name, last_name, phone, birth_date')
+          .select('id, full_name, last_name, phone, birth_date, avatar_url')
           .eq('user_id', user.id)
           .order('created_at', { ascending: true }),
       ])
@@ -2167,6 +2171,89 @@ export default function DashboardHomePage() {
     setPasswordSuccess(true)
   }
 
+  const handleParentAvatarUpload = useCallback(
+    async (file: File) => {
+      if (!userId) return null
+      const ext = safeImageExtension(file.name)
+      const result = await uploadAvatarFile(supabase, `users/${userId}.${ext}`, file)
+      if ('error' in result) {
+        return null
+      }
+
+      const { error } = await supabase
+        .from('users')
+        .update({ avatar_url: result.publicUrl })
+        .eq('id', userId)
+
+      if (error) {
+        return null
+      }
+
+      setParentProfile((current) =>
+        current ? { ...current, avatarUrl: result.publicUrl } : current
+      )
+      window.dispatchEvent(new Event('profile-updated'))
+      return result.publicUrl
+    },
+    [userId, supabase]
+  )
+
+  const handleParentAvatarDelete = useCallback(async () => {
+    if (!userId || !parentProfile?.avatarUrl) return
+
+    const url = parentProfile.avatarUrl
+    const storagePath = avatarStoragePathFromUrl(url)
+    if (storagePath?.startsWith('users/')) {
+      await removeAvatarFile(supabase, url)
+    }
+
+    await supabase.from('users').update({ avatar_url: null }).eq('id', userId)
+    const fallback = authUser ? parentAvatarFromUser(authUser) : null
+    setParentProfile((current) =>
+      current ? { ...current, avatarUrl: fallback } : current
+    )
+    window.dispatchEvent(new Event('profile-updated'))
+  }, [userId, parentProfile?.avatarUrl, authUser, supabase])
+
+  const handlePartnerAvatarUpload = useCallback(
+    async (file: File) => {
+      if (!partner?.id) return null
+      const ext = safeImageExtension(file.name)
+      const result = await uploadAvatarFile(supabase, `family_members/${partner.id}.${ext}`, file)
+      if ('error' in result) {
+        return null
+      }
+
+      const { error } = await supabase
+        .from('family_members')
+        .update({ avatar_url: result.publicUrl })
+        .eq('id', partner.id)
+
+      if (error) {
+        return null
+      }
+
+      setPartner((current) =>
+        current ? { ...current, avatar_url: result.publicUrl } : current
+      )
+      return result.publicUrl
+    },
+    [partner?.id, supabase]
+  )
+
+  const handlePartnerAvatarDelete = useCallback(async () => {
+    if (!partner?.id || !partner.avatar_url) return
+
+    const url = partner.avatar_url
+    const storagePath = avatarStoragePathFromUrl(url)
+    if (storagePath?.startsWith('family_members/')) {
+      await removeAvatarFile(supabase, url)
+    }
+
+    await supabase.from('family_members').update({ avatar_url: null }).eq('id', partner.id)
+    setPartner((current) => (current ? { ...current, avatar_url: null } : current))
+  }, [partner, supabase])
+
   const greetingName =
     userDbProfile?.first_name ||
     authUser?.user_metadata?.full_name?.split(' ')[0] ||
@@ -2177,13 +2264,6 @@ export default function DashboardHomePage() {
   const profileInitials = parentProfile
     ? initialsFromDisplay(parentProfile.fullName, parentProfile.email)
     : '?'
-
-  const avatarUrl = parentProfile?.avatarUrl ?? null
-  const showParentAvatar = avatarUrl != null && isValidUrl(avatarUrl) && !avatarError
-
-  useEffect(() => {
-    setAvatarError(false)
-  }, [avatarUrl])
 
   return (
     <main
@@ -2262,22 +2342,19 @@ export default function DashboardHomePage() {
                 >
                   <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
                 </button>
-                {showParentAvatar ? (
-                  <img
-                    src={avatarUrl}
-                    alt=""
-                    referrerPolicy="no-referrer"
-                    onError={() => setAvatarError(true)}
-                    className="h-16 w-16 shrink-0 rounded-full object-cover"
-                  />
-                ) : (
-                  <div
-                    className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-white ${brand.accentBg}`}
-                    aria-hidden
-                  >
-                    {profileInitials.slice(0, 1)}
-                  </div>
-                )}
+                <ClickableAvatar
+                  imageUrl={parentProfile.avatarUrl}
+                  initials={profileInitials.slice(0, 1)}
+                  initialsClassName={`text-white ${brand.accentBg}`}
+                  bordered={false}
+                  onUpload={handleParentAvatarUpload}
+                  onDelete={
+                    parentProfile.avatarUrl &&
+                    avatarStoragePathFromUrl(parentProfile.avatarUrl)?.startsWith('users/')
+                      ? handleParentAvatarDelete
+                      : undefined
+                  }
+                />
                 <div className="min-w-0 flex-1 pr-6">
                   <p className="text-base font-semibold leading-snug text-gray-900 break-words sm:truncate">
                     {parentProfile.fullName ?? 'Tu cuenta'}
@@ -2315,14 +2392,17 @@ export default function DashboardHomePage() {
                     <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
                   </button>
                 ) : null}
-                <div
-                  className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-semibold ${
+                <ClickableAvatar
+                  imageUrl={partner?.avatar_url ?? null}
+                  initials={partner ? getPartnerInitials(partner.full_name, partner.last_name) : '+'}
+                  initialsClassName={
                     partner ? partnerAvatarColors[0] : 'border-2 bg-gray-50 text-gray-400'
-                  }`}
-                  aria-hidden
-                >
-                  {partner ? getPartnerInitials(partner.full_name, partner.last_name) : '+'}
-                </div>
+                  }
+                  disabled={!partner}
+                  onUpload={handlePartnerAvatarUpload}
+                  onDelete={partner?.avatar_url ? handlePartnerAvatarDelete : undefined}
+                  onClickWhenDisabled={() => setShowAddPartnerModal(true)}
+                />
                 <div className={`min-w-0 flex-1 text-left ${partner ? 'pr-6' : ''}`}>
                   {partner ? (
                     <>
@@ -2354,6 +2434,7 @@ export default function DashboardHomePage() {
             onAddChild={() => setShowAddChildModal(true)}
             onChildCardPress={(child) => setChildActionTarget(child)}
             childActionTargetId={childActionTarget?.id ?? null}
+            onChildrenChange={setChildren}
           />
         ) : null}
 
