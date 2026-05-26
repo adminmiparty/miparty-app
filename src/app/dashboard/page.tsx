@@ -933,6 +933,9 @@ export default function DashboardHomePage() {
   const [showPasados, setShowPasados] = useState(false)
   const [partner, setPartner] = useState<FamilyMemberPartner | null>(null)
   const [showAddPartnerModal, setShowAddPartnerModal] = useState(false)
+  const [partnerActionTarget, setPartnerActionTarget] = useState<FamilyMemberPartner | null>(null)
+  const [pendingDeletePartner, setPendingDeletePartner] = useState<FamilyMemberPartner | null>(null)
+  const [partnerDeleteBusy, setPartnerDeleteBusy] = useState(false)
   const [partnerFirstName, setPartnerFirstName] = useState('')
   const [partnerLastName, setPartnerLastName] = useState('')
   const [partnerCountryCode, setPartnerCountryCode] = useState<string>('+34')
@@ -1269,6 +1272,34 @@ export default function DashboardHomePage() {
     setChildDeletedToast(true)
     window.setTimeout(() => setChildDeletedToast(false), 2500)
   }, [pendingDeleteChild, userId, supabase])
+
+  const confirmDeletePartner = useCallback(async () => {
+    if (!pendingDeletePartner || !userId) return
+    const target = pendingDeletePartner
+    setPartnerDeleteBusy(true)
+
+    const avatarUrl = target.avatar_url?.trim()
+    if (avatarUrl) {
+      await removeAvatarFile(supabase, avatarUrl)
+    }
+
+    const { error } = await supabase
+      .from('family_members')
+      .delete()
+      .eq('id', target.id)
+      .eq('user_id', userId)
+
+    setPartnerDeleteBusy(false)
+    setPendingDeletePartner(null)
+
+    if (error) {
+      return
+    }
+
+    setPartner(null)
+    setPartnerActionTarget(null)
+    setShowAddPartnerModal(false)
+  }, [pendingDeletePartner, userId, supabase])
 
   const organizedEventIds = useMemo(() => new Set(events.map((e) => e.id)), [events])
 
@@ -2416,32 +2447,10 @@ export default function DashboardHomePage() {
                 </div>
               </div>
               <div
-                role="button"
-                tabIndex={0}
-                onClick={() => setShowAddPartnerModal(true)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    setShowAddPartnerModal(true)
-                  }
-                }}
-                className={`card-soft relative flex min-h-[5.625rem] cursor-pointer flex-row items-center gap-3 p-3 sm:gap-4 ${
+                className={`card-soft relative flex min-h-[5.625rem] flex-row items-center gap-3 p-3 sm:gap-4 ${
                   partner ? 'border border-gray-100' : 'border border-dashed border-gray-200'
                 }`}
               >
-                {partner ? (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      setShowAddPartnerModal(true)
-                    }}
-                    className="absolute top-2 right-2 rounded-full p-1 text-gray-300 transition hover:bg-gray-100 hover:text-gray-500"
-                    aria-label="Editar pareja"
-                  >
-                    <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
-                  </button>
-                ) : null}
                 <ClickableAvatar
                   imageUrl={partner?.avatar_url ?? null}
                   initials={partner ? getPartnerInitials(partner.full_name, partner.last_name) : '+'}
@@ -2449,11 +2458,33 @@ export default function DashboardHomePage() {
                     partner ? partnerAvatarColors[0] : 'border-2 bg-gray-50 text-gray-400'
                   }
                   disabled={!partner}
+                  photoClickMode={partner ? 'picker-only' : 'default'}
                   onUpload={handlePartnerAvatarUpload}
                   onDelete={partner?.avatar_url?.trim() ? handlePartnerAvatarDelete : undefined}
                   onClickWhenDisabled={() => setShowAddPartnerModal(true)}
                 />
-                <div className={`min-w-0 flex-1 text-left ${partner ? 'pr-6' : ''}`}>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    if (partner) {
+                      setPartnerActionTarget(partner)
+                    } else {
+                      setShowAddPartnerModal(true)
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      if (partner) {
+                        setPartnerActionTarget(partner)
+                      } else {
+                        setShowAddPartnerModal(true)
+                      }
+                    }
+                  }}
+                  className={`min-w-0 flex-1 cursor-pointer text-left outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[var(--brand-focus)] rounded-lg ${partner ? 'pr-2' : ''}`}
+                >
                   {partner ? (
                     <>
                       <p className="text-xs font-medium text-gray-500">Pareja</p>
@@ -3625,6 +3656,143 @@ export default function DashboardHomePage() {
                 saveType="submit"
               />
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {partnerActionTarget ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setPartnerActionTarget(null)}
+          role="presentation"
+        >
+          <div
+            className="relative mx-4 w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="partner-action-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPartnerActionTarget(null)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </button>
+            <h2 id="partner-action-modal-title" className="pr-8 text-lg font-semibold text-gray-900">
+              {partnerDisplayLabel(partnerActionTarget)}
+            </h2>
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const label = partnerDisplayLabel(partnerActionTarget)
+                  const firstName = label.split(' ')[0] || label
+                  const age = calculateAge(partnerActionTarget.birth_date)
+                  const title = age
+                    ? `Cumple ${age + 1} de ${firstName}`
+                    : `Evento de ${firstName}`
+                  setPartnerActionTarget(null)
+                  requestCreateEvent(
+                    `/dashboard/eventos/nuevo?mode=birthday&title=${encodeURIComponent(title)}`
+                  )
+                }}
+                className={brand.modalActionPrimary}
+              >
+                <span className={brand.modalActionPrimaryIcon} aria-hidden>
+                  🎉
+                </span>
+                <span className="text-sm font-medium text-gray-700">Crear evento</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPartnerActionTarget(null)
+                  setShowAddPartnerModal(true)
+                }}
+                className="flex w-full items-center gap-3 rounded-xl bg-gray-50 px-4 py-3 transition hover:bg-gray-100"
+              >
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg"
+                  aria-hidden
+                >
+                  ✏️
+                </span>
+                <span className="text-sm font-medium text-gray-700">Editar perfil</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingDeletePartner(partnerActionTarget)
+                  setPartnerActionTarget(null)
+                }}
+                className="flex w-full items-center gap-3 rounded-xl border border-rose-100/90 bg-rose-50 px-4 py-3 text-left transition hover:bg-rose-100/80"
+              >
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100/90 text-lg"
+                  aria-hidden
+                >
+                  🗑️
+                </span>
+                <span className="text-sm font-medium text-rose-800/90">Eliminar perfil</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingDeletePartner ? (
+        <div
+          className="fixed inset-0 z-[55] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => !partnerDeleteBusy && setPendingDeletePartner(null)}
+          role="presentation"
+        >
+          <div
+            className="relative mx-4 max-h-[min(85vh,calc(100dvh-2rem))] w-full max-w-xs overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-partner-confirm-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              disabled={partnerDeleteBusy}
+              onClick={() => setPendingDeletePartner(null)}
+              className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </button>
+            <h2 id="delete-partner-confirm-title" className="pr-8 text-lg font-semibold text-gray-900">
+              ¿Eliminar pareja?
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-gray-600">
+              Se eliminará el perfil de{' '}
+              <span className="font-medium text-gray-900">
+                {partnerDisplayLabel(pendingDeletePartner)}
+              </span>
+              .
+            </p>
+            <div className="mt-5 flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={partnerDeleteBusy}
+                onClick={() => setPendingDeletePartner(null)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:w-auto sm:min-w-[7.5rem]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={partnerDeleteBusy}
+                onClick={() => void confirmDeletePartner()}
+                className="w-full rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-rose-700 disabled:opacity-60 sm:w-auto sm:min-w-[7.5rem]"
+              >
+                {partnerDeleteBusy ? 'Eliminando…' : 'Eliminar'}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

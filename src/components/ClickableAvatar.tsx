@@ -15,6 +15,8 @@ type ClickableAvatarProps = {
   disabled?: boolean
   bordered?: boolean
   ariaLabel?: string
+  /** default: photo menu when a photo exists; picker-only: always open file selector */
+  photoClickMode?: 'default' | 'picker-only'
   onUpload: (file: File) => Promise<string | null>
   onDelete?: () => Promise<void>
   onClickWhenDisabled?: () => void
@@ -28,6 +30,7 @@ export function ClickableAvatar({
   disabled = false,
   bordered = true,
   ariaLabel = 'Añadir foto',
+  photoClickMode = 'default',
   onUpload,
   onDelete,
   onClickWhenDisabled,
@@ -88,11 +91,11 @@ export function ClickableAvatar({
       return
     }
     if (busy) return
-    if (hasPhoto) {
-      setShowPhotoActions(true)
+    if (photoClickMode === 'picker-only' || !hasPhoto) {
+      openPicker()
       return
     }
-    openPicker()
+    setShowPhotoActions(true)
   }
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {

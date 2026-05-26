@@ -192,19 +192,7 @@ export function ChildrenSection({
               return (
                 <div
                   key={child.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onChildCardPress(child)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      onChildCardPress(child)
-                    }
-                  }}
-                  aria-label={`Opciones de ${fullName}`}
-                  aria-haspopup="menu"
-                  aria-expanded={isCardActive}
-                  className={`card-soft group relative flex min-h-[5rem] w-full cursor-pointer flex-row items-center gap-3 p-3 text-left transition hover:shadow-[var(--shadow-card-hover)] hover:-translate-y-px focus-visible:outline-none sm:p-2 ${brand.cardFocusRing} ${
+                  className={`card-soft group relative flex min-h-[5rem] w-full flex-row items-center gap-3 p-3 text-left transition sm:p-2 ${
                     isCardActive ? `shadow-[var(--shadow-card-hover)] ${brand.cardActiveRing}` : ''
                   }`}
                 >
@@ -219,7 +207,21 @@ export function ChildrenSection({
                         : undefined
                     }
                   />
-                  <div className="flex min-w-0 flex-1 flex-col items-start justify-start gap-1">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onChildCardPress(child)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onChildCardPress(child)
+                      }
+                    }}
+                    aria-label={`Opciones de ${fullName}`}
+                    aria-haspopup="menu"
+                    aria-expanded={isCardActive}
+                    className={`flex min-w-0 flex-1 cursor-pointer flex-col items-start justify-start gap-1 rounded-lg outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[var(--brand-focus)] ${brand.cardFocusRing}`}
+                  >
                     <p
                       className="text-sm font-medium leading-snug text-gray-800 break-words sm:truncate"
                       title={fullName}
