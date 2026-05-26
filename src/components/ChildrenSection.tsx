@@ -2,7 +2,7 @@
 
 import { ClickableAvatar } from '@/components/ClickableAvatar'
 import { brand } from '@/lib/brand'
-import { avatarStoragePathFromUrl, removeAvatarFile, safeImageExtension, uploadAvatarFile } from '@/lib/avatarStorage'
+import { removeAvatarFile, safeImageExtension, uploadAvatarFile } from '@/lib/avatarStorage'
 import {
   formatPersonRelationLine,
   normalizePersonRelation,
@@ -102,28 +102,6 @@ export function ChildrenSection({
     return result.publicUrl
   }
 
-  const handleChildAvatarDelete = async (childId: string) => {
-    const child = children.find((c) => c.id === childId)
-    const avatarUrl = child?.avatar_url?.trim()
-    if (!avatarUrl) {
-      return
-    }
-
-    await removeAvatarFile(supabase, avatarUrl)
-
-    const { error: updateError } = await supabase
-      .from('children')
-      .update({ avatar_url: null })
-      .eq('id', childId)
-      .eq('user_id', userId)
-
-    if (updateError) {
-      return
-    }
-
-    updateChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, avatar_url: null } : c)))
-  }
-
   const displayed = children.slice(0, 6)
 
   const handleAddClick = () => {
@@ -213,7 +191,11 @@ export function ChildrenSection({
                     initials={initials || '?'}
                     initialsClassName={avatarColorClass}
                     onUpload={(file) => handleChildAvatarUpload(child.id, file)}
-                    onDelete={() => handleChildAvatarDelete(child.id)}
+                    onDelete={
+                      child.avatar_url?.trim()
+                        ? () => handleChildAvatarDelete(child.id)
+                        : undefined
+                    }
                   />
                   <div className="flex min-w-0 flex-1 flex-col items-start justify-start gap-1">
                     <p

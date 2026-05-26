@@ -108,8 +108,8 @@ const features: FeatureItem[] = [
 const steps = [
   {
     number: '1',
-    title: 'Crea tu familia',
-    description: 'Añade hijos y alergias.',
+    title: 'Crea tu perfil',
+    description: 'Añade a tus hijos (alergias) y otros familiares y/o amigos.',
     hint: (
       <div className="mx-auto mt-1.5 max-w-[10rem] rounded-lg border border-[var(--brand-border-light)] bg-[var(--brand-primary-light)]/55 px-2.5 py-2 text-left">
         <div className="flex items-center gap-1.5">
@@ -129,8 +129,8 @@ const steps = [
   },
   {
     number: '2',
-    title: 'Crea el evento',
-    description: 'Fecha, lugar y menú.',
+    title: 'Crea tu evento',
+    description: 'Fecha, hora, lugar, opciones de comida, etc.',
     hint: (
       <div className="mx-auto mt-1.5 max-w-[10.5rem] rounded-lg border border-gray-100 bg-white px-2.5 py-2 text-left shadow-[var(--shadow-card)]">
         <p className="text-[10px] font-semibold text-gray-900">Cumple 7 de Sofía</p>
@@ -156,7 +156,7 @@ const steps = [
   {
     number: '3',
     title: 'Comparte la invitación',
-    description: 'Lista para WhatsApp.',
+    description: 'Copia y pega en un grupo de WhatsApp o por separado a tus contactos.',
     hint: (
       <div className="mx-auto mt-1.5 max-w-[11rem] rounded-lg bg-green-50/90 p-1.5 ring-1 ring-green-100/70">
         <div className="rounded-md rounded-tl-sm bg-[#dcf8c6] px-2 py-1.5 text-left text-[9px] leading-snug text-gray-800">
@@ -169,7 +169,8 @@ const steps = [
   {
     number: '4',
     title: 'Todo en un solo lugar',
-    description: 'Sin 100 mensajes en el grupo.',
+    description:
+      'Recibe las respuestas con toda la información necesaria evitando hasta 100 mensajes en tus grupos de WhatsApp.',
     hint: (
       <div className="mx-auto mt-1.5 max-w-[10.5rem] rounded-lg border border-gray-100 bg-white px-2 py-2 shadow-[var(--shadow-card)]">
         <p className="truncate text-[9px] font-semibold text-gray-900">Cumple 7 de Sofía</p>

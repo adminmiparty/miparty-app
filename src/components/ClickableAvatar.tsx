@@ -76,14 +76,19 @@ export function ClickableAvatar({
     })
   }
 
-  const handleAvatarPress = (event: React.MouseEvent) => {
+  const stopCardActivation = (event: React.SyntheticEvent) => {
     event.stopPropagation()
+    event.preventDefault()
+  }
+
+  const handleAvatarPress = (event: React.MouseEvent) => {
+    stopCardActivation(event)
     if (disabled) {
       onClickWhenDisabled?.()
       return
     }
     if (busy) return
-    if (hasPhoto && onDelete) {
+    if (hasPhoto) {
       setShowPhotoActions(true)
       return
     }
@@ -150,9 +155,11 @@ export function ClickableAvatar({
       <button
         type="button"
         onClick={handleAvatarPress}
+        onMouseDown={stopCardActivation}
+        onPointerDown={stopCardActivation}
         disabled={busy && !disabled}
         className={`group/avatar relative h-16 w-16 shrink-0 cursor-pointer border-0 bg-transparent p-0 disabled:cursor-default disabled:opacity-50 ${placeholderClassName ?? ''}`}
-        aria-label={hasPhoto && onDelete ? 'Opciones de foto' : ariaLabel}
+        aria-label={hasPhoto ? 'Opciones de foto' : ariaLabel}
       >
         {showImage ? (
           <img
@@ -185,7 +192,7 @@ export function ClickableAvatar({
         ) : null}
       </button>
 
-      {showPhotoActions && onDelete ? (
+      {showPhotoActions && hasPhoto ? (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
           onClick={() => {
@@ -211,14 +218,16 @@ export function ClickableAvatar({
               >
                 Cambiar foto
               </button>
-              <button
-                type="button"
-                disabled={deleting}
-                onClick={() => void handleDeletePhoto()}
-                className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-              >
-                {deleting ? 'Eliminando…' : 'Eliminar foto'}
-              </button>
+              {onDelete ? (
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => void handleDeletePhoto()}
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                >
+                  {deleting ? 'Eliminando…' : 'Eliminar foto'}
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={deleting}

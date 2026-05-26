@@ -693,11 +693,37 @@ function composeBirthDateIso(day: string, month: string, year: string): string |
   return `${year}-${month}-${day}`
 }
 
+function normalizeBirthDateIso(value: unknown): string | null {
+  if (value == null) return null
+  const raw = String(value).trim()
+  if (!raw) return null
+  const datePart = raw.split('T')[0]?.split(' ')[0] ?? ''
+  const match = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return match ? datePart : null
+}
+
+function userProfileHasBirthDate(value: unknown): boolean {
+  return normalizeBirthDateIso(value) != null
+}
+
+function userNeedsProfileCompletion(
+  userProfile: { phone?: string | null; birth_date?: unknown } | null | undefined
+): boolean {
+  if (!userProfile) return true
+  const phone =
+    typeof userProfile.phone === 'string' && userProfile.phone.trim()
+      ? userProfile.phone.trim()
+      : null
+  if (!phone) return true
+  return !userProfileHasBirthDate(userProfile.birth_date)
+}
+
 function isoToBirthParts(iso: string | null) {
-  if (!iso) {
+  const normalized = normalizeBirthDateIso(iso)
+  if (!normalized) {
     return { day: '', month: '', year: '' }
   }
-  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (!match) {
     return { day: '', month: '', year: '' }
   }
@@ -970,6 +996,7 @@ export default function DashboardHomePage() {
   const [viewChildError, setViewChildError] = useState<string | null>(null)
   const [childUpdateSuccessToast, setChildUpdateSuccessToast] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
+  const [profileModalRequired, setProfileModalRequired] = useState(false)
   const [authUser, setAuthUser] = useState<User | null>(null)
   const [userDbProfile, setUserDbProfile] = useState<{
     first_name: string | null
@@ -1074,12 +1101,12 @@ export default function DashboardHomePage() {
 
   const profileHasChanges = useMemo(() => {
     const birthIso = composeBirthDateIso(profileBirthDay, profileBirthMonth, profileBirthYear)
-    const originalBirth = userDbProfile?.birth_date ?? null
+    const originalBirth = normalizeBirthDateIso(userDbProfile?.birth_date)
     return (
       profileFirstName !== (userDbProfile?.first_name || '') ||
       profileLastName !== (userDbProfile?.last_name || '') ||
       profileCurrentPhone !== profileInitialPhone ||
-      (birthIso ?? null) !== (originalBirth ?? null)
+      (birthIso ?? null) !== originalBirth
     )
   }, [
     profileFirstName,
@@ -1392,7 +1419,7 @@ export default function DashboardHomePage() {
 
       const { data: userProfile } = await supabase
         .from('users')
-        .select('first_name, last_name, phone, birth_date, avatar_url')
+        .select('first_name, last_name, full_name, phone, birth_date, avatar_url')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -1402,26 +1429,26 @@ export default function DashboardHomePage() {
           : null
 
       const dbDisplayName = userProfile
-        ? `${userProfile.first_name ?? ''} ${userProfile.last_name ?? ''}`.trim()
+        ? `${userProfile.first_name ?? ''} ${userProfile.last_name ?? ''}`.trim() ||
+          (typeof userProfile.full_name === 'string' ? userProfile.full_name.trim() : '')
         : ''
 
       if (isMounted) {
         setUserId(user.id)
         setAuthUser(user)
+        const normalizedBirthDate = normalizeBirthDateIso(userProfile?.birth_date)
         setUserDbProfile(
           userProfile
             ? {
                 first_name: userProfile.first_name ?? null,
                 last_name: userProfile.last_name ?? null,
                 phone: userProfile.phone ?? null,
-                birth_date: userProfile.birth_date ?? null,
+                birth_date: normalizedBirthDate,
               }
             : null
         )
-        const birthDateMissing =
-          !userProfile?.birth_date ||
-          (typeof userProfile.birth_date === 'string' && !userProfile.birth_date.trim())
-        if (!userProfile || !phone || birthDateMissing) {
+        if (userNeedsProfileCompletion(userProfile)) {
+          setProfileModalRequired(true)
           let first = userProfile?.first_name?.trim() ?? ''
           let last = userProfile?.last_name?.trim() ?? ''
           if (!first && !last) {
@@ -1970,6 +1997,7 @@ export default function DashboardHomePage() {
     setPasswordSuccess(false)
     setProfileError(null)
     setProfilePhoneNotice(false)
+    setProfileModalRequired(false)
     setShowProfileModal(true)
   }
 
@@ -2033,29 +2061,23 @@ export default function DashboardHomePage() {
 
     const fullPhone = buildFullPhone(profileCountryCode, profileCustomCode, profilePhoneNumber)
 
-    const combinedBirthDate = birthIso
+    const completedAt = new Date().toISOString()
 
-    console.log('Attempting to save profile:', {
-      id: userId,
-      first_name: trimmedFirst,
-      last_name: trimmedLast || null,
-      phone: fullPhone || null,
-      birth_date: combinedBirthDate || null,
-    })
-
-    const { data, error } = await supabase
+    const { data: savedRow, error } = await supabase
       .from('users')
-      .upsert({
-        id: userId,
-        first_name: trimmedFirst,
-        last_name: trimmedLast || null,
-        phone: fullPhone || null,
-        birth_date: birthIso,
-      })
-      .select()
-
-    console.log('Upsert error:', error)
-    console.log('Upsert data:', data)
+      .upsert(
+        {
+          id: userId,
+          first_name: trimmedFirst,
+          last_name: trimmedLast || null,
+          phone: fullPhone,
+          birth_date: birthIso,
+          onboarding_completed_at: completedAt,
+        },
+        { onConflict: 'id' }
+      )
+      .select('first_name, last_name, phone, birth_date')
+      .maybeSingle()
 
     if (error) {
       setProfileError(error.message)
@@ -2063,7 +2085,11 @@ export default function DashboardHomePage() {
       return
     }
 
-    window.dispatchEvent(new Event('profile-updated'))
+    if (!savedRow) {
+      setProfileError('No se pudo guardar el perfil. Inténtalo de nuevo.')
+      setProfileSaving(false)
+      return
+    }
 
     const trimmedEmail = profileEmail.trim()
     if (!profileIsGoogle && trimmedEmail && trimmedEmail !== profileEmailInitial) {
@@ -2084,19 +2110,15 @@ export default function DashboardHomePage() {
       return
     }
 
+    window.dispatchEvent(new Event('profile-updated'))
+
     const phoneChanged = fullPhone !== profileInitialPhone
 
-    const { data: refreshed } = await supabase
-      .from('users')
-      .select('first_name, last_name, phone, birth_date')
-      .eq('id', userId)
-      .maybeSingle()
-
-    const refreshedProfile = refreshed ?? {
-      first_name: trimmedFirst,
-      last_name: trimmedLast || null,
-      phone: fullPhone || null,
-      birth_date: birthIso,
+    const refreshedProfile = {
+      first_name: savedRow.first_name ?? trimmedFirst,
+      last_name: savedRow.last_name ?? trimmedLast || null,
+      phone: savedRow.phone ?? fullPhone,
+      birth_date: normalizeBirthDateIso(savedRow.birth_date) ?? birthIso,
     }
 
     setUserDbProfile({
@@ -2137,6 +2159,7 @@ export default function DashboardHomePage() {
     )
     setProfileEmailInitial(trimmedEmail)
     setProfileSaving(false)
+    setProfileModalRequired(false)
     setShowProfileModal(false)
     setProfilePhoneNotice(phoneChanged)
     setProfileSuccessToast(true)
@@ -2400,7 +2423,7 @@ export default function DashboardHomePage() {
                   }
                   disabled={!partner}
                   onUpload={handlePartnerAvatarUpload}
-                  onDelete={partner?.avatar_url ? handlePartnerAvatarDelete : undefined}
+                  onDelete={partner?.avatar_url?.trim() ? handlePartnerAvatarDelete : undefined}
                   onClickWhenDisabled={() => setShowAddPartnerModal(true)}
                 />
                 <div className={`min-w-0 flex-1 text-left ${partner ? 'pr-6' : ''}`}>
@@ -2886,7 +2909,10 @@ export default function DashboardHomePage() {
                 </h2>
                 <button
                   type="button"
-                  onClick={() => setShowProfileModal(false)}
+                  onClick={() => {
+                    setShowProfileModal(false)
+                    setProfileModalRequired(false)
+                  }}
                   className="shrink-0 rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
                   aria-label="Cerrar"
                 >
@@ -3210,8 +3236,11 @@ export default function DashboardHomePage() {
 
                 <ModalActionButtons
                   saveLabel="Guardar"
-                  onCancel={() => setShowProfileModal(false)}
-                  hasChanges={profileHasChanges}
+                  onCancel={() => {
+                    setShowProfileModal(false)
+                    setProfileModalRequired(false)
+                  }}
+                  hasChanges={profileHasChanges || profileModalRequired}
                   saving={profileSaving}
                   onSave={() => void handleProfileSave()}
                 />
