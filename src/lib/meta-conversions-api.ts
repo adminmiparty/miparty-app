@@ -116,15 +116,21 @@ export async function sendMetaEvent(params: SendMetaEventParams): Promise<void> 
   }
 
   const endpoint = `https://graph.facebook.com/v19.0/${pixelId}/events`
+  const testEventCode = readServerEnv('META_PIXEL_TEST_EVENT_CODE')
+
+  const requestBody: Record<string, unknown> = {
+    data: [serverEvent],
+    access_token: accessToken,
+  }
+  if (testEventCode) {
+    requestBody.test_event_code = testEventCode
+  }
 
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        data: [serverEvent],
-        access_token: accessToken,
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {
