@@ -2163,8 +2163,24 @@ END:VCALENDAR`
         ) : null}
 
         {showWelcomeSecondChild ? (
-          <div className="mt-4 space-y-3">
-            <p className="text-sm font-semibold text-gray-900">Añadir otra persona</p>
+          <div className="relative mt-4 space-y-3">
+            <button
+              type="button"
+              className="absolute right-0 top-0 text-2xl leading-none text-gray-400 hover:text-gray-700"
+              aria-label="Quitar segunda persona"
+              onClick={() => {
+                setShowWelcomeSecondChild(false)
+                setWelcomeChild2FirstName('')
+                setWelcomeChild2LastName('')
+                setWelcomeChild2Relation('hijo')
+                setWelcomeChild2BirthDay('')
+                setWelcomeChild2BirthMonth('')
+                setWelcomeChild2BirthYear('')
+              }}
+            >
+              ×
+            </button>
+            <p className="pr-8 text-sm font-semibold text-gray-900">Añadir otra persona</p>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label htmlFor="welcomeChild2FirstName" className="text-xs font-medium text-gray-600">
