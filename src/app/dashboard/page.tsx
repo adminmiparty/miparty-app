@@ -1131,18 +1131,25 @@ export default function DashboardHomePage() {
 
   const partnerHasChanges = useMemo(() => {
     if (!partner) {
-      return partnerFirstName.trim() !== ''
+      return (
+        partnerFirstName.trim() !== '' ||
+        partnerLastName.trim() !== '' ||
+        partnerPhoneNumber.trim() !== '' ||
+        partnerBirthIso != null
+      )
     }
+    const originalBirth = normalizeBirthDateIso(originalPartnerBirth)
     return (
-      partnerFirstName !== (partner.full_name?.split(' ')[0] || '') ||
-      partnerLastName !== (partner.last_name || '') ||
+      partnerFirstName.trim() !== (partner.full_name?.trim() || '') ||
+      partnerLastName.trim() !== (partner.last_name?.trim() || '') ||
       partnerCurrentPhone !== originalPartnerPhone ||
-      (partnerBirthIso ?? null) !== (originalPartnerBirth ?? null)
+      (partnerBirthIso ?? null) !== originalBirth
     )
   }, [
     partner,
     partnerFirstName,
     partnerLastName,
+    partnerPhoneNumber,
     partnerCurrentPhone,
     originalPartnerPhone,
     partnerBirthIso,
@@ -1716,7 +1723,7 @@ export default function DashboardHomePage() {
       setPartnerBirthDay(birth.day)
       setPartnerBirthMonth(birth.month)
       setPartnerBirthYear(birth.year)
-      setOriginalPartnerBirth(partner.birth_date ?? null)
+      setOriginalPartnerBirth(normalizeBirthDateIso(partner.birth_date))
     } else {
       setPartnerFirstName('')
       setPartnerLastName('')
@@ -1767,38 +1774,58 @@ export default function DashboardHomePage() {
     const fullPhone = buildFullPhone(partnerCountryCode, partnerCustomDialCode, partnerPhoneNumber)
     const birthDate = composeBirthDateIso(partnerBirthDay, partnerBirthMonth, partnerBirthYear)
 
+    const partnerPayload = {
+      full_name: trimmedName,
+      last_name: trimmedLastName || null,
+      phone: fullPhone || null,
+      birth_date: birthDate || null,
+    }
+
     if (partner) {
-      const { error: updateError } = await supabase
+      const { data: saved, error: updateError } = await supabase
         .from('family_members')
-        .update({
-          full_name: trimmedName,
-          last_name: trimmedLastName || null,
-          phone: fullPhone || null,
-          birth_date: birthDate || null,
-        })
+        .update(partnerPayload)
         .eq('id', partner.id)
+        .eq('user_id', userId)
+        .select('id, full_name, last_name, phone, birth_date, avatar_url')
+        .maybeSingle()
 
       if (updateError) {
         setPartnerModalError(updateError.message)
         setPartnerSaving(false)
         return
       }
+      if (!saved) {
+        setPartnerModalError('No se pudo guardar la pareja. Inténtalo de nuevo.')
+        setPartnerSaving(false)
+        return
+      }
+      setPartner(saved)
     } else {
-      const { error: insertError } = await supabase.from('family_members').insert({
-        user_id: userId,
-        full_name: trimmedName,
-        last_name: trimmedLastName || null,
-        phone: fullPhone || null,
-        birth_date: birthDate || null,
-      })
+      const { data: saved, error: insertError } = await supabase
+        .from('family_members')
+        .insert({
+          user_id: userId,
+          ...partnerPayload,
+        })
+        .select('id, full_name, last_name, phone, birth_date, avatar_url')
+        .maybeSingle()
 
       if (insertError) {
         setPartnerModalError(insertError.message)
         setPartnerSaving(false)
         return
       }
+      if (!saved) {
+        setPartnerModalError('No se pudo guardar la pareja. Inténtalo de nuevo.')
+        setPartnerSaving(false)
+        return
+      }
+      setPartner(saved)
     }
 
+    setOriginalPartnerPhone(fullPhone)
+    setOriginalPartnerBirth(birthDate)
     await loadPartner(userId)
     setShowAddPartnerModal(false)
     setPartnerSaving(false)
@@ -3465,7 +3492,7 @@ export default function DashboardHomePage() {
               <ModalActionButtons
                 saveLabel="Guardar"
                 onCancel={() => setShowAddPartnerModal(false)}
-                hasChanges={partnerHasChanges}
+                hasChanges={!partner || partnerHasChanges}
                 saving={partnerSaving}
                 saveType="submit"
               />
