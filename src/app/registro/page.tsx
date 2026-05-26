@@ -8,6 +8,10 @@ import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useState } from 'react'
 import { brand } from '@/lib/brand'
 import { trackCompleteRegistration, trackLead } from '@/lib/meta-pixel'
+import {
+  trackCompleteRegistration as trackTikTokCompleteRegistration,
+  trackLead as trackTikTokLead,
+} from '@/lib/tiktok-pixel'
 import { createClient } from '@/lib/supabase/client'
 
 export default function SignupPage() {
@@ -27,6 +31,7 @@ export default function SignupPage() {
 
   useEffect(() => {
     trackLead('crear_cuenta')
+    trackTikTokLead('crear_cuenta')
   }, [])
 
   useEffect(() => {
@@ -96,6 +101,7 @@ export default function SignupPage() {
     setSignupAutoLogin(Boolean(data.session))
     setSignupSuccess(true)
     trackCompleteRegistration(uid ? `registration-${uid}` : undefined)
+    trackTikTokCompleteRegistration()
     setLoadingSignup(false)
   }
 

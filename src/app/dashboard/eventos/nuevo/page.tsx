@@ -46,6 +46,7 @@ import { X } from 'lucide-react'
 import MetaPixelPageView from '@/components/MetaPixelPageView'
 import { createClient } from '@/lib/supabase/client'
 import { trackLead, trackSchedule } from '@/lib/meta-pixel'
+import { trackLead as trackTikTokLead, trackSchedule as trackTikTokSchedule } from '@/lib/tiktok-pixel'
 import { themes, type ThemeKey } from '@/lib/themes'
 import 'react-day-picker/style.css'
 
@@ -2529,6 +2530,7 @@ function NewEventPageContent() {
     allowUnsavedLeaveRef.current = true
     clearDirtyBaseline()
     trackSchedule(`schedule-${insertedEvent.id}`)
+    trackTikTokSchedule()
     const shareThemeQuery = invitationTheme ? `?theme=${invitationTheme}` : ''
     router.push(`/dashboard/eventos/${insertedEvent.public_slug}/compartir${shareThemeQuery}`)
   }
@@ -2537,6 +2539,7 @@ function NewEventPageContent() {
     if (eventCreationStartedTrackedRef.current) return
     eventCreationStartedTrackedRef.current = true
     trackLead('event_creation_started')
+    trackTikTokLead('event_creation_started')
   }
 
   const buildSubmitParams = () => {

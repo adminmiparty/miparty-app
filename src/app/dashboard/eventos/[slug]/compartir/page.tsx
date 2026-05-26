@@ -23,6 +23,11 @@ import {
   trackPurchase,
   trackViewContent,
 } from '@/lib/meta-pixel'
+import {
+  trackInitiateCheckout as trackTikTokInitiateCheckout,
+  trackPurchase as trackTikTokPurchase,
+  trackViewContent as trackTikTokViewContent,
+} from '@/lib/tiktok-pixel'
 import { postStripeCheckout } from '@/lib/stripe/checkoutClient'
 import { verifyCheckoutReturnWithRetry } from '@/lib/stripe/verifyCheckoutReturn'
 import {
@@ -362,6 +367,7 @@ export default function EventSharePage() {
   useEffect(() => {
     if (!loading && event) {
       trackViewContent()
+      trackTikTokViewContent()
     }
   }, [loading, event])
 
@@ -396,6 +402,7 @@ export default function EventSharePage() {
       }
 
       trackPurchase(1.99, 'EUR', `purchase-${sessionId}`)
+      trackTikTokPurchase(1.99, 'EUR')
       router.replace(`/dashboard/eventos/${result.slug}?published=paid`)
     }
 
@@ -443,6 +450,7 @@ export default function EventSharePage() {
       if (publishData.requiresPayment) {
         setPublishing(false)
         trackInitiateCheckout()
+        trackTikTokInitiateCheckout()
         setShowPaymentModal(true)
         return
       }

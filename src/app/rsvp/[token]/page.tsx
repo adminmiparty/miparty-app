@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase/client'
 import MetaPixelPageView from '@/components/MetaPixelPageView'
 import { brand } from '@/lib/brand'
 import { trackLead, trackRsvpAttendanceLead } from '@/lib/meta-pixel'
+import { trackLead as trackTikTokLead } from '@/lib/tiktok-pixel'
 import { isActiveEventStatus } from '@/lib/eventLifecycle'
 import { getTheme } from '@/lib/themes'
 
@@ -581,6 +582,7 @@ export default function RsvpEditPage() {
   useEffect(() => {
     if (!showConversionModal || conversionModalView !== 'signup') return
     trackLead('rsvp_conversion_modal_shown')
+    trackTikTokLead('rsvp_conversion_modal_shown')
   }, [showConversionModal, conversionModalView])
 
   useEffect(() => {
@@ -1050,6 +1052,7 @@ export default function RsvpEditPage() {
               type="button"
               onClick={() => {
                 trackLead('rsvp_crear_cuenta')
+                trackTikTokLead('rsvp_crear_cuenta')
                 void handleEmailSignup()
               }}
               className="w-full rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white"
@@ -1330,6 +1333,7 @@ export default function RsvpEditPage() {
                     type="button"
                     onClick={() => {
                       trackLead('rsvp_conversion_modal_crear_cuenta')
+                      trackTikTokLead('rsvp_conversion_modal_crear_cuenta')
                       void handleEmailSignupModal()
                     }}
                     className="inline-flex w-full items-center justify-center rounded-lg bg-gray-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800"
@@ -2275,6 +2279,7 @@ export default function RsvpEditPage() {
                       const next = !signupToggle
                       setSignupToggle(next)
                       if (next) trackLead('rsvp_signup_interest')
+                      if (next) trackTikTokLead('rsvp_signup_interest')
                     }}
                     className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
                       signupToggle ? 'bg-green-500' : 'bg-gray-200'
@@ -2322,6 +2327,7 @@ export default function RsvpEditPage() {
                     type="button"
                     onClick={() => {
                       trackLead('rsvp_crear_cuenta')
+                      trackTikTokLead('rsvp_crear_cuenta')
                       void handleEmailSignup()
                     }}
                     className="inline-flex w-full items-center justify-center rounded-lg border border-gray-900 bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"

@@ -11,6 +11,10 @@ import AppNav from '@/components/AppNav'
 import EventCreationSteps from '@/components/EventCreationSteps'
 import { brand } from '@/lib/brand'
 import { trackLead, trackRsvpAttendanceLead, trackViewContent } from '@/lib/meta-pixel'
+import {
+  trackLead as trackTikTokLead,
+  trackViewContent as trackTikTokViewContent,
+} from '@/lib/tiktok-pixel'
 import { eventFlowShellClass, eventFormBrandUi } from '@/lib/eventFormTheme'
 import { getTheme } from '@/lib/themes'
 
@@ -799,12 +803,14 @@ function RsvpFormInner({
   useEffect(() => {
     if (!isPreview) {
       trackViewContent()
+      trackTikTokViewContent()
     }
   }, [isPreview])
 
   useEffect(() => {
     if (!showSignupModal || isPreview || modalView !== 'signup') return
     trackLead('rsvp_conversion_modal_shown')
+    trackTikTokLead('rsvp_conversion_modal_shown')
   }, [showSignupModal, modalView, isPreview])
 
   useEffect(() => {
@@ -2352,6 +2358,7 @@ END:VCALENDAR`
                     type="button"
                     onClick={() => {
                       trackLead('rsvp_conversion_modal_crear_cuenta')
+                      trackTikTokLead('rsvp_conversion_modal_crear_cuenta')
                       void handleEmailSignupModal()
                     }}
                     className="inline-flex w-full items-center justify-center rounded-lg bg-gray-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800"
@@ -3167,6 +3174,7 @@ END:VCALENDAR`
                     const next = !signupToggle
                     setSignupToggle(next)
                     if (next) trackLead('rsvp_signup_interest')
+                    if (next) trackTikTokLead('rsvp_signup_interest')
                   }}
                   className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                     signupToggle ? 'bg-green-500' : 'bg-gray-200'
@@ -3220,6 +3228,7 @@ END:VCALENDAR`
                     disabled={isPreview}
                     onClick={() => {
                       trackLead('rsvp_crear_cuenta')
+                      trackTikTokLead('rsvp_crear_cuenta')
                       void handleEmailSignupInline()
                     }}
                     className="inline-flex w-full items-center justify-center rounded-lg border border-gray-900 bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
