@@ -11,9 +11,9 @@ export type OrganizerBillingConfig = {
 }
 
 function parsePriceEur(raw: string | undefined): number {
-  const normalized = (raw ?? '1.99').replace(',', '.').trim()
+  const normalized = (raw ?? '2.99').replace(',', '.').trim()
   const value = Number.parseFloat(normalized)
-  return Number.isFinite(value) && value > 0 ? value : 1.99
+  return Number.isFinite(value) && value > 0 ? value : 2.99
 }
 
 function formatPriceLabel(eur: number): string {

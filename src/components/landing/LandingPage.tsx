@@ -208,7 +208,7 @@ type PricingPlan = {
 const plans: PricingPlan[] = [
   {
     name: 'Un cumpleaños',
-    price: '1,99 €',
+    price: '2,99 €',
     priceSubtitle: 'Por evento',
     description: 'Todo listo para organizar un cumpleaños sin perseguir mensajes.',
     features: [

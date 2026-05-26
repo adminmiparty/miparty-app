@@ -130,7 +130,7 @@ export function sendTikTokPurchaseEvent(
     userPhone: params.userPhone,
     clientIpAddress: params.clientIpAddress,
     clientUserAgent: params.clientUserAgent,
-    value: params.value ?? 1.99,
+    value: params.value ?? 2.99,
     currency: params.currency ?? 'EUR',
   })
 }

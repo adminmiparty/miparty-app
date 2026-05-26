@@ -401,8 +401,8 @@ export default function EventSharePage() {
         return
       }
 
-      trackPurchase(1.99, 'EUR', `purchase-${sessionId}`)
-      trackTikTokPurchase(1.99, 'EUR')
+      trackPurchase(2.99, 'EUR', `purchase-${sessionId}`)
+      trackTikTokPurchase(2.99, 'EUR')
       router.replace(`/dashboard/eventos/${result.slug}?published=paid`)
     }
 
