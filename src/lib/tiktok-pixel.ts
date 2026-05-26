@@ -8,7 +8,13 @@ type TikTokEventName =
   | 'ClickButton'
   | 'SubmitForm'
 
-type TikTokEventProps = Record<string, string | number | boolean>
+type TikTokContentItem = {
+  content_id: string
+}
+
+type TikTokEventProps = Record<string, string | number | boolean> & {
+  contents?: TikTokContentItem[]
+}
 
 interface TikTokPixel {
   page: () => void
@@ -31,11 +37,13 @@ function track(event: TikTokEventName, props?: TikTokEventProps): void {
 }
 
 export function trackViewContent(contentName?: string): void {
-  if (contentName?.trim()) {
-    track('ViewContent', { content_name: contentName.trim() })
-    return
-  }
-  track('ViewContent')
+  const trimmed = contentName?.trim()
+  const contentId = trimmed && trimmed.length > 0 ? trimmed : 'miparty'
+
+  track('ViewContent', {
+    ...(trimmed ? { content_name: trimmed } : {}),
+    contents: [{ content_id: contentId }],
+  })
 }
 
 export function trackLead(contentName: string): void {
