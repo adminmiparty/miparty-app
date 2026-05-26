@@ -102,6 +102,28 @@ export function ChildrenSection({
     return result.publicUrl
   }
 
+  const handleChildAvatarDelete = async (childId: string) => {
+    const child = children.find((c) => c.id === childId)
+    const avatarUrl = child?.avatar_url?.trim()
+    if (!avatarUrl) {
+      return
+    }
+
+    await removeAvatarFile(supabase, avatarUrl)
+
+    const { error: updateError } = await supabase
+      .from('children')
+      .update({ avatar_url: null })
+      .eq('id', childId)
+      .eq('user_id', userId)
+
+    if (updateError) {
+      return
+    }
+
+    updateChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, avatar_url: null } : c)))
+  }
+
   const displayed = children.slice(0, 6)
 
   const handleAddClick = () => {

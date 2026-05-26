@@ -2116,7 +2116,7 @@ export default function DashboardHomePage() {
 
     const refreshedProfile = {
       first_name: savedRow.first_name ?? trimmedFirst,
-      last_name: savedRow.last_name ?? trimmedLast || null,
+      last_name: savedRow.last_name ?? (trimmedLast || null),
       phone: savedRow.phone ?? fullPhone,
       birth_date: normalizeBirthDateIso(savedRow.birth_date) ?? birthIso,
     }
