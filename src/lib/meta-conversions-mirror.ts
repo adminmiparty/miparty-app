@@ -1,14 +1,16 @@
-import type { MetaServerEventName } from '@/lib/meta-conversions-api'
+import type { MetaPixelEventName } from '@/lib/meta-conversions-api'
 
-type MirrorMetaConversionPayload = {
-  eventName: MetaServerEventName
+export type MirrorMetaConversionPayload = {
+  eventName: MetaPixelEventName
   eventSourceUrl: string
   eventId?: string
+  contentName?: string
   value?: number
   currency?: string
+  userPhone?: string
 }
 
-/** Fire-and-forget server-side Conversions API mirror (via /api/meta/event). */
+/** Fire-and-forget Conversions API gateway (POST /api/meta/event). */
 export function mirrorMetaConversionToServer(payload: MirrorMetaConversionPayload): void {
   if (typeof window === 'undefined') return
 

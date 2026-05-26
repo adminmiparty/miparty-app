@@ -1,65 +1,52 @@
-type FbqCommand = 'track' | 'trackCustom' | 'init'
+import { mirrorMetaConversionToServer } from '@/lib/meta-conversions-mirror'
+import type { MetaPixelEventName } from '@/lib/meta-conversions-api'
 
-type FbqParams = Record<string, string | number | boolean>
-
-interface FbqFunction {
-  (...args: [FbqCommand, string, FbqParams?]): void
-  (...args: [FbqCommand, string]): void
-  callMethod?: (...args: unknown[]) => void
-  queue?: unknown[]
-  loaded?: boolean
-  version?: string
-  push?: FbqFunction
+function eventSourceUrl(): string {
+  if (typeof window === 'undefined') return ''
+  return window.location.href
 }
 
-declare global {
-  interface Window {
-    fbq?: FbqFunction
+function sendPixelEvent(
+  eventName: MetaPixelEventName,
+  options?: {
+    contentName?: string
+    value?: number
+    currency?: string
+    eventId?: string
   }
-}
-
-function hasFbq(): boolean {
-  return typeof window !== 'undefined' && typeof window.fbq === 'function'
-}
-
-function trackStandard(event: string, params?: FbqParams): void {
-  if (!hasFbq()) return
-  if (params) {
-    window.fbq!('track', event, params)
-  } else {
-    window.fbq!('track', event)
-  }
+): void {
+  mirrorMetaConversionToServer({
+    eventName,
+    eventSourceUrl: eventSourceUrl(),
+    eventId: options?.eventId,
+    contentName: options?.contentName,
+    value: options?.value,
+    currency: options?.currency,
+  })
 }
 
 export function trackViewContent(contentName?: string): void {
-  if (!hasFbq()) return
-  if (contentName) {
-    window.fbq!('track', 'ViewContent', { content_name: contentName })
-  } else {
-    window.fbq!('track', 'ViewContent')
-  }
+  sendPixelEvent('ViewContent', { contentName })
 }
 
 export function trackLead(contentName: string): void {
-  if (!hasFbq()) return
-  window.fbq!('track', 'Lead', { content_name: contentName })
+  sendPixelEvent('Lead', { contentName })
 }
 
-export function trackCompleteRegistration(): void {
-  trackStandard('CompleteRegistration')
+export function trackCompleteRegistration(eventId?: string): void {
+  sendPixelEvent('CompleteRegistration', { eventId })
 }
 
-export function trackSchedule(): void {
-  trackStandard('Schedule')
+export function trackSchedule(eventId?: string): void {
+  sendPixelEvent('Schedule', { eventId })
 }
 
-export function trackInitiateCheckout(): void {
-  trackStandard('InitiateCheckout')
+export function trackInitiateCheckout(eventId?: string): void {
+  sendPixelEvent('InitiateCheckout', { eventId })
 }
 
-export function trackPurchase(value: number, currency: string): void {
-  if (!hasFbq()) return
-  window.fbq!('track', 'Purchase', { value, currency })
+export function trackPurchase(value: number, currency: string, eventId?: string): void {
+  sendPixelEvent('Purchase', { value, currency, eventId })
 }
 
 export type RsvpAttendanceStatus = 'confirmed' | 'declined' | 'maybe'

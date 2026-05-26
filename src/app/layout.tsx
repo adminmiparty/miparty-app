@@ -64,6 +64,12 @@ export default function RootLayout({
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} h-full font-sans antialiased`}
     >
+      <head>
+        <meta
+          name="facebook-domain-verification"
+          content="kahvtwp4tj9y068qrykko0wrb3hykp"
+        />
+      </head>
       <body className={`${geistSans.className} min-h-full flex flex-col`}>
         <MetaPixel />
         {children}

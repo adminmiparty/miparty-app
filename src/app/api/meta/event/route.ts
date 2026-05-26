@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import {
-  isMetaServerEventName,
+  isMetaPixelEventName,
   metaRequestContext,
   sendMetaEvent,
-  type MetaServerEventName,
+  type MetaPixelEventName,
 } from '@/lib/meta-conversions-api'
 import { createClient } from '@/lib/supabase/server'
 
@@ -14,6 +14,7 @@ type MetaEventBody = {
   eventSourceUrl?: string
   eventId?: string
   userPhone?: string
+  contentName?: string
   value?: number
   currency?: string
 }
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as MetaEventBody
     const eventName = body.eventName?.trim()
 
-    if (!eventName || !isMetaServerEventName(eventName)) {
+    if (!eventName || !isMetaPixelEventName(eventName)) {
       return NextResponse.json({ ok: false }, { status: 400 })
     }
 
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
       data: { user },
     } = await supabase.auth.getUser()
 
-    const typedEventName = eventName as MetaServerEventName
+    const typedEventName = eventName as MetaPixelEventName
 
     await sendMetaEvent({
       eventName: typedEventName,
@@ -45,8 +46,9 @@ export async function POST(request: Request) {
       userPhone: body.userPhone?.trim(),
       clientIpAddress: requestContext.clientIpAddress,
       clientUserAgent: requestContext.clientUserAgent,
-      value: typedEventName === 'Purchase' ? body.value : undefined,
-      currency: typedEventName === 'Purchase' ? body.currency : undefined,
+      contentName: body.contentName?.trim(),
+      value: body.value,
+      currency: body.currency?.trim(),
     })
   } catch {
     // Silent — never break client flows.

@@ -1,22 +1,33 @@
 import { createHash, randomUUID } from 'crypto'
 import { readServerEnv } from '@/lib/envServer'
 
-export const META_SERVER_EVENT_NAMES = [
+/** Standard Meta Pixel events sent through the Conversions API gateway. */
+export const META_PIXEL_EVENT_NAMES = [
+  'ViewContent',
+  'Lead',
   'CompleteRegistration',
   'Schedule',
+  'InitiateCheckout',
   'Purchase',
 ] as const
 
-export type MetaServerEventName = (typeof META_SERVER_EVENT_NAMES)[number]
+export type MetaPixelEventName = (typeof META_PIXEL_EVENT_NAMES)[number]
+
+/** @deprecated Use MetaPixelEventName */
+export type MetaServerEventName = MetaPixelEventName
+
+/** @deprecated Use META_PIXEL_EVENT_NAMES */
+export const META_SERVER_EVENT_NAMES = META_PIXEL_EVENT_NAMES
 
 export type SendMetaEventParams = {
-  eventName: MetaServerEventName
+  eventName: MetaPixelEventName
   eventSourceUrl: string
   eventId?: string
   userEmail?: string
   userPhone?: string
   clientIpAddress?: string
   clientUserAgent?: string
+  contentName?: string
   value?: number
   currency?: string
 }
@@ -64,8 +75,28 @@ function buildUserData(params: SendMetaEventParams): MetaUserDataPayload {
   return userData
 }
 
-export function isMetaServerEventName(value: string): value is MetaServerEventName {
-  return (META_SERVER_EVENT_NAMES as readonly string[]).includes(value)
+function buildCustomData(params: SendMetaEventParams): Record<string, string | number> | undefined {
+  if (params.eventName === 'Purchase') {
+    if (params.value == null || !params.currency) return undefined
+    return { value: params.value, currency: params.currency }
+  }
+
+  if (params.eventName === 'ViewContent' || params.eventName === 'Lead') {
+    const contentName = params.contentName?.trim()
+    if (!contentName) return undefined
+    return { content_name: contentName }
+  }
+
+  return undefined
+}
+
+export function isMetaPixelEventName(value: string): value is MetaPixelEventName {
+  return (META_PIXEL_EVENT_NAMES as readonly string[]).includes(value)
+}
+
+/** @deprecated Use isMetaPixelEventName */
+export function isMetaServerEventName(value: string): value is MetaPixelEventName {
+  return isMetaPixelEventName(value)
 }
 
 export function metaRequestContext(
@@ -96,6 +127,7 @@ export async function sendMetaEvent(params: SendMetaEventParams): Promise<void> 
   const eventId = params.eventId?.trim() || randomUUID()
   const eventTime = Math.floor(Date.now() / 1000)
   const userData = buildUserData(params)
+  const customData = buildCustomData(params)
 
   const serverEvent: Record<string, unknown> = {
     event_name: params.eventName,
@@ -106,13 +138,8 @@ export async function sendMetaEvent(params: SendMetaEventParams): Promise<void> 
     user_data: userData,
   }
 
-  if (params.eventName === 'Purchase') {
-    if (params.value != null && params.currency) {
-      serverEvent.custom_data = {
-        value: params.value,
-        currency: params.currency,
-      }
-    }
+  if (customData) {
+    serverEvent.custom_data = customData
   }
 
   const endpoint = `https://graph.facebook.com/v19.0/${pixelId}/events`

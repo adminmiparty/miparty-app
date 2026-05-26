@@ -395,7 +395,7 @@ export default function EventSharePage() {
         return
       }
 
-      trackPurchase(1.99, 'EUR')
+      trackPurchase(1.99, 'EUR', `purchase-${sessionId}`)
       router.replace(`/dashboard/eventos/${result.slug}?published=paid`)
     }
 
