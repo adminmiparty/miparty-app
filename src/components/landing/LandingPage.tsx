@@ -196,8 +196,7 @@ type PricingPlan = {
   name: string
   price?: string
   priceSubtitle?: string
-  priceLabel?: string
-  description: string
+  description?: string
   features?: string[]
   highlight: boolean
   comingSoon: boolean
@@ -207,15 +206,16 @@ type PricingPlan = {
 
 const plans: PricingPlan[] = [
   {
-    name: 'Un cumpleaños',
+    name: 'MiParty Clásico',
     price: '2,99 €',
     priceSubtitle: 'Por evento',
-    description: 'Todo listo para organizar un cumpleaños sin perseguir mensajes.',
+    description:
+      'Organiza cumpleaños, bautizos, comuniones y reuniones familiares sin perseguir mensajes.',
     features: [
       'Invitación compartible',
       'Confirmaciones automáticas',
       'Alergias y menú',
-      'Panel para organizar',
+      'Panel para organizar invitados',
     ],
     highlight: true,
     comingSoon: false,
@@ -223,22 +223,46 @@ const plans: PricingPlan[] = [
     ctaHref: '/registro',
   },
   {
-    name: 'Pack familiar',
-    priceLabel: 'Próximamente',
-    description: 'Todos los cumpleaños de tu familia, en un solo lugar.',
+    name: 'MiParty Anual',
     highlight: false,
     comingSoon: true,
     ctaLabel: 'Muy pronto',
   },
   {
-    name: 'De por vida',
-    priceLabel: 'Próximamente',
-    description: 'Guarda recuerdos, invitados y celebraciones para siempre.',
+    name: 'MiParty 4Life',
     highlight: false,
     comingSoon: true,
     ctaLabel: 'Muy pronto',
   },
 ]
+
+function PricingComingSoonPlaceholder({ variant }: { variant: 'annual' | 'lifetime' }) {
+  const isAnnual = variant === 'annual'
+  return (
+    <div
+      className="mt-2 flex flex-1 flex-col blur-[7px] contrast-[0.92] saturate-[0.85] select-none"
+      aria-hidden
+    >
+      <p className="font-display text-5xl font-semibold leading-none text-gray-400">
+        {isAnnual ? '12,99 €' : '29,99 €'}
+      </p>
+      <p className="mt-1 text-sm text-gray-400">{isAnnual ? 'Por año' : 'Para siempre'}</p>
+      <p className="mt-3 text-sm leading-relaxed text-gray-400">
+        {isAnnual
+          ? 'Todos los eventos de tu familia, en un solo lugar.'
+          : 'Recuerdos, invitados y celebraciones guardados para siempre.'}
+      </p>
+      <ul className="mt-4 flex-1 space-y-1.5 text-sm text-gray-400">
+        {(isAnnual
+          ? ['Eventos ilimitados', 'Historial familiar', 'Recordatorios', 'Soporte prioritario']
+          : ['Acceso vitalicio', 'Archivo de celebraciones', 'Invitados guardados', 'Nuevas funciones']
+        ).map((line) => (
+          <li key={line}>· {line}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
 
 const previewCaptions = ['Panel', 'Invitación', 'Menú', 'WhatsApp'] as const
 
@@ -494,38 +518,52 @@ export default function LandingPage() {
                   className={`flex flex-col rounded-[var(--radius-card)] border px-7 py-6 ${
                     plan.highlight
                       ? 'border-[var(--brand-border-light)] bg-white shadow-[0_10px_36px_rgba(67,45,42,0.12)] ring-2 ring-[var(--brand-primary)]'
-                      : 'border-[var(--border-soft)] bg-white/95 shadow-[var(--shadow-card)]'
-                  } ${plan.comingSoon ? 'opacity-[0.97]' : ''}`}
+                      : plan.comingSoon
+                        ? 'border-gray-200/90 bg-gradient-to-b from-white to-gray-50/95 shadow-[var(--shadow-card)]'
+                        : 'border-[var(--border-soft)] bg-white/95 shadow-[var(--shadow-card)]'
+                  }`}
                 >
                   {plan.comingSoon ? (
-                    <span className="mb-3 inline-flex self-start rounded-full bg-[var(--brand-primary-muted)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--brand-accent-dark)]">
+                    <span className="mb-3 inline-flex self-start rounded-full border border-[var(--brand-border-light)] bg-[var(--brand-primary-muted)]/80 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-[var(--brand-accent-dark)]">
                       Próximamente
                     </span>
                   ) : null}
-                  <h3 className="text-base font-semibold text-gray-900">{plan.name}</h3>
-                  {plan.price ? (
+                  <h3
+                    className={`text-base font-semibold ${
+                      plan.comingSoon ? 'text-gray-800' : 'text-gray-900'
+                    }`}
+                  >
+                    {plan.name}
+                  </h3>
+                  {plan.comingSoon ? (
+                    <PricingComingSoonPlaceholder
+                      variant={plan.name === 'MiParty Anual' ? 'annual' : 'lifetime'}
+                    />
+                  ) : (
                     <>
-                      <p className="mt-2 font-display text-5xl font-semibold leading-none text-gray-900">
-                        {plan.price}
-                      </p>
-                      {plan.priceSubtitle ? (
-                        <p className="mt-1 text-sm text-gray-500">{plan.priceSubtitle}</p>
+                      {plan.price ? (
+                        <>
+                          <p className="mt-2 font-display text-5xl font-semibold leading-none text-gray-900">
+                            {plan.price}
+                          </p>
+                          {plan.priceSubtitle ? (
+                            <p className="mt-1 text-sm text-gray-500">{plan.priceSubtitle}</p>
+                          ) : null}
+                        </>
                       ) : null}
+                      {plan.description ? (
+                        <p className="mt-3 text-sm leading-relaxed text-gray-600">{plan.description}</p>
+                      ) : null}
+                      {plan.features ? (
+                        <ul className="mt-4 flex-1 space-y-1.5 text-sm text-gray-600">
+                          {plan.features.map((line) => (
+                            <li key={line}>· {line}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="flex-1" aria-hidden />
+                      )}
                     </>
-                  ) : (
-                    <p className="mt-2 font-display text-3xl font-semibold leading-tight text-gray-700">
-                      {plan.priceLabel}
-                    </p>
-                  )}
-                  <p className="mt-3 text-sm leading-relaxed text-gray-600">{plan.description}</p>
-                  {plan.features ? (
-                    <ul className="mt-4 flex-1 space-y-1.5 text-sm text-gray-600">
-                      {plan.features.map((line) => (
-                        <li key={line}>· {line}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="flex-1" aria-hidden />
                   )}
                   {plan.ctaHref ? (
                     <Link
@@ -539,7 +577,11 @@ export default function LandingPage() {
                     </Link>
                   ) : (
                     <span
-                      className="mt-5 inline-flex cursor-not-allowed justify-center rounded-full border border-[var(--brand-border)] bg-white px-4 py-2.5 text-sm font-medium text-gray-500 opacity-80"
+                      className={`mt-5 inline-flex cursor-not-allowed justify-center rounded-full border px-4 py-2.5 text-sm font-medium ${
+                        plan.comingSoon
+                          ? 'border-gray-200 bg-white/90 text-gray-500'
+                          : 'border-[var(--brand-border)] bg-white text-gray-500 opacity-80'
+                      }`}
                       aria-disabled
                     >
                       {plan.ctaLabel}
