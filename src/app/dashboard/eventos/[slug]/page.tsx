@@ -6,7 +6,8 @@
 
 import AppNav from '@/components/AppNav'
 import Link from 'next/link'
-import { Contact, Copy, LayoutGrid, MessageCircle, Share2, Table2, X } from 'lucide-react'
+import { Contact, Copy, LayoutGrid, MessageCircle, Pencil, Share2, Table2, X } from 'lucide-react'
+import OrganizerRsvpEditModal from '@/components/dashboard/OrganizerRsvpEditModal'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { subDays } from 'date-fns'
@@ -57,6 +58,7 @@ type RsvpItem = {
   child_name: string
   guest_parent_name: string
   guest_parent_phone: string | null
+  guest_parent_email: string | null
   attendance_status: 'confirmed' | 'declined' | 'maybe' | null
   food_preference: string | null
   allergy_notes: string | null
@@ -226,6 +228,25 @@ function openGuestWhatsApp(phone: string, childName: string) {
   return true
 }
 
+function RsvpEditIconButton({
+  onClick,
+  className = '',
+}: {
+  onClick: () => void
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 ${className}`}
+      aria-label="Editar invitado"
+    >
+      <Pencil className="h-4 w-4" aria-hidden />
+    </button>
+  )
+}
+
 function RsvpContactIconButton({
   rsvp,
   onOpen,
@@ -361,6 +382,7 @@ export default function EventControlCenterPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [guestContactModal, setGuestContactModal] = useState<GuestContactTarget | null>(null)
+  const [editingRsvp, setEditingRsvp] = useState<RsvpItem | null>(null)
   const [confirmingCheckoutReturn, setConfirmingCheckoutReturn] = useState(false)
   const [checkoutVerifyError, setCheckoutVerifyError] = useState<string | null>(null)
   const [showPublishedSuccess, setShowPublishedSuccess] = useState(false)
@@ -528,7 +550,7 @@ export default function EventControlCenterPage() {
       const { data: rsvpRows } = await supabase
         .from('rsvps')
         .select(
-          'id, child_name, guest_parent_name, guest_parent_phone, attendance_status, food_preference, allergy_notes, extra_notes, is_family'
+          'id, child_name, guest_parent_name, guest_parent_phone, guest_parent_email, attendance_status, food_preference, allergy_notes, extra_notes, is_family'
         )
         .eq('event_id', eventRow.id)
         .order('created_at', { ascending: false })
@@ -640,7 +662,7 @@ export default function EventControlCenterPage() {
   }, [event])
 
   const showFoodColumn = Boolean(event?.enable_food_options && foodOptionLabels.length > 0)
-  const rsvpTableColCount = showFoodColumn ? 6 : 5
+  const rsvpTableColCount = (showFoodColumn ? 6 : 5) + 1
 
   const dashboardGiftLine = event ? formatDashboardGiftLine(event) : null
   const hasLocationDetails =
@@ -1279,7 +1301,7 @@ export default function EventControlCenterPage() {
                                     ) : null}
                                   </div>
                                 </div>
-                                <div className="flex shrink-0 items-center gap-2">
+                                <div className="flex shrink-0 items-center gap-1">
                                   <RsvpContactIconButton
                                     rsvp={rsvp}
                                     onOpen={setGuestContactModal}
@@ -1287,6 +1309,7 @@ export default function EventControlCenterPage() {
                                   <span className={`rounded-full border px-2 py-1 text-xs font-medium ${status.badge}`}>
                                     {status.label}
                                   </span>
+                                  <RsvpEditIconButton onClick={() => setEditingRsvp(rsvp)} />
                                 </div>
                               </div>
                               {showFoodColumn && rsvp.food_preference ? (
@@ -1316,6 +1339,9 @@ export default function EventControlCenterPage() {
                             ) : null}
                             <th className="whitespace-nowrap px-3 py-2">Alergias</th>
                             <th className="whitespace-nowrap px-3 py-2">Mensaje</th>
+                            <th className="whitespace-nowrap px-2 py-2 text-center">
+                              <span className="sr-only">Editar</span>
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1389,6 +1415,12 @@ export default function EventControlCenterPage() {
                                   ) : (
                                     <span className="text-gray-300">—</span>
                                   )}
+                                </td>
+                                <td className="whitespace-nowrap px-2 py-2 text-center">
+                                  <RsvpEditIconButton
+                                    onClick={() => setEditingRsvp(rsvp)}
+                                    className="mx-auto"
+                                  />
                                 </td>
                               </tr>
                             )
@@ -1471,6 +1503,24 @@ export default function EventControlCenterPage() {
         <GuestContactModal
           contact={guestContactModal}
           onClose={() => setGuestContactModal(null)}
+          onToast={showToast}
+        />
+      ) : null}
+
+      {editingRsvp && event ? (
+        <OrganizerRsvpEditModal
+          rsvp={editingRsvp}
+          eventId={event.id}
+          enableFoodOptions={Boolean(event.enable_food_options)}
+          foodOptionLabels={foodOptionLabels}
+          primaryButtonClass={primaryButtonClass}
+          onClose={() => setEditingRsvp(null)}
+          onSaved={(updated) => {
+            setRsvps((prev) => prev.map((row) => (row.id === updated.id ? updated : row)))
+          }}
+          onDeleted={(id) => {
+            setRsvps((prev) => prev.filter((row) => row.id !== id))
+          }}
           onToast={showToast}
         />
       ) : null}
