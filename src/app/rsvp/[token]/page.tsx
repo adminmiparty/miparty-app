@@ -2044,17 +2044,6 @@ export default function RsvpEditPage() {
               >
                 ❌ No
               </button>
-              <button
-                type="button"
-                onClick={() => handleAttendancePickFromSummary('maybe')}
-                className={`inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
-                  attendance === 'maybe'
-                    ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
-                    : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
-                }`}
-              >
-                <span className="text-sm">🤔 Aún no lo sé</span>
-              </button>
             </div>
           </article>
         ) : null}

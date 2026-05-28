@@ -1850,7 +1850,7 @@ END:VCALENDAR`
     const shouldDeselect = attendance === nextStatus
     setAttendance(shouldDeselect ? null : nextStatus)
     if (!shouldDeselect) {
-      if (nextStatus === 'declined' || nextStatus === 'maybe') {
+      if (nextStatus === 'declined') {
         setTimeout(() => {
           window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
         }, 0)
@@ -2771,18 +2771,6 @@ END:VCALENDAR`
           }`}
         >
           ❌ No
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleAttendanceSelect('maybe')}
-          className={`pointer-events-auto inline-flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm font-medium transition ${
-            attendance === 'maybe'
-              ? `${activeTheme.border} ${activeTheme.button} text-gray-900`
-              : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
-          }`}
-        >
-          <span className="text-sm">🤔 Aún no lo sé</span>
         </button>
       </div>
 

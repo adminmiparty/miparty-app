@@ -563,7 +563,6 @@ export default function EventControlCenterPage() {
 
   const confirmedCount = rsvps.filter((rsvp) => rsvp.attendance_status === 'confirmed').length
   const declinedCount = rsvps.filter((rsvp) => rsvp.attendance_status === 'declined').length
-  const maybeCount = rsvps.filter((rsvp) => rsvp.attendance_status === 'maybe').length
   const pendingCount = 0
 
   const todayIso = useMemo(() => localTodayIsoDate(), [])
@@ -602,9 +601,8 @@ export default function EventControlCenterPage() {
   }, [rsvps, activeFilters])
 
   const showDemoLucía = activeFilters.length === 0 || activeFilters.includes('confirmed')
-  const showDemoCarlos = activeFilters.length === 0 || activeFilters.includes('maybe')
   const showDemoEmma = activeFilters.length === 0 || activeFilters.includes('declined')
-  const anyDemoRowVisible = showDemoLucía || showDemoCarlos || showDemoEmma
+  const anyDemoRowVisible = showDemoLucía || showDemoEmma
 
   const foodPreferenceCounts = useMemo(() => {
     const counts = new Map<string, number>()
@@ -1076,7 +1074,7 @@ export default function EventControlCenterPage() {
 
           <div className="w-full space-y-4">
             <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl">
-              <div className="mx-auto grid w-full grid-cols-3 gap-3">
+              <div className="mx-auto grid w-full grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => toggleFilter('confirmed')}
@@ -1104,20 +1102,6 @@ export default function EventControlCenterPage() {
                 >
                   <p className="text-xs text-gray-600">❌ No pueden</p>
                   <p className={`mt-1 text-2xl font-bold ${accentTextClass}`}>{declinedCount}</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toggleFilter('maybe')}
-                  className={`cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm transition-transform hover:scale-105 hover:shadow ${
-                    activeFilters.length === 0
-                      ? 'opacity-100'
-                      : activeFilters.includes('maybe')
-                        ? `opacity-100 ring-2 ring-offset-2 ring-offset-white ${statRingActiveClass} shadow-md`
-                        : 'opacity-50'
-                  }`}
-                >
-                  <p className="text-xs text-gray-600">🤔 Aún no saben</p>
-                  <p className={`mt-1 text-2xl font-bold ${accentTextClass}`}>{maybeCount}</p>
                 </button>
               </div>
               {rsvps.length === 0 ? (
@@ -1151,27 +1135,6 @@ export default function EventControlCenterPage() {
                               <p className="mt-1 rounded-lg bg-gray-100/80 px-2 py-1 text-sm italic text-gray-500">
                                 💬 ¡Qué ilusión, gracias por invitarnos!
                               </p>
-                            </article>
-                          ) : null}
-                          {showDemoCarlos ? (
-                            <article className="pointer-events-none rounded-xl border border-dashed border-gray-200 bg-gray-50 p-3 opacity-70">
-                              <div className="flex items-start justify-between gap-2">
-                                <div>
-                                  <p className="text-sm font-semibold text-gray-500">Carlos Díaz</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="inline-flex rounded-lg p-2 text-gray-400">
-                                    <Contact className="h-4 w-4" aria-hidden />
-                                  </span>
-                                  <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">
-                                    🤔 Aún no lo sé
-                                  </span>
-                                </div>
-                              </div>
-                              {showFoodColumn ? (
-                                <p className="mt-2 text-sm text-gray-500">🌭 Perrito</p>
-                              ) : null}
-                              <p className="mt-1 text-sm text-gray-500">⚠️ Gluten</p>
                             </article>
                           ) : null}
                           {showDemoEmma ? (
@@ -1245,28 +1208,6 @@ export default function EventControlCenterPage() {
                                     <td className="whitespace-nowrap px-3 py-2 min-w-[120px] text-gray-700" title="¡Qué ilusión, gracias por invitarnos!">
                                       ¡Qué ilusión, gracias por invitarnos!
                                     </td>
-                                  </tr>
-                                ) : null}
-                                {showDemoCarlos ? (
-                                  <tr className="border-b border-gray-100 bg-gray-50 italic text-gray-400 opacity-70">
-                                    <td className="whitespace-nowrap px-3 py-2 font-medium">Carlos Díaz</td>
-                                    <td className="whitespace-nowrap px-3 py-2 text-center text-gray-400">
-                                      <Contact className="mx-auto h-4 w-4" aria-hidden />
-                                    </td>
-                                    <td className="whitespace-nowrap px-3 py-2">
-                                      <span className="whitespace-nowrap rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-400">
-                                        🤔 Aún no lo sé
-                                      </span>
-                                    </td>
-                                    {showFoodColumn ? (
-                                      <td className="whitespace-nowrap px-3 py-2" title="🌭 Perrito">
-                                        🌭 Perrito
-                                      </td>
-                                    ) : null}
-                                    <td className="whitespace-nowrap px-3 py-2" title="Gluten">
-                                      Gluten
-                                    </td>
-                                    <td className="whitespace-nowrap px-3 py-2 text-gray-400">—</td>
                                   </tr>
                                 ) : null}
                                 {showDemoEmma ? (
