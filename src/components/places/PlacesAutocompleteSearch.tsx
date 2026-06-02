@@ -37,7 +37,7 @@ export type PlacesAutocompleteSearchProps = {
   label?: string
   placeholder?: string
   onPlaceSelected: (place: ResolvedGooglePlace) => void
-  onRequestManual: () => void
+  onRequestManual: (reason: 'user' | 'fallback') => void
 }
 
 export default function PlacesAutocompleteSearch({
@@ -74,7 +74,7 @@ export default function PlacesAutocompleteSearch({
   useEffect(() => {
     if (!hasGoogleMapsApiKey()) {
       setPlacesError('Google Maps no está configurado. Puedes introducir la dirección manualmente.')
-      onRequestManual()
+      onRequestManual('fallback')
       return
     }
 
@@ -92,7 +92,7 @@ export default function PlacesAutocompleteSearch({
         }
         if (!cancelled) {
           setPlacesError('No pudimos cargar la búsqueda de Google Maps. Introduce la dirección manualmente.')
-          onRequestManual()
+          onRequestManual('fallback')
         }
       })
 
@@ -244,7 +244,7 @@ export default function PlacesAutocompleteSearch({
             No encontramos resultados. Puedes{' '}
             <button
               type="button"
-              onClick={onRequestManual}
+              onClick={() => onRequestManual('user')}
               className="font-medium text-gray-700 underline hover:text-gray-900"
             >
               introducir la dirección manualmente
@@ -258,7 +258,7 @@ export default function PlacesAutocompleteSearch({
 
       <button
         type="button"
-        onClick={onRequestManual}
+        onClick={() => onRequestManual('user')}
         className="text-sm font-medium text-gray-500 underline hover:text-gray-800"
       >
         Introducir dirección manualmente

@@ -57,6 +57,13 @@ export default function EventLocationSection({
     setLocationPlaceId('')
   }, [setLocationPlaceId, setUseManualLocation])
 
+  const handleRequestManual = useCallback(
+    (_reason: 'user' | 'fallback') => {
+      switchToManual()
+    },
+    [switchToManual]
+  )
+
   const switchToGoogleSearch = useCallback(() => {
     setUseManualLocation(false)
     setLocationStreet('')
@@ -124,7 +131,7 @@ export default function EventLocationSection({
               inputClassName={inputClassName}
               label="Buscar lugar *"
               onPlaceSelected={handlePlaceSelected}
-              onRequestManual={switchToManual}
+              onRequestManual={handleRequestManual}
             />
           )}
         </div>
