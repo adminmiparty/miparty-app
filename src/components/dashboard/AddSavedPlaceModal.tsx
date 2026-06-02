@@ -32,10 +32,16 @@ export default function AddSavedPlaceModal({
   const [placeCity, setPlaceCity] = useState('')
   const [placeModalError, setPlaceModalError] = useState<string | null>(null)
   const [placeSaving, setPlaceSaving] = useState(false)
+  const [googleFallbackNotice, setGoogleFallbackNotice] = useState<string | null>(null)
 
-  const openManualEntry = useCallback(() => {
+  const openManualEntry = useCallback((reason: 'user' | 'fallback') => {
     setUseManualLocation(true)
     setPlaceModalError(null)
+    setGoogleFallbackNotice(
+      reason === 'fallback'
+        ? 'No pudimos cargar Google Maps en este dispositivo. Puedes guardar el lugar manualmente.'
+        : null
+    )
   }, [])
 
   const persistAndClose = useCallback(
@@ -154,11 +160,18 @@ export default function AddSavedPlaceModal({
                 onClick={() => {
                   setUseManualLocation(false)
                   setPlaceModalError(null)
+                  setGoogleFallbackNotice(null)
                 }}
                 className="text-sm font-medium text-gray-500 underline hover:text-gray-800"
               >
                 Buscar en Google Maps
               </button>
+
+              {googleFallbackNotice ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  {googleFallbackNotice}
+                </p>
+              ) : null}
 
               <div>
                 <label htmlFor="placeName" className="text-sm font-medium text-gray-700">
