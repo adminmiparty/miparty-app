@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { parseStoredLocationAddress } from '@/lib/eventLocation'
 
 export type SavedPlace = {
   id: string
@@ -9,6 +10,32 @@ export type SavedPlace = {
   number: string
   postal: string
   city: string
+  location_place_id?: string
+}
+
+export type EventLocationForSavedPlace = {
+  location_name: string
+  location_address: string
+  google_maps_url: string
+  location_place_id?: string | null
+}
+
+const DRAFT_LOCATION_ADDRESS_PLACEHOLDER = '\u2014, \u2014 \u2014'
+
+export function isPlaceholderLocationName(name: string): boolean {
+  const trimmed = name.trim()
+  return trimmed === '' || trimmed === '\u2014' || trimmed === '—'
+}
+
+export function isPlaceholderLocationAddress(address: string): boolean {
+  const trimmed = address.trim()
+  if (!trimmed) {
+    return true
+  }
+  if (trimmed === DRAFT_LOCATION_ADDRESS_PLACEHOLDER) {
+    return true
+  }
+  return /^[\u2014—\s,]+$/.test(trimmed)
 }
 
 export type DashboardLocationCard = {
@@ -48,6 +75,102 @@ export function persistDismissedLocationNames(userId: string, names: string[]) {
 
 export function normalizeLocationNameKey(name: string) {
   return name.trim().toLowerCase()
+}
+
+function normalizeAddressKey(address: string) {
+  return address.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function normalizeMapsUrlKey(url: string) {
+  return url.trim().toLowerCase()
+}
+
+function findMatchingSavedPlaceIndex(
+  places: SavedPlace[],
+  location: EventLocationForSavedPlace
+): number {
+  const placeId = location.location_place_id?.trim() ?? ''
+  if (placeId) {
+    const byPlaceId = places.findIndex((p) => (p.location_place_id?.trim() ?? '') === placeId)
+    if (byPlaceId >= 0) {
+      return byPlaceId
+    }
+  }
+
+  const mapsUrl = location.google_maps_url.trim()
+  if (mapsUrl) {
+    const mapsKey = normalizeMapsUrlKey(mapsUrl)
+    const byMaps = places.findIndex(
+      (p) => p.google_maps_url.trim() !== '' && normalizeMapsUrlKey(p.google_maps_url) === mapsKey
+    )
+    if (byMaps >= 0) {
+      return byMaps
+    }
+  }
+
+  const nameKey = normalizeLocationNameKey(location.location_name)
+  const addressKey = normalizeAddressKey(location.location_address)
+  return places.findIndex(
+    (p) =>
+      normalizeLocationNameKey(p.location_name) === nameKey &&
+      normalizeAddressKey(p.location_address) === addressKey
+  )
+}
+
+/** Persists event location to local saved places (deduped). No-op for placeholders or SSR. */
+export function upsertSavedPlaceFromEventLocation(
+  userId: string,
+  location: EventLocationForSavedPlace
+): void {
+  if (typeof window === 'undefined' || !userId) {
+    return
+  }
+
+  const locationName = location.location_name.trim()
+  const locationAddress = location.location_address.trim()
+  if (isPlaceholderLocationName(locationName) || isPlaceholderLocationAddress(locationAddress)) {
+    return
+  }
+
+  const parsed = parseStoredLocationAddress(locationAddress)
+  const placeId = location.location_place_id?.trim() ?? ''
+  const mapsUrl = location.google_maps_url.trim()
+
+  const places = loadSavedPlaces(userId)
+  const matchIndex = findMatchingSavedPlaceIndex(places, {
+    location_name: locationName,
+    location_address: locationAddress,
+    google_maps_url: mapsUrl,
+    location_place_id: placeId || null,
+  })
+
+  if (matchIndex >= 0) {
+    const existing = places[matchIndex]
+    places[matchIndex] = {
+      ...existing,
+      location_name: locationName,
+      location_address: locationAddress,
+      google_maps_url: mapsUrl || existing.google_maps_url,
+      location_place_id: placeId || existing.location_place_id,
+      street: parsed.street || existing.street,
+      postal: parsed.postal || existing.postal,
+      city: parsed.city || existing.city,
+    }
+  } else {
+    places.push({
+      id: crypto.randomUUID(),
+      location_name: locationName,
+      location_address: locationAddress,
+      google_maps_url: mapsUrl,
+      street: parsed.street,
+      number: '',
+      postal: parsed.postal,
+      city: parsed.city,
+      ...(placeId ? { location_place_id: placeId } : {}),
+    })
+  }
+
+  persistSavedPlaces(userId, places)
 }
 
 export function buildPlaceAddressLine(
@@ -119,8 +242,10 @@ export function mergeEventAndSavedLocations(
 
   for (const e of events) {
     const n = e.location_name?.trim()
-    if (!n) continue
-    const address = e.location_address?.trim() ?? null
+    if (!n || isPlaceholderLocationName(n)) continue
+    const rawAddress = e.location_address?.trim() ?? ''
+    const address =
+      rawAddress && !isPlaceholderLocationAddress(rawAddress) ? rawAddress : null
     const mapsUrl = e.google_maps_url?.trim() || null
     const existing = m.get(n)
     if (!existing) {
@@ -143,7 +268,7 @@ export function mergeEventAndSavedLocations(
 
   for (const place of savedPlaces) {
     const n = place.location_name.trim()
-    if (!n) continue
+    if (!n || isPlaceholderLocationName(n)) continue
     const existing = m.get(n)
     if (existing) {
       m.set(n, {

@@ -29,6 +29,14 @@ import {
   themeForPersistence,
   type SelectedInvitationTheme,
 } from '@/lib/eventFormTheme'
+import EventLocationSection from '@/components/places/EventLocationSection'
+import {
+  getEventLocationFormState,
+  initEventLocationFromStored,
+  resolveEventLocationForSave,
+  validateEventLocation,
+} from '@/lib/eventLocation'
+import { upsertSavedPlaceFromEventLocation } from '@/lib/savedPlaces'
 import { createClient } from '@/lib/supabase/client'
 import { themes, type ThemeKey } from '@/lib/themes'
 import 'react-day-picker/style.css'
@@ -293,6 +301,7 @@ type EventRow = {
   location_name: string | null
   location_address: string | null
   google_maps_url: string | null
+  location_place_id: string | null
   gift_option: 'sin_regalo' | 'regalo_libre' | 'bizum_pool' | null
   bizum_phone: string | null
   rsvp_deadline_days: number | null
@@ -307,20 +316,6 @@ type EventRow = {
   invitation_image_zoom: number | null
   event_type: string | null
   public_slug: string
-}
-
-function parseStoredLocationAddress(address: string) {
-  const segments = address.split(',').map((part) => part.trim())
-  if (segments.length >= 2) {
-    const street = segments[0] ?? ''
-    const tail = segments.slice(1).join(', ').trim()
-    const tailMatch = tail.match(/^(\S+)\s+(.+)$/)
-    if (tailMatch) {
-      return { street, postal: tailMatch[1], city: tailMatch[2] }
-    }
-    return { street, postal: '', city: tail }
-  }
-  return { street: address.trim(), postal: '', city: '' }
 }
 
 const EXTRA_INTERNATIONAL_PREFIXES_LONGEST_FIRST = Array.from(
@@ -574,6 +569,9 @@ export default function EditEventPage() {
   const [pickupTime, setPickupTime] = useState('')
 
   const [locationName, setLocationName] = useState('')
+  const [locationPlaceId, setLocationPlaceId] = useState('')
+  const [locationFormattedAddress, setLocationFormattedAddress] = useState('')
+  const [useManualLocation, setUseManualLocation] = useState(false)
   const [locationStreet, setLocationStreet] = useState('')
   const [locationCity, setLocationCity] = useState('')
   const [locationPostal, setLocationPostal] = useState('')
@@ -598,6 +596,37 @@ export default function EditEventPage() {
   const [bizumDialOpen, setBizumDialOpen] = useState(false)
   const organizerDialRef = useRef<HTMLDivElement>(null)
   const bizumDialRef = useRef<HTMLDivElement>(null)
+
+  const applyStoredEventLocation = (
+    row: Pick<EventRow, 'location_name' | 'location_address' | 'google_maps_url' | 'location_place_id'>
+  ) => {
+    const state = initEventLocationFromStored(
+      row.location_name,
+      row.location_address,
+      row.google_maps_url,
+      row.location_place_id
+    )
+    setUseManualLocation(state.useManualLocation)
+    setLocationPlaceId(state.locationPlaceId)
+    setLocationName(state.locationName)
+    setLocationFormattedAddress(state.locationFormattedAddress)
+    setLocationStreet(state.locationStreet)
+    setLocationCity(state.locationCity)
+    setLocationPostal(state.locationPostal)
+    setGoogleMapsUrl(state.googleMapsUrl)
+  }
+
+  const getCurrentEventLocationState = () =>
+    getEventLocationFormState({
+      useManualLocation,
+      locationPlaceId,
+      locationName,
+      locationFormattedAddress,
+      locationStreet,
+      locationCity,
+      locationPostal,
+      googleMapsUrl,
+    })
 
   const [foodEnabled, setFoodEnabled] = useState(false)
   const [foodOptions, setFoodOptions] = useState<string[]>([''])
@@ -883,7 +912,7 @@ export default function EditEventPage() {
       const { data: eventRow, error: eventError } = await supabase
         .from('events')
         .select(
-          'id, user_id, status, child_name, child_birth_date, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, event_type, public_slug'
+          'id, user_id, status, child_name, child_birth_date, title, event_date, start_time, pickup_time, location_name, location_address, google_maps_url, location_place_id, gift_option, bizum_phone, rsvp_deadline_days, birthday_number, organizer_phone, enable_food_options, organizer_notes, invitation_theme, invitation_image_url, invitation_image_fit, invitation_image_position, invitation_image_zoom, event_type, public_slug'
         )
         .eq('public_slug', slug)
         .maybeSingle<EventRow>()
@@ -994,12 +1023,7 @@ export default function EditEventPage() {
       setStartTime(eventRow.start_time ? eventRow.start_time.slice(0, 5) : '')
       setPickupTime(eventRow.pickup_time ? eventRow.pickup_time.slice(0, 5) : '')
 
-      const loc = parseStoredLocationAddress(eventRow.location_address ?? '')
-      setLocationName(eventRow.location_name ?? '')
-      setLocationStreet(loc.street)
-      setLocationCity(loc.city)
-      setLocationPostal(loc.postal)
-      setGoogleMapsUrl(eventRow.google_maps_url ?? '')
+      applyStoredEventLocation(eventRow)
 
       setRsvpDeadlineDays(
         eventRow.rsvp_deadline_days != null && Number.isFinite(eventRow.rsvp_deadline_days)
@@ -1242,12 +1266,7 @@ export default function EditEventPage() {
     const trimmedApellido = childLastName.trim()
     const trimmedChildName = isNewChildSelection ? `${trimmedNombre} ${trimmedApellido}`.trim() : trimmedNombre
     const trimmedEventTitle = eventTitle.trim()
-    const trimmedLocationName = locationName.trim()
-    const trimmedLocationStreet = locationStreet.trim()
-    const trimmedLocationCity = locationCity.trim()
-    const trimmedLocationPostal = locationPostal.trim()
-    const combinedAddress = `${trimmedLocationStreet}, ${trimmedLocationPostal} ${trimmedLocationCity}`
-    const trimmedGoogleMapsUrl = googleMapsUrl.trim()
+    const resolvedLocation = resolveEventLocationForSave(getCurrentEventLocationState())
     const trimmedBizumPhoneNumber = bizumPhoneNumber.trim()
 
     if (selectedChildId === '') {
@@ -1296,8 +1315,9 @@ export default function EditEventPage() {
       return
     }
 
-    if (!trimmedLocationName || !trimmedLocationStreet || !trimmedLocationCity || !trimmedLocationPostal) {
-      setError('El nombre del lugar, la dirección, la ciudad y el código postal son obligatorios.')
+    const locationValidationError = validateEventLocation(getCurrentEventLocationState())
+    if (locationValidationError) {
+      setError(locationValidationError)
       return
     }
 
@@ -1395,11 +1415,6 @@ export default function EditEventPage() {
       }
     }
 
-    const query = encodeURIComponent(`${trimmedLocationStreet}, ${trimmedLocationPostal} ${trimmedLocationCity}, Spain`)
-    const generatedMapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`
-    const generatedGoogleMapsUrl = generatedMapsUrl
-    const finalGoogleMapsUrl = trimmedGoogleMapsUrl || generatedGoogleMapsUrl
-
     const { error: eventError } = await supabase
       .from('events')
       .update({
@@ -1410,9 +1425,10 @@ export default function EditEventPage() {
         event_date: parsedEventDate,
         start_time: startTime,
         pickup_time: pickupTime || null,
-        location_name: trimmedLocationName,
-        location_address: combinedAddress,
-        google_maps_url: finalGoogleMapsUrl,
+        location_name: resolvedLocation.location_name,
+        location_address: resolvedLocation.location_address,
+        google_maps_url: resolvedLocation.google_maps_url,
+        location_place_id: resolvedLocation.location_place_id,
         gift_option: isGiftActive ? giftOption : 'regalo_libre',
         bizum_phone:
           isGiftActive && giftOption === 'bizum_pool'
@@ -1478,6 +1494,7 @@ export default function EditEventPage() {
     if (invitationTheme) {
       localStorage.setItem('lastEventTheme', invitationTheme)
     }
+    upsertSavedPlaceFromEventLocation(user.id, resolvedLocation)
     if (fromShare) {
       const shareThemeQuery = invitationTheme ? `?theme=${invitationTheme}` : ''
       router.push(`/dashboard/eventos/${slug}/compartir${shareThemeQuery}`)
@@ -1893,90 +1910,29 @@ export default function EditEventPage() {
 
             </div>
 
-            <div className="space-y-4">
-              <h2 className="text-base font-semibold text-gray-900">Ubicación</h2>
+            <EventLocationSection
+              idPrefix="edit-event-location"
+              inputFocusClass={inputFocusClass}
+              useManualLocation={useManualLocation}
+              setUseManualLocation={setUseManualLocation}
+              locationPlaceId={locationPlaceId}
+              setLocationPlaceId={setLocationPlaceId}
+              locationName={locationName}
+              setLocationName={setLocationName}
+              locationFormattedAddress={locationFormattedAddress}
+              setLocationFormattedAddress={setLocationFormattedAddress}
+              locationStreet={locationStreet}
+              setLocationStreet={setLocationStreet}
+              locationCity={locationCity}
+              setLocationCity={setLocationCity}
+              locationPostal={locationPostal}
+              setLocationPostal={setLocationPostal}
+              googleMapsUrl={googleMapsUrl}
+              setGoogleMapsUrl={setGoogleMapsUrl}
+            />
 
-              <div>
-                <label htmlFor="locationName" className="mb-1.5 block text-sm font-medium text-gray-900">
-                  Nombre del lugar *
-                </label>
-                <input
-                  id="locationName"
-                  type="text"
-                  value={locationName}
-                  onChange={(event) => setLocationName(event.target.value)}
-                  required
-                  placeholder="Ej. Parque del barrio"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="locationStreet" className="mb-1.5 block text-sm font-medium text-gray-900">
-                  Dirección *
-                </label>
-                <input
-                  id="locationStreet"
-                  type="text"
-                  value={locationStreet}
-                  onChange={(event) => setLocationStreet(event.target.value)}
-                  required
-                  placeholder="Calle y número"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="locationCity" className="mb-1.5 block text-sm font-medium text-gray-900">
-                    Ciudad *
-                  </label>
-                  <input
-                    id="locationCity"
-                    type="text"
-                    value={locationCity}
-                    onChange={(event) => setLocationCity(event.target.value)}
-                    required
-                    placeholder="Ej. Madrid"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="locationPostal" className="mb-1.5 block text-sm font-medium text-gray-900">
-                    Código postal *
-                  </label>
-                  <input
-                    id="locationPostal"
-                    type="text"
-                    value={locationPostal}
-                    onChange={(event) => setLocationPostal(event.target.value)}
-                    required
-                    placeholder="00000 si no aplica"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="mapsUrl" className="mb-1.5 block text-sm font-medium text-gray-900">
-                  URL de Google Maps (opcional)
-                </label>
-                <input
-                  id="mapsUrl"
-                  type="url"
-                  value={googleMapsUrl}
-                  onChange={(event) => setGoogleMapsUrl(event.target.value)}
-                  placeholder="https://maps.google.com/..."
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none ring-yellow-400 transition placeholder:text-gray-400 focus:border-yellow-400 focus:ring-2"
-                />
-                <p className="mt-1 text-xs text-gray-400">
-                  Si lo dejas vacío, generaremos un enlace usando la dirección, ciudad y código postal.
-                </p>
-              </div>
-
-              <div>
-                <label htmlFor="organizerPhone" className="mb-1.5 block text-sm font-medium text-gray-900">
+            <div>
+              <label htmlFor="organizerPhone" className="mb-1.5 block text-sm font-medium text-gray-900">
                   Número de contacto del organizador *
                 </label>
                 <p className="mb-2 text-xs text-gray-500">Los invitados podrán contactarte en este número</p>
@@ -2087,7 +2043,6 @@ export default function EditEventPage() {
                   </label>
                 ) : null}
               </div>
-            </div>
 
             {!showGift ? (
               <button
