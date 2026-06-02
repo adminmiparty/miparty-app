@@ -21,6 +21,7 @@ export type DraftPersistInput = {
     location_name: string
     location_address: string
     google_maps_url: string
+    location_place_id: string | null
     gift_option: 'sin_regalo' | 'regalo_libre' | 'bizum_pool'
     bizum_phone: string | null
     rsvp_deadline_days: number | null
