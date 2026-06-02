@@ -7,6 +7,7 @@ import {
   resolvePlacePrediction,
   type ResolvedGooglePlace,
 } from '@/lib/googleMaps/resolvePlacePrediction'
+import { logGoogleMapsFailure } from '@/lib/googleMaps/googleMapsDiagnostics'
 import {
   hasGoogleMapsApiKey,
   loadGoogleMapsPlacesLibrary,
@@ -63,6 +64,18 @@ export default function PlacesAutocompleteSearch({
 
   const debouncedQuery = useDebouncedValue(searchQuery, 280)
 
+  const logPlacesFallbackError = useCallback(
+    (stage: string, error: unknown, extra?: Record<string, unknown>) => {
+      logGoogleMapsFailure('PlacesAutocompleteSearch', stage, error, {
+        manualFallback: true,
+        apiKeyConfigured: hasGoogleMapsApiKey(),
+        apiKeyLength: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim().length ?? 0,
+        extra,
+      })
+    },
+    []
+  )
+
   const ensureSessionToken = useCallback(async () => {
     const library = await loadGoogleMapsPlacesLibrary()
     if (!sessionTokenRef.current) {
@@ -73,6 +86,7 @@ export default function PlacesAutocompleteSearch({
 
   useEffect(() => {
     if (!hasGoogleMapsApiKey()) {
+      logPlacesFallbackError('missing_api_key', new Error('missing_api_key'))
       setPlacesError('Google Maps no está configurado. Puedes introducir la dirección manualmente.')
       onRequestManual('fallback')
       return
@@ -87,9 +101,7 @@ export default function PlacesAutocompleteSearch({
         }
       })
       .catch((error) => {
-        if (process.env.NODE_ENV === 'development') {
-          console.error('[PlacesAutocompleteSearch] Google Maps Places load failed:', error)
-        }
+        logPlacesFallbackError('load_google_places_library', error)
         if (!cancelled) {
           setPlacesError('No pudimos cargar la búsqueda de Google Maps. Introduce la dirección manualmente.')
           onRequestManual('fallback')
@@ -99,7 +111,7 @@ export default function PlacesAutocompleteSearch({
     return () => {
       cancelled = true
     }
-  }, [onRequestManual])
+  }, [logPlacesFallbackError, onRequestManual])
 
   useEffect(() => {
     const query = debouncedQuery.trim()
@@ -145,7 +157,10 @@ export default function PlacesAutocompleteSearch({
 
         setSuggestions(next)
         setSuggestionsOpen(next.length > 0)
-      } catch {
+      } catch (error) {
+        logPlacesFallbackError('fetch_autocomplete_suggestions', error, {
+          query,
+        })
         if (requestId !== requestSeqRef.current) return
         setSuggestions([])
         setSuggestionsOpen(false)
@@ -156,7 +171,7 @@ export default function PlacesAutocompleteSearch({
         }
       }
     })()
-  }, [debouncedQuery, ensureSessionToken, placesReady])
+  }, [debouncedQuery, ensureSessionToken, logPlacesFallbackError, placesReady])
 
   const handleSelectSuggestion = async (item: PlaceSuggestionItem) => {
     setSelectingPlace(true)
@@ -170,7 +185,8 @@ export default function PlacesAutocompleteSearch({
       setSearchQuery('')
       setSuggestions([])
       sessionTokenRef.current = await createPlacesSessionToken()
-    } catch {
+    } catch (error) {
+      logPlacesFallbackError('select_prediction', error, { searchQuery })
       setPlacesError('No pudimos usar ese lugar. Prueba otra búsqueda o introduce la dirección manualmente.')
       setSuggestionsOpen(true)
     } finally {
