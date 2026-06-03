@@ -1259,7 +1259,7 @@ function NewEventPageContent() {
     if (locationAddressParam?.trim()) {
       const addr = decodeURIComponent(locationAddressParam)
       if (addr.trim()) {
-        setUseManualLocation(true)
+        setUseManualLocation(false)
         setLocationPlaceId('')
         setLocationFormattedAddress('')
         const loc = parseStoredLocationAddress(addr)
@@ -1268,7 +1268,7 @@ function NewEventPageContent() {
         setLocationCity(loc.city)
       }
     } else {
-      setUseManualLocation(true)
+      setUseManualLocation(false)
     }
 
     if (googleMapsUrlParam?.trim()) {

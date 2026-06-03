@@ -58,11 +58,18 @@ export default function EventLocationSection({
   }, [setLocationPlaceId, setUseManualLocation])
 
   const handleRequestManual = useCallback(
-    (_reason: 'user' | 'fallback') => {
-      switchToManual()
+    (reason: 'user' | 'fallback') => {
+      if (reason === 'user') {
+        switchToManual()
+      }
     },
     [switchToManual]
   )
+
+  const hasManualDraft =
+    !locationPlaceId.trim() &&
+    Boolean(locationName.trim()) &&
+    Boolean(locationStreet.trim() || locationCity.trim())
 
   const switchToGoogleSearch = useCallback(() => {
     setUseManualLocation(false)
@@ -126,13 +133,37 @@ export default function EventLocationSection({
               </button>
             </div>
           ) : (
-            <PlacesAutocompleteSearch
-              idPrefix={idPrefix}
-              inputClassName={inputClassName}
-              label="Buscar lugar *"
-              onPlaceSelected={handlePlaceSelected}
-              onRequestManual={handleRequestManual}
-            />
+            <>
+              {hasManualDraft ? (
+                <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                  Ubicación guardada: <span className="font-medium text-gray-900">{locationName}</span>
+                  {locationStreet.trim() ? (
+                    <>
+                      {' '}
+                      — {locationStreet.trim()}
+                      {locationPostal.trim() || locationCity.trim()
+                        ? `, ${[locationPostal.trim(), locationCity.trim()].filter(Boolean).join(' ')}`
+                        : ''}
+                    </>
+                  ) : null}
+                  .{' '}
+                  <button
+                    type="button"
+                    onClick={switchToManual}
+                    className="font-medium text-gray-700 underline hover:text-gray-900"
+                  >
+                    Editar manualmente
+                  </button>
+                </p>
+              ) : null}
+              <PlacesAutocompleteSearch
+                idPrefix={idPrefix}
+                inputClassName={inputClassName}
+                label="Buscar lugar *"
+                onPlaceSelected={handlePlaceSelected}
+                onRequestManual={handleRequestManual}
+              />
+            </>
           )}
         </div>
       ) : (
