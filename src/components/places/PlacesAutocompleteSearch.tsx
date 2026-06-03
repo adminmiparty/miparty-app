@@ -37,11 +37,16 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
   return debounced
 }
 
+/** overlay: compact floating list (event forms). expanded: in-flow list for modals. */
+export type PlacesSuggestionsLayout = 'overlay' | 'expanded'
+
 export type PlacesAutocompleteSearchProps = {
   idPrefix?: string
   inputClassName: string
   label?: string
   placeholder?: string
+  suggestionsLayout?: PlacesSuggestionsLayout
+  onSuggestionsOpenChange?: (open: boolean) => void
   onPlaceSelected: (place: ResolvedGooglePlace) => void
   onRequestManual: (reason: 'user' | 'fallback') => void
 }
@@ -51,6 +56,8 @@ export default function PlacesAutocompleteSearch({
   inputClassName,
   label = 'Buscar lugar',
   placeholder = 'Ej. Burger King Marbella, Parque de la Constitución…',
+  suggestionsLayout = 'overlay',
+  onSuggestionsOpenChange,
   onPlaceSelected,
   onRequestManual,
 }: PlacesAutocompleteSearchProps) {
@@ -70,6 +77,12 @@ export default function PlacesAutocompleteSearch({
   const [loadAttempt, setLoadAttempt] = useState(0)
 
   const debouncedQuery = useDebouncedValue(searchQuery, 280)
+  const isExpandedLayout = suggestionsLayout === 'expanded'
+  const showSuggestionsList = suggestionsOpen && suggestions.length > 0
+
+  useEffect(() => {
+    onSuggestionsOpenChange?.(showSuggestionsList)
+  }, [onSuggestionsOpenChange, showSuggestionsList])
 
   const logPlacesFallbackError = useCallback(
     (stage: string, error: unknown, extra?: Record<string, unknown>) =>
@@ -207,9 +220,13 @@ export default function PlacesAutocompleteSearch({
     }
   }
 
+  const suggestionsListClassName = isExpandedLayout
+    ? 'mt-2 w-full min-h-[18rem] max-h-[min(25rem,55vh)] overflow-y-auto overscroll-contain rounded-xl border border-gray-200 bg-white py-1 shadow-sm sm:min-h-[20rem] sm:max-h-[25rem]'
+    : 'absolute z-30 mt-1 max-h-60 w-full overflow-y-auto overscroll-contain rounded-xl border border-gray-200 bg-white py-1 shadow-lg'
+
   return (
     <div className="space-y-3">
-      <div className="relative">
+      <div className={isExpandedLayout ? 'flex flex-col' : 'relative'}>
         <label htmlFor={`${idPrefix}-search`} className="mb-1.5 block text-sm font-medium text-gray-900">
           {label}
         </label>
@@ -243,11 +260,11 @@ export default function PlacesAutocompleteSearch({
             {selectingPlace ? 'Cargando lugar…' : 'Buscando…'}
           </p>
         ) : null}
-        {suggestionsOpen && suggestions.length > 0 ? (
+        {showSuggestionsList ? (
           <ul
             id={listboxId}
             role="listbox"
-            className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+            className={suggestionsListClassName}
           >
             {suggestions.map((item) => (
               <li key={item.id} role="option">
