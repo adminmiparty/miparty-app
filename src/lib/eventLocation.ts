@@ -112,7 +112,7 @@ export function initEventLocationFromStored(
 
   const parsed = parseStoredLocationAddress(locationAddress ?? '')
   return {
-    useManualLocation: true,
+    useManualLocation: false,
     locationPlaceId: '',
     locationName: locationName?.trim() ?? '',
     locationFormattedAddress: '',
