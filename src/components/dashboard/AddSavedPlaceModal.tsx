@@ -7,7 +7,7 @@ import PlacesAutocompleteSearch from '@/components/places/PlacesAutocompleteSear
 import {
   buildGoogleMapsSearchUrl,
   buildPlaceAddressLine,
-  loadSavedPlaces,
+  type SavedPlace,
   upsertSavedPlaceFromEventLocation,
 } from '@/lib/savedPlaces'
 
@@ -15,7 +15,7 @@ type AddSavedPlaceModalProps = {
   userId: string
   inputClassName: string
   onClose: () => void
-  onSaved: (places: ReturnType<typeof loadSavedPlaces>) => void
+  onSaved: (places: SavedPlace[], added: { location_name: string }) => void
 }
 
 export default function AddSavedPlaceModal({
@@ -53,8 +53,8 @@ export default function AddSavedPlaceModal({
       google_maps_url: string
       location_place_id?: string | null
     }) => {
-      upsertSavedPlaceFromEventLocation(userId, location)
-      onSaved(loadSavedPlaces(userId))
+      const nextPlaces = upsertSavedPlaceFromEventLocation(userId, location)
+      onSaved(nextPlaces, { location_name: location.location_name })
       onClose()
     },
     [onClose, onSaved, userId]

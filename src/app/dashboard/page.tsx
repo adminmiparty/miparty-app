@@ -1322,12 +1322,28 @@ export default function DashboardHomePage() {
     setShowAddPlaceModal(true)
   }
 
-  const handleAddPlaceSaved = (next: SavedPlace[]) => {
-    setSavedPlaces(next)
-    setShowAddPlaceModal(false)
-    setPlaceAddSuccessToast(true)
-    window.setTimeout(() => setPlaceAddSuccessToast(false), 2500)
-  }
+  const handleAddPlaceSaved = useCallback(
+    (next: SavedPlace[], added: { location_name: string }) => {
+      setSavedPlaces([...next])
+
+      const addedNameKey = normalizeLocationNameKey(added.location_name)
+      if (addedNameKey) {
+        setDismissedLocationNames((prev) => {
+          const filtered = prev.filter((name) => normalizeLocationNameKey(name) !== addedNameKey)
+          if (filtered.length === prev.length) {
+            return prev
+          }
+          persistDismissedLocationNames(userId, filtered)
+          return filtered
+        })
+      }
+
+      setShowAddPlaceModal(false)
+      setPlaceAddSuccessToast(true)
+      window.setTimeout(() => setPlaceAddSuccessToast(false), 2500)
+    },
+    [userId]
+  )
 
   const handleConfirmDeleteLocation = async () => {
     if (!pendingDeleteLocation || !userId) {
