@@ -7,10 +7,15 @@ import {
   resolvePlacePrediction,
   type ResolvedGooglePlace,
 } from '@/lib/googleMaps/resolvePlacePrediction'
-import { logGoogleMapsFailure } from '@/lib/googleMaps/googleMapsDiagnostics'
+import {
+  googleMapsFailureUserMessage,
+  logGoogleMapsFailure,
+  type GoogleMapsFailureKind,
+} from '@/lib/googleMaps/googleMapsDiagnostics'
 import {
   hasGoogleMapsApiKey,
   loadGoogleMapsPlacesLibrary,
+  resetGoogleMapsPlacesLibraryCache,
 } from '@/lib/googleMaps/loadPlacesLibrary'
 
 export type { ResolvedGooglePlace }
@@ -61,18 +66,19 @@ export default function PlacesAutocompleteSearch({
   const [selectingPlace, setSelectingPlace] = useState(false)
   const [placesReady, setPlacesReady] = useState(false)
   const [placesError, setPlacesError] = useState<string | null>(null)
+  const [loadFailureKind, setLoadFailureKind] = useState<GoogleMapsFailureKind | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
 
   const debouncedQuery = useDebouncedValue(searchQuery, 280)
 
   const logPlacesFallbackError = useCallback(
-    (stage: string, error: unknown, extra?: Record<string, unknown>) => {
+    (stage: string, error: unknown, extra?: Record<string, unknown>) =>
       logGoogleMapsFailure('PlacesAutocompleteSearch', stage, error, {
         manualFallback: true,
         apiKeyConfigured: hasGoogleMapsApiKey(),
         apiKeyLength: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim().length ?? 0,
         extra,
-      })
-    },
+      }),
     []
   )
 
@@ -86,32 +92,39 @@ export default function PlacesAutocompleteSearch({
 
   useEffect(() => {
     if (!hasGoogleMapsApiKey()) {
-      logPlacesFallbackError('missing_api_key', new Error('missing_api_key'))
-      setPlacesError('Google Maps no está configurado. Puedes introducir la dirección manualmente.')
-      onRequestManual('fallback')
+      const log = logPlacesFallbackError('missing_api_key', new Error('missing_api_key'))
+      setLoadFailureKind(log.failureKind)
+      setPlacesError(googleMapsFailureUserMessage(log.failureKind))
+      setPlacesReady(false)
       return
     }
 
     let cancelled = false
+    setPlacesReady(false)
+    setLoadFailureKind(null)
+    setPlacesError(null)
+
     void loadGoogleMapsPlacesLibrary()
       .then(() => {
         if (!cancelled) {
           setPlacesReady(true)
           setPlacesError(null)
+          setLoadFailureKind(null)
         }
       })
       .catch((error) => {
-        logPlacesFallbackError('load_google_places_library', error)
+        const log = logPlacesFallbackError('load_google_places_library', error)
         if (!cancelled) {
-          setPlacesError('No pudimos cargar la búsqueda de Google Maps. Introduce la dirección manualmente.')
-          onRequestManual('fallback')
+          setLoadFailureKind(log.failureKind)
+          setPlacesError(googleMapsFailureUserMessage(log.failureKind))
+          setPlacesReady(false)
         }
       })
 
     return () => {
       cancelled = true
     }
-  }, [logPlacesFallbackError, onRequestManual])
+  }, [loadAttempt, logPlacesFallbackError])
 
   useEffect(() => {
     const query = debouncedQuery.trim()
@@ -217,7 +230,7 @@ export default function PlacesAutocompleteSearch({
           }}
           autoComplete="off"
           enterKeyHint="search"
-          disabled={!placesReady || selectingPlace}
+          disabled={selectingPlace || (!placesReady && !placesError)}
           placeholder={placeholder}
           className={inputClassName}
           role="combobox"
@@ -270,7 +283,23 @@ export default function PlacesAutocompleteSearch({
         ) : null}
       </div>
 
-      {placesError ? <p className="text-sm text-amber-800">{placesError}</p> : null}
+      {placesError ? (
+        <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <p className="text-sm text-amber-900">{placesError}</p>
+          {loadFailureKind && hasGoogleMapsApiKey() ? (
+            <button
+              type="button"
+              onClick={() => {
+                resetGoogleMapsPlacesLibraryCache()
+                setLoadAttempt((attempt: number) => attempt + 1)
+              }}
+              className="text-sm font-medium text-amber-900 underline hover:text-amber-950"
+            >
+              Reintentar búsqueda
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <button
         type="button"
