@@ -182,6 +182,32 @@ export function buildGoogleMapsFailureLog(
   }
 }
 
+/** Short Spanish copy for in-app banners (no secrets). */
+export function googleMapsFailureUserMessage(kind: GoogleMapsFailureKind): string {
+  switch (kind) {
+    case 'missing_api_key':
+      return 'Google Maps no está configurado en este entorno. Puedes introducir la dirección manualmente.'
+    case 'RefererNotAllowedMapError':
+    case 'gm_authFailure':
+      return 'Google Maps rechazó esta web (restricción de dominio en la clave API). Añade https://miparty.net/* y https://www.miparty.net/* en Google Cloud Console, o usa la entrada manual.'
+    case 'ApiNotActivatedMapError':
+      return 'Falta activar Maps JavaScript API o Places API (New) en Google Cloud. Mientras tanto, usa la entrada manual.'
+    case 'script_load_failed':
+      return 'No se pudo cargar Google Maps (red, bloqueador o VPN). Prueba de nuevo o introduce la dirección manualmente.'
+    case 'import_library_unavailable':
+    case 'import_library_places':
+      return 'No pudimos iniciar la búsqueda de Google Maps. Prueba de nuevo o introduce la dirección manualmente.'
+    case 'InvalidKeyMapError':
+    case 'MissingKeyMapError':
+    case 'DeletedApiProjectMapError':
+      return 'La clave de Google Maps no es válida. Revisa la configuración del proyecto o usa la entrada manual.'
+    case 'OverQuotaMapError':
+      return 'Google Maps ha alcanzado el límite de uso. Usa la entrada manual por ahora.'
+    default:
+      return 'No pudimos cargar la búsqueda de Google Maps. Prueba de nuevo o introduce la dirección manualmente.'
+  }
+}
+
 /** Always logs in production (console.error). */
 export function logGoogleMapsFailure(
   context: GoogleMapsLogContext,

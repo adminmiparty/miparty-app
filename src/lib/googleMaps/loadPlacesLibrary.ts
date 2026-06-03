@@ -4,8 +4,6 @@ import {
 } from '@/lib/googleMaps/googleMapsDiagnostics'
 
 let placesLibraryPromise: Promise<google.maps.PlacesLibrary> | null = null
-let bootstrapInstalled = false
-let nativeImportLibrary: typeof google.maps.importLibrary | null = null
 let lastAuthFailure: Error | null = null
 
 function getApiKey() {
@@ -17,128 +15,91 @@ function getApiKeyMeta() {
   return { apiKeyConfigured: key.length > 0, apiKeyLength: key.length }
 }
 
-type MapsNamespace = typeof google.maps & {
-  __mipartyMapsInit__?: () => void
+type GoogleMapsBootstrapOptions = {
+  key: string
+  v: string
+  language?: string
+  region?: string
+  authReferrerPolicy?: 'origin'
 }
 
 /**
- * Official dynamic-import bootstrap (see Google Maps JS "Dynamic Library Import").
- * Defines google.maps.importLibrary before the API script loads; do NOT use
- * libraries=places on a bare script tag — that legacy path often leaves
- * importLibrary undefined (import_library_unavailable).
+ * Google's official dynamic-import bootstrap (Maps JavaScript API docs).
+ * Do not use a bare script tag with libraries=places — that leaves importLibrary undefined.
  */
-function ensureGoogleMapsImportLibraryBootstrap(apiKey: string): Promise<void> {
-  if (typeof window === 'undefined') {
-    const error = new Error('browser_only')
-    logGoogleMapsFailure('loadPlacesLibrary', 'browser_only', error, getApiKeyMeta())
-    return Promise.reject(error)
-  }
+function installGoogleMapsDynamicLoader(options: GoogleMapsBootstrapOptions): void {
+  const g = options
+  ;(
+    (loaderOptions: GoogleMapsBootstrapOptions) => {
+      let scriptLoadPromise: Promise<void> | null = null
+      let scriptEl: HTMLScriptElement | null = null
+      const apiName = 'The Google Maps JavaScript API'
+      const googleNamespace = 'google'
+      const importLibraryName = 'importLibrary'
+      const initCallbackName = '__ib__'
+      const doc = document
+      const win = window as Window & typeof globalThis
+      const googleRef =
+        ((win as unknown as Record<string, unknown>)[googleNamespace] as
+          | Record<string, unknown>
+          | undefined) ??
+        (((win as unknown as Record<string, unknown>)[googleNamespace] = {}) as Record<
+          string,
+          unknown
+        >)
+      const mapsRef =
+        (googleRef.maps as Record<string, unknown> | undefined) ??
+        ((googleRef.maps = {}) as Record<string, unknown>)
+      const requestedLibraries = new Set<string>()
+      const searchParams = new URLSearchParams()
 
-  ensureGoogleMapsAuthFailureLogger((error) => {
-    lastAuthFailure = error
-    logGoogleMapsFailure('loadPlacesLibrary', 'gm_authFailure', error, {
-      ...getApiKeyMeta(),
-      extra: { note: 'window.gm_authFailure callback from Google Maps JS' },
-    })
-  })
+      const loadScript = () =>
+        scriptLoadPromise ??
+        (scriptLoadPromise = new Promise<void>((resolve, reject) => {
+          void (async () => {
+            scriptEl = doc.createElement('script')
+            searchParams.set('libraries', [...requestedLibraries].join(','))
+            for (const key of Object.keys(loaderOptions) as (keyof GoogleMapsBootstrapOptions)[]) {
+              const value = loaderOptions[key]
+              if (value == null || value === '') continue
+              const paramKey = key.replace(/[A-Z]/g, (letter) => `_${letter[0].toLowerCase()}`)
+              searchParams.set(paramKey, String(value))
+            }
+            searchParams.set('callback', `${googleNamespace}.maps.${initCallbackName}`)
+            scriptEl.src = `https://maps.googleapis.com/maps/api/js?${searchParams}`
+            mapsRef[initCallbackName] = resolve
+            scriptEl.onerror = () => {
+              scriptLoadPromise = null
+              reject(new Error(`${apiName} could not load.`))
+            }
+            const nonceScript = doc.querySelector('script[nonce]')
+            if (nonceScript instanceof HTMLScriptElement && nonceScript.nonce) {
+              scriptEl.nonce = nonceScript.nonce
+            }
+            doc.head.append(scriptEl)
+          })()
+        }))
 
-  const existingImportLibrary = window.google?.maps?.importLibrary
-  if (typeof existingImportLibrary === 'function' && existingImportLibrary !== bootstrapImportLibrary) {
-    nativeImportLibrary = existingImportLibrary.bind(window.google.maps)
-    bootstrapInstalled = true
-    return Promise.resolve()
-  }
+      if (typeof mapsRef[importLibraryName] === 'function') {
+        console.warn(`${apiName} only loads once. Ignoring:`, loaderOptions)
+        return
+      }
 
-  if (bootstrapInstalled && typeof existingImportLibrary === 'function') {
-    return Promise.resolve()
-  }
-
-  // Drop scripts from the old direct loader (libraries=places) that never expose importLibrary.
-  document.querySelectorAll('script[data-miparty-google-maps="1"]').forEach((node) => {
-    node.remove()
-  })
-
-  const googleRef = window.google ?? (window.google = {} as typeof google)
-  const maps = (googleRef.maps ?? (googleRef.maps = {} as typeof google.maps)) as MapsNamespace
-
-  const requestedLibraries = new Set<string>()
-  let scriptLoadPromise: Promise<void> | null = null
-
-  const loadMapsApiScript = (): Promise<void> => {
-    if (scriptLoadPromise) {
-      return scriptLoadPromise
+      mapsRef[importLibraryName] = (library: string) =>
+        requestedLibraries.add(library) &&
+        loadScript().then(() =>
+          (mapsRef[importLibraryName] as typeof google.maps.importLibrary)(
+            library as 'places'
+          )
+        )
     }
+  )(g)
+}
 
-    scriptLoadPromise = new Promise((resolve, reject) => {
-      const params = new URLSearchParams({
-        key: apiKey,
-        v: 'weekly',
-      })
-      if (requestedLibraries.size > 0) {
-        params.set('libraries', [...requestedLibraries].join(','))
-      }
-      params.set('callback', 'google.maps.__mipartyMapsInit__')
-
-      maps.__mipartyMapsInit__ = () => {
-        if (lastAuthFailure) {
-          reject(lastAuthFailure)
-          return
-        }
-        const loadedImportLibrary = google.maps.importLibrary
-        if (
-          typeof loadedImportLibrary === 'function' &&
-          loadedImportLibrary !== bootstrapImportLibrary
-        ) {
-          nativeImportLibrary = loadedImportLibrary.bind(google.maps)
-        }
-        resolve()
-      }
-
-      const script = document.createElement('script')
-      script.dataset.mipartyGoogleMaps = '1'
-      script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`
-      script.async = true
-      script.onerror = () => {
-        scriptLoadPromise = null
-        const error = new Error('script_load_failed')
-        logGoogleMapsFailure('loadPlacesLibrary', 'script_load_failed', error, {
-          ...getApiKeyMeta(),
-          extra: {
-            hint: 'Network block, CSP, ad blocker, or invalid script URL',
-          },
-        })
-        reject(error)
-      }
-      document.head.append(script)
-    })
-
-    return scriptLoadPromise
-  }
-
-  function bootstrapImportLibrary(library: string) {
-    requestedLibraries.add(library)
-    return loadMapsApiScript().then(() => {
-      const loadedImportLibrary = google.maps.importLibrary
-      if (
-        !nativeImportLibrary &&
-        typeof loadedImportLibrary === 'function' &&
-        loadedImportLibrary !== bootstrapImportLibrary
-      ) {
-        nativeImportLibrary = loadedImportLibrary.bind(google.maps)
-      }
-
-      const importLibrary = nativeImportLibrary
-      if (!importLibrary) {
-        throw new Error('import_library_unavailable')
-      }
-      return importLibrary(library as 'places')
-    })
-  }
-
-  maps.importLibrary = bootstrapImportLibrary as typeof google.maps.importLibrary
-  bootstrapInstalled = true
-
-  return Promise.resolve()
+/** Clears cached library load (e.g. after user taps Reintentar). */
+export function resetGoogleMapsPlacesLibraryCache() {
+  placesLibraryPromise = null
+  lastAuthFailure = null
 }
 
 export function hasGoogleMapsApiKey() {
@@ -154,38 +115,63 @@ export async function loadGoogleMapsPlacesLibrary(): Promise<google.maps.PlacesL
     throw error
   }
 
+  if (typeof window === 'undefined') {
+    const error = new Error('browser_only')
+    logGoogleMapsFailure('loadPlacesLibrary', 'browser_only', error, apiKeyMeta)
+    throw error
+  }
+
+  ensureGoogleMapsAuthFailureLogger((error) => {
+    lastAuthFailure = error
+    logGoogleMapsFailure('loadPlacesLibrary', 'gm_authFailure', error, {
+      ...apiKeyMeta,
+      extra: { note: 'window.gm_authFailure callback from Google Maps JS' },
+    })
+    resetGoogleMapsPlacesLibraryCache()
+  })
+
+  document.querySelectorAll('script[data-miparty-google-maps="1"]').forEach((node) => {
+    node.remove()
+  })
+
   if (!placesLibraryPromise) {
     const apiKey = getApiKey()
-    placesLibraryPromise = ensureGoogleMapsImportLibraryBootstrap(apiKey)
-      .then(async () => {
-        if (lastAuthFailure) {
-          throw lastAuthFailure
-        }
-        if (typeof google.maps.importLibrary !== 'function') {
-          const error = new Error('import_library_unavailable')
-          logGoogleMapsFailure('loadPlacesLibrary', 'import_library_unavailable', error, {
-            ...apiKeyMeta,
-            extra: {
-              hasGoogleObject: Boolean(window.google),
-              hasMapsObject: Boolean(window.google?.maps),
-              bootstrapInstalled,
-              note: 'importLibrary missing after bootstrap; check API key and HTTP referrer restrictions',
-            },
-          })
-          throw error
-        }
-        try {
-          return (await google.maps.importLibrary('places')) as google.maps.PlacesLibrary
-        } catch (error) {
-          logGoogleMapsFailure('loadPlacesLibrary', 'import_library_places', error, apiKeyMeta)
-          throw error
-        }
+    placesLibraryPromise = (async () => {
+      if (lastAuthFailure) {
+        throw lastAuthFailure
+      }
+
+      installGoogleMapsDynamicLoader({
+        key: apiKey,
+        v: 'weekly',
+        language: 'es',
+        authReferrerPolicy: 'origin',
       })
-      .catch((error) => {
-        logGoogleMapsFailure('loadPlacesLibrary', 'load_google_maps_places_library', error, apiKeyMeta)
-        placesLibraryPromise = null
+
+      if (typeof google.maps.importLibrary !== 'function') {
+        const error = new Error('import_library_unavailable')
+        logGoogleMapsFailure('loadPlacesLibrary', 'import_library_unavailable', error, {
+          ...apiKeyMeta,
+          extra: {
+            hasGoogleObject: Boolean(window.google),
+            hasMapsObject: Boolean(window.google?.maps),
+            note: 'importLibrary missing after bootstrap',
+          },
+        })
         throw error
-      })
+      }
+
+      try {
+        return (await google.maps.importLibrary('places')) as google.maps.PlacesLibrary
+      } catch (error) {
+        logGoogleMapsFailure('loadPlacesLibrary', 'import_library_places', error, apiKeyMeta)
+        throw error
+      }
+    })().catch((error) => {
+      logGoogleMapsFailure('loadPlacesLibrary', 'load_google_maps_places_library', error, apiKeyMeta)
+      placesLibraryPromise = null
+      throw error
+    })
   }
 
   return placesLibraryPromise
