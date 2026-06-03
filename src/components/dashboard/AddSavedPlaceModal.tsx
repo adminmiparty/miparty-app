@@ -7,7 +7,7 @@ import PlacesAutocompleteSearch from '@/components/places/PlacesAutocompleteSear
 import {
   buildGoogleMapsSearchUrl,
   buildPlaceAddressLine,
-  loadSavedPlaces,
+  type SavedPlace,
   upsertSavedPlaceFromEventLocation,
 } from '@/lib/savedPlaces'
 
@@ -15,7 +15,7 @@ type AddSavedPlaceModalProps = {
   userId: string
   inputClassName: string
   onClose: () => void
-  onSaved: (places: ReturnType<typeof loadSavedPlaces>) => void
+  onSaved: (places: SavedPlace[], added: { location_name: string }) => void
 }
 
 export default function AddSavedPlaceModal({
@@ -33,9 +33,11 @@ export default function AddSavedPlaceModal({
   const [placeModalError, setPlaceModalError] = useState<string | null>(null)
   const [placeSaving, setPlaceSaving] = useState(false)
   const [googleFallbackNotice, setGoogleFallbackNotice] = useState<string | null>(null)
+  const [placeSuggestionsOpen, setPlaceSuggestionsOpen] = useState(false)
 
   const openManualEntry = useCallback((reason: 'user' | 'fallback') => {
     setUseManualLocation(true)
+    setPlaceSuggestionsOpen(false)
     setPlaceModalError(null)
     setGoogleFallbackNotice(
       reason === 'fallback'
@@ -51,8 +53,8 @@ export default function AddSavedPlaceModal({
       google_maps_url: string
       location_place_id?: string | null
     }) => {
-      upsertSavedPlaceFromEventLocation(userId, location)
-      onSaved(loadSavedPlaces(userId))
+      const nextPlaces = upsertSavedPlaceFromEventLocation(userId, location)
+      onSaved(nextPlaces, { location_name: location.location_name })
       onClose()
     },
     [onClose, onSaved, userId]
@@ -126,7 +128,13 @@ export default function AddSavedPlaceModal({
       role="presentation"
     >
       <div
-        className="relative mx-4 max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+        className={`relative mx-4 flex w-full max-w-sm flex-col rounded-2xl bg-white p-6 shadow-xl ${
+          useManualLocation
+            ? 'max-h-[85vh] overflow-y-auto'
+            : placeSuggestionsOpen
+              ? 'max-h-[min(92vh,44rem)] overflow-visible sm:min-h-[32rem]'
+              : 'max-h-[min(92vh,44rem)] overflow-y-auto sm:min-h-[14rem]'
+        }`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-place-modal-title"
@@ -150,6 +158,8 @@ export default function AddSavedPlaceModal({
               idPrefix="add-place"
               inputClassName={inputClassName}
               label="Buscar lugar"
+              suggestionsLayout="expanded"
+              onSuggestionsOpenChange={setPlaceSuggestionsOpen}
               onPlaceSelected={handleGooglePlaceSelected}
               onRequestManual={openManualEntry}
             />
@@ -159,6 +169,7 @@ export default function AddSavedPlaceModal({
                 type="button"
                 onClick={() => {
                   setUseManualLocation(false)
+                  setPlaceSuggestionsOpen(false)
                   setPlaceModalError(null)
                   setGoogleFallbackNotice(null)
                 }}

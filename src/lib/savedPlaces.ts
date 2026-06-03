@@ -117,19 +117,26 @@ function findMatchingSavedPlaceIndex(
   )
 }
 
-/** Persists event location to local saved places (deduped). No-op for placeholders or SSR. */
+function newSavedPlaceId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `place-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+/** Persists event location to local saved places (deduped). Returns current list (SSR/no-op: []). */
 export function upsertSavedPlaceFromEventLocation(
   userId: string,
   location: EventLocationForSavedPlace
-): void {
+): SavedPlace[] {
   if (typeof window === 'undefined' || !userId) {
-    return
+    return []
   }
 
   const locationName = location.location_name.trim()
   const locationAddress = location.location_address.trim()
   if (isPlaceholderLocationName(locationName) || isPlaceholderLocationAddress(locationAddress)) {
-    return
+    return loadSavedPlaces(userId)
   }
 
   const parsed = parseStoredLocationAddress(locationAddress)
@@ -158,7 +165,7 @@ export function upsertSavedPlaceFromEventLocation(
     }
   } else {
     places.push({
-      id: crypto.randomUUID(),
+      id: newSavedPlaceId(),
       location_name: locationName,
       location_address: locationAddress,
       google_maps_url: mapsUrl,
@@ -171,6 +178,7 @@ export function upsertSavedPlaceFromEventLocation(
   }
 
   persistSavedPlaces(userId, places)
+  return places
 }
 
 export function buildPlaceAddressLine(

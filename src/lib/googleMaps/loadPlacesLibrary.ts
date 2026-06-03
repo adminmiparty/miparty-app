@@ -5,6 +5,7 @@ import {
 
 let placesLibraryPromise: Promise<google.maps.PlacesLibrary> | null = null
 let lastAuthFailure: Error | null = null
+let productionEnvDiagnosticLogged = false
 
 function getApiKey() {
   return process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? ''
@@ -13,6 +14,21 @@ function getApiKey() {
 function getApiKeyMeta() {
   const key = getApiKey()
   return { apiKeyConfigured: key.length > 0, apiKeyLength: key.length }
+}
+
+/** Temporary: verify NEXT_PUBLIC_* inlined at build time (remove after prod check). */
+function logProductionGoogleMapsEnvDiagnostic() {
+  if (typeof window === 'undefined' || productionEnvDiagnosticLogged) {
+    return
+  }
+  productionEnvDiagnosticLogged = true
+
+  console.log('[GoogleMaps][env]', {
+    googleMapsConfigured: Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY),
+    googleMapsKeyLength: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.length ?? 0,
+    hasGoogleMapsApiKey: getApiKey().length > 0,
+    googleMapsKeyLengthTrimmed: getApiKey().length,
+  })
 }
 
 type GoogleMapsBootstrapOptions = {
@@ -103,10 +119,12 @@ export function resetGoogleMapsPlacesLibraryCache() {
 }
 
 export function hasGoogleMapsApiKey() {
+  logProductionGoogleMapsEnvDiagnostic()
   return getApiKey().length > 0
 }
 
 export async function loadGoogleMapsPlacesLibrary(): Promise<google.maps.PlacesLibrary> {
+  logProductionGoogleMapsEnvDiagnostic()
   const apiKeyMeta = getApiKeyMeta()
 
   if (!apiKeyMeta.apiKeyConfigured) {
