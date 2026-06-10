@@ -145,41 +145,83 @@ function appendMipartyExportFooter(text: string): string {
   return `${text}\n\n${MIPARTY_EXPORT_FOOTER}`
 }
 
+/** Collapse line breaks in stored RSVP/location fields so WhatsApp only wraps between guests. */
+function sanitizeExportField(value: string): string {
+  return value.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim()
+}
+
+/** Non-breaking spaces keep each guest row on one visual line in WhatsApp. */
+function toWhatsAppSingleLine(value: string): string {
+  return sanitizeExportField(value).replace(/ /g, '\u00A0')
+}
+
+function formatExportAllergySegment(allergy: string): string {
+  return `(Alergia: ${sanitizeExportField(allergy)})`
+}
+
+function formatExportLocationLines(
+  locationName: string,
+  locationAddress: string,
+  mapsUrl: string
+): string[] {
+  const name = sanitizeExportField(locationName)
+  const address = sanitizeExportField(locationAddress)
+  const shortUrl = mapsUrl.trim().replace(/^https?:\/\//i, '')
+  const lines: string[] = []
+
+  if (name && address) {
+    lines.push(`📍 *${name}*, ${address}`)
+  } else if (name) {
+    lines.push(`📍 *${name}*`)
+  } else if (address) {
+    lines.push(`📍 ${address}`)
+  }
+
+  if (shortUrl) {
+    lines.push(shortUrl)
+  } else if (lines.length === 0) {
+    return []
+  }
+
+  return lines
+}
+
 function buildEventExportHeader(ev: EventDetails): string {
-  const lines = [ev.title]
+  const lines = [`🎉 *${sanitizeExportField(ev.title)}*`]
   const datePart = formatExportEventDate(ev.event_date)
   const start = formatTimeValue(ev.start_time)
   const end = ev.pickup_time ? formatTimeValue(ev.pickup_time) : null
-  lines.push(
-    end ? `${datePart} · De: ${start} Hasta: ${end}` : `${datePart} · A las: ${start}`
-  )
+  const timePart = end ? `🕐 De: ${start} Hasta: ${end}` : `🕐 A las: ${start}`
+  lines.push(`📅 ${datePart} · ${timePart}`)
 
-  const locationName = ev.location_name?.trim() ?? ''
-  const locationAddress = ev.location_address?.trim() ?? ''
-  const mapsUrl = ev.google_maps_url?.trim() ?? ''
-  const locationText = [locationName, locationAddress].filter(Boolean).join(', ')
-  if (locationText || mapsUrl) {
-    lines.push(locationText && mapsUrl ? `${locationText} — ${mapsUrl}` : locationText || mapsUrl)
-  }
+  lines.push(
+    ...formatExportLocationLines(
+      ev.location_name?.trim() ?? '',
+      ev.location_address?.trim() ?? '',
+      ev.google_maps_url?.trim() ?? ''
+    )
+  )
 
   return lines.join('\n')
 }
 
 function formatConfirmedAttendeeExportLine(rsvp: RsvpItem, index: number): string {
-  const name = rsvp.child_name.trim()
-  const food = (rsvp.food_preference ?? '').trim()
+  const name = sanitizeExportField(rsvp.child_name)
+  const food = sanitizeExportField(rsvp.food_preference ?? '')
   const allergy = normalizeRsvpAllergyNotesForStorage(rsvp.allergy_notes)
+  const allergySegment = allergy ? formatExportAllergySegment(allergy) : ''
 
-  if (food && allergy) {
-    return `${index + 1}. ${name} | ${food} (${allergy})`
+  let line: string
+  if (food && allergySegment) {
+    line = `${index + 1}. ${name} | ${food} ${allergySegment}`
+  } else if (food) {
+    line = `${index + 1}. ${name} | ${food}`
+  } else if (allergySegment) {
+    line = `${index + 1}. ${name} ${allergySegment}`
+  } else {
+    line = `${index + 1}. ${name}`
   }
-  if (food) {
-    return `${index + 1}. ${name} | ${food}`
-  }
-  if (allergy) {
-    return `${index + 1}. ${name} (${allergy})`
-  }
-  return `${index + 1}. ${name}`
+  return toWhatsAppSingleLine(line)
 }
 
 type AllergyExportRow = { childName: string; foodSelected: string; note: string }
@@ -198,8 +240,13 @@ function buildComidaYAlergiasExportText(
       '',
       '⚠️ ALERGIAS E INTOLERANCIAS',
       ...allergies.map((a, i) => {
-        const foodCol = a.foodSelected ? a.foodSelected : 'Sin comida seleccionada'
-        return `${i + 1}. ${a.childName} | ${foodCol} | ${a.note}`
+        const foodCol = a.foodSelected
+          ? sanitizeExportField(a.foodSelected)
+          : 'Sin comida seleccionada'
+        const note = sanitizeExportField(a.note)
+        return toWhatsAppSingleLine(
+          `${i + 1}. ${sanitizeExportField(a.childName)} | ${foodCol} | Alergia: ${note}`
+        )
       })
     )
   }
@@ -212,7 +259,7 @@ function buildConfirmedAttendeesExportText(ev: EventDetails, rsvpList: RsvpItem[
     .sort(compareRsvpsForDisplay)
   const rows = confirmed.map((rsvp, index) => formatConfirmedAttendeeExportLine(rsvp, index))
   return appendMipartyExportFooter(
-    [buildEventExportHeader(ev), '', `✅ CONFIRMADOS (${confirmed.length})`, ...rows].join('\n')
+    [buildEventExportHeader(ev), '', `✅ *CONFIRMADOS (${confirmed.length})*`, ...rows].join('\n')
   )
 }
 
