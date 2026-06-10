@@ -15,6 +15,7 @@ import { sanitizePhoneInput, validatePhoneNumber } from '@/lib/phone'
 import { trackLead, trackRsvpAttendanceLead } from '@/lib/meta-pixel'
 import { trackLead as trackTikTokLead } from '@/lib/tiktok-pixel'
 import { isActiveEventStatus } from '@/lib/eventLifecycle'
+import { normalizeRsvpAllergyNotesForStorage } from '@/lib/rsvpAllergyNotes'
 import { getTheme } from '@/lib/themes'
 
 type AttendanceStatus = 'confirmed' | 'declined' | 'maybe'
@@ -235,7 +236,7 @@ function buildNormalizedPayloadFromForm(params: {
   const combinedChildName =
     trimmedChildLastName.length > 0 ? `${trimmedChildName} ${trimmedChildLastName}` : trimmedChildName
   const trimmedFoodPreference = params.foodPreference.trim()
-  const trimmedAllergyNotes = params.allergyNotes.trim()
+  const normalizedAllergyNotes = normalizeRsvpAllergyNotesForStorage(params.allergyNotes)
   const trimmedExtraNotes = params.extraNotes.trim()
   const { attendance, hasFoodOptions } = params
   return {
@@ -245,7 +246,7 @@ function buildNormalizedPayloadFromForm(params: {
     guest_parent_phone: trimmedParentPhone || null,
     child_name: combinedChildName,
     food_preference: attendance === 'confirmed' && hasFoodOptions ? trimmedFoodPreference || null : null,
-    allergy_notes: attendance === 'confirmed' && hasFoodOptions ? trimmedAllergyNotes || null : null,
+    allergy_notes: attendance === 'confirmed' && hasFoodOptions ? normalizedAllergyNotes : null,
     extra_notes: trimmedExtraNotes || null,
   }
 }
@@ -279,7 +280,10 @@ function buildBaselinePayload(
     guest_parent_phone: phone,
     child_name: childFull,
     food_preference: status === 'confirmed' && hasFoodOptions ? foodPref : null,
-    allergy_notes: status === 'confirmed' && hasFoodOptions ? rsvpData.allergy_notes?.trim() || null : null,
+    allergy_notes:
+      status === 'confirmed' && hasFoodOptions
+        ? normalizeRsvpAllergyNotesForStorage(rsvpData.allergy_notes)
+        : null,
     extra_notes: rsvpData.extra_notes?.trim() || null,
   }
 }
@@ -1099,7 +1103,7 @@ export default function RsvpEditPage() {
     const trimmedParentEmail = parentEmail.trim()
     const trimmedParentPhoneNumber = parentPhoneNumber.trim()
     const trimmedFoodPreference = foodPreference.trim()
-    const trimmedAllergyNotes = allergyNotes.trim()
+    const normalizedAllergyNotes = normalizeRsvpAllergyNotesForStorage(allergyNotes)
     const trimmedExtraNotes = extraNotes.trim()
 
     if (!trimmedParentName) {
@@ -1132,7 +1136,7 @@ export default function RsvpEditPage() {
 
     const foodPrefForDb = attendance === 'confirmed' && hasFoodOptions ? trimmedFoodPreference || null : null
     const allergyForDb =
-      attendance === 'confirmed' && hasFoodOptions ? trimmedAllergyNotes || null : null
+      attendance === 'confirmed' && hasFoodOptions ? normalizedAllergyNotes : null
 
     console.log('updating token:', token)
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { normalizeRsvpAllergyNotesForStorage } from '@/lib/rsvpAllergyNotes'
 
 type AttendanceStatus = 'confirmed' | 'declined' | 'maybe'
 
@@ -96,7 +97,7 @@ export default function OrganizerRsvpEditModal({
     const trimmedPhone = parentPhone.trim()
     const trimmedEmail = parentEmail.trim()
     const trimmedFood = foodPreference.trim()
-    const trimmedAllergy = allergyNotes.trim()
+    const normalizedAllergy = normalizeRsvpAllergyNotesForStorage(allergyNotes)
     const trimmedExtra = extraNotes.trim()
 
     if (!trimmedChild) {
@@ -122,7 +123,7 @@ export default function OrganizerRsvpEditModal({
       guest_parent_email: trimmedEmail || null,
       attendance_status: attendance,
       food_preference: showFoodFields ? trimmedFood || null : null,
-      allergy_notes: showFoodFields ? trimmedAllergy || null : null,
+      allergy_notes: showFoodFields ? normalizedAllergy : null,
       extra_notes: trimmedExtra || null,
     }
 

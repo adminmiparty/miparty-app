@@ -7,6 +7,7 @@
 import AppNav from '@/components/AppNav'
 import Link from 'next/link'
 import { Contact, Copy, LayoutGrid, MessageCircle, Pencil, Share2, Table2, X } from 'lucide-react'
+import OrganizerAddGuestModal from '@/components/dashboard/OrganizerAddGuestModal'
 import OrganizerRsvpEditModal from '@/components/dashboard/OrganizerRsvpEditModal'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -18,6 +19,10 @@ import { createClient } from '@/lib/supabase/client'
 import ShareButton from '@/components/ShareButton'
 import { ConfettiBurst } from '@/components/ConfettiBurst'
 import { PublishedSuccessModal } from '@/components/PublishedSuccessModal'
+import {
+  hasMeaningfulRsvpAllergyNotes,
+  normalizeRsvpAllergyNotesForStorage,
+} from '@/lib/rsvpAllergyNotes'
 import { verifyCheckoutReturnWithRetry } from '@/lib/stripe/verifyCheckoutReturn'
 
 function localTodayIsoDate() {
@@ -166,7 +171,7 @@ function buildConfirmedAttendeesExportText(ev: EventDetails, rsvpList: RsvpItem[
     const phonePart = phone ? ` | ${phone}` : ''
     const food = (rsvp.food_preference ?? '').trim()
     const foodPart = food ? ` | ${food}` : ''
-    const allergy = (rsvp.allergy_notes ?? '').trim()
+    const allergy = normalizeRsvpAllergyNotesForStorage(rsvp.allergy_notes)
     const allergyPart = allergy ? ` | ⚠️ ${allergy}` : ''
     return `${index + 1}. ${rsvp.child_name.trim()} | Adulto: ${rsvp.guest_parent_name}${phonePart}${foodPart}${allergyPart}`
   })
@@ -383,6 +388,7 @@ export default function EventControlCenterPage() {
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [guestContactModal, setGuestContactModal] = useState<GuestContactTarget | null>(null)
   const [editingRsvp, setEditingRsvp] = useState<RsvpItem | null>(null)
+  const [showAddGuestModal, setShowAddGuestModal] = useState(false)
   const [confirmingCheckoutReturn, setConfirmingCheckoutReturn] = useState(false)
   const [checkoutVerifyError, setCheckoutVerifyError] = useState<string | null>(null)
   const [showPublishedSuccess, setShowPublishedSuccess] = useState(false)
@@ -643,11 +649,11 @@ export default function EventControlCenterPage() {
   const allergyEntries = useMemo(
     () =>
       rsvps
-        .filter((rsvp) => (rsvp.allergy_notes ?? '').trim() !== '')
+        .filter((rsvp) => hasMeaningfulRsvpAllergyNotes(rsvp.allergy_notes))
         .map((rsvp) => ({
           childName: rsvp.child_name.trim(),
           foodSelected: (rsvp.food_preference ?? '').trim(),
-          note: (rsvp.allergy_notes ?? '').trim(),
+          note: normalizeRsvpAllergyNotesForStorage(rsvp.allergy_notes) ?? '',
         })),
     [rsvps]
   )
@@ -849,6 +855,16 @@ export default function EventControlCenterPage() {
     const text = buildConfirmedAttendeesExportText(event, rsvps)
     await shareOrCopyExport(text, event.title, 'Invitados confirmados copiados ✨')
   }
+
+  const addGuestButton = (
+    <button
+      type="button"
+      onClick={() => setShowAddGuestModal(true)}
+      className={`mt-3 w-full rounded-lg px-4 py-3 text-sm font-semibold transition ${primaryButtonClass}`}
+    >
+      + Añadir invitado manualmente
+    </button>
+  )
 
   const responsesSectionHeader = (
     <div className="mt-3 flex items-center justify-between gap-2">
@@ -1129,7 +1145,8 @@ export default function EventControlCenterPage() {
               {rsvps.length === 0 ? (
                 <>
                   {responsesSectionHeader}
-                  <p className="mb-2 mt-1 text-left text-xs text-gray-400">Así se verán las respuestas</p>
+                  {addGuestButton}
+                  <p className="mb-2 mt-3 text-left text-xs text-gray-400">Así se verán las respuestas</p>
                   {viewMode === 'cards' ? (
                     <>
                       {!anyDemoRowVisible ? (
@@ -1274,6 +1291,7 @@ export default function EventControlCenterPage() {
               ) : (
                 <>
                   {responsesSectionHeader}
+                  {addGuestButton}
                   {viewMode === 'cards' ? (
                     filteredRsvps.length === 0 ? (
                       <p className="mt-3 text-center text-sm text-gray-600">No hay respuestas con estos filtros.</p>
@@ -1283,6 +1301,7 @@ export default function EventControlCenterPage() {
                           const status = rsvpStatusMeta(rsvp.attendance_status)
                           const fullChildName = rsvp.child_name.trim()
                           const familyBadge = event ? getFamilyRsvpBadge(rsvp, event.child_name) : null
+                          const allergyDisplay = normalizeRsvpAllergyNotesForStorage(rsvp.allergy_notes)
                           return (
                             <article
                               key={rsvp.id}
@@ -1315,8 +1334,8 @@ export default function EventControlCenterPage() {
                               {showFoodColumn && rsvp.food_preference ? (
                                 <p className="mt-2 text-sm text-gray-700">{`🍽️ ${rsvp.food_preference}`}</p>
                               ) : null}
-                              {rsvp.allergy_notes ? (
-                                <p className="mt-1 text-sm text-gray-700">{`⚠️ ${rsvp.allergy_notes}`}</p>
+                              {allergyDisplay ? (
+                                <p className="mt-1 text-sm text-gray-700">{`⚠️ ${allergyDisplay}`}</p>
                               ) : null}
                               {rsvp.extra_notes ? (
                                 <p className="mt-1 rounded-lg bg-gray-50 px-2 py-1 text-sm italic text-gray-600">{`💬 ${rsvp.extra_notes}`}</p>
@@ -1361,7 +1380,7 @@ export default function EventControlCenterPage() {
                             const familyBadge = event ? getFamilyRsvpBadge(rsvp, event.child_name) : null
                             const foodRaw = (rsvp.food_preference ?? '').trim()
                             const foodDisplay = foodRaw ? `🍽️ ${foodRaw}` : ''
-                            const allergyRaw = (rsvp.allergy_notes ?? '').trim()
+                            const allergyRaw = normalizeRsvpAllergyNotesForStorage(rsvp.allergy_notes) ?? ''
                             const messageRaw = (rsvp.extra_notes ?? '').trim()
                             return (
                               <tr
@@ -1503,6 +1522,20 @@ export default function EventControlCenterPage() {
         <GuestContactModal
           contact={guestContactModal}
           onClose={() => setGuestContactModal(null)}
+          onToast={showToast}
+        />
+      ) : null}
+
+      {showAddGuestModal && event ? (
+        <OrganizerAddGuestModal
+          eventId={event.id}
+          enableFoodOptions={Boolean(event.enable_food_options)}
+          foodOptionLabels={foodOptionLabels}
+          primaryButtonClass={primaryButtonClass}
+          onClose={() => setShowAddGuestModal(false)}
+          onSaved={(created) => {
+            setRsvps((prev) => [created, ...prev])
+          }}
           onToast={showToast}
         />
       ) : null}

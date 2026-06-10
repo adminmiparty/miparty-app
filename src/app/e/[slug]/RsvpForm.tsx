@@ -18,6 +18,7 @@ import {
   trackViewContent as trackTikTokViewContent,
 } from '@/lib/tiktok-pixel'
 import { eventFlowShellClass, eventFormBrandUi } from '@/lib/eventFormTheme'
+import { normalizeRsvpAllergyNotesForStorage } from '@/lib/rsvpAllergyNotes'
 import { getTheme } from '@/lib/themes'
 
 const previewBrandMap: Record<
@@ -1495,7 +1496,7 @@ function RsvpFormInner({
     const trimmedParentPhone =
       trimmedParentPhoneNumber.length > 0 ? `${finalParentDial}${trimmedParentPhoneNumber}` : ''
     const trimmedFoodPreference = foodPreference.trim()
-    const trimmedAllergyNotes = allergyNotes.trim()
+    const normalizedAllergyNotes = normalizeRsvpAllergyNotesForStorage(allergyNotes)
     const trimmedExtraNotes = extraNotes.trim()
 
     if (!trimmedParentName) {
@@ -1528,7 +1529,7 @@ function RsvpFormInner({
         guest_parent_phone: trimmedParentPhone || null,
         child_name: combinedChildName,
         food_preference: attendance === 'confirmed' && hasFoodOptions ? trimmedFoodPreference || null : null,
-        allergy_notes: attendance === 'confirmed' && hasFoodOptions ? trimmedAllergyNotes || null : null,
+        allergy_notes: attendance === 'confirmed' && hasFoodOptions ? normalizedAllergyNotes : null,
         extra_notes: trimmedExtraNotes || null,
         user_id: loggedInUserId || null,
       })
@@ -1547,7 +1548,7 @@ function RsvpFormInner({
       childName: combinedChildName,
       parentName: trimmedParentName,
       foodPreference: trimmedFoodPreference || null,
-      allergyNotes: trimmedAllergyNotes || null,
+      allergyNotes: normalizedAllergyNotes,
       extraNotes: trimmedExtraNotes || null,
       phone: trimmedParentPhone || null,
     })
@@ -1615,7 +1616,7 @@ function RsvpFormInner({
     const trimmedParentPhone =
       trimmedParentPhoneNumber.length > 0 ? `${finalParentDial}${trimmedParentPhoneNumber}` : ''
     const trimmedFoodPreference = foodPreference.trim()
-    const trimmedAllergyNotes = allergyNotes.trim()
+    const normalizedAllergyNotes = normalizeRsvpAllergyNotesForStorage(allergyNotes)
     const trimmedExtraNotes = extraNotes.trim()
 
     if (!trimmedParentName) {
@@ -1650,7 +1651,7 @@ function RsvpFormInner({
       child_name: combinedChildName,
       attendance_status: attendance,
       food_preference: attendance === 'confirmed' && hasFoodOptions ? trimmedFoodPreference || null : null,
-      allergy_notes: attendance === 'confirmed' && hasFoodOptions ? trimmedAllergyNotes || null : null,
+      allergy_notes: attendance === 'confirmed' && hasFoodOptions ? normalizedAllergyNotes : null,
       extra_notes: trimmedExtraNotes || null,
       user_id: loggedInUserId || null,
     }
@@ -1671,7 +1672,7 @@ function RsvpFormInner({
         childName: combinedChildName,
         parentName: trimmedParentName,
         foodPreference: trimmedFoodPreference || null,
-        allergyNotes: trimmedAllergyNotes || null,
+        allergyNotes: normalizedAllergyNotes,
         extraNotes: trimmedExtraNotes || null,
         phone: trimmedParentPhone || null,
       })
@@ -1728,7 +1729,7 @@ function RsvpFormInner({
       childName: combinedChildName,
       parentName: trimmedParentName,
       foodPreference: trimmedFoodPreference || null,
-      allergyNotes: trimmedAllergyNotes || null,
+      allergyNotes: normalizedAllergyNotes,
       extraNotes: trimmedExtraNotes || null,
       phone: trimmedParentPhone || null,
     })
