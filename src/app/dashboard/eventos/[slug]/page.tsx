@@ -138,6 +138,43 @@ function formatExportEventDate(isoDate: string) {
   return `${d} ${monthName} ${y}`
 }
 
+function buildEventExportHeader(ev: EventDetails): string {
+  const lines = [ev.title]
+  const datePart = formatExportEventDate(ev.event_date)
+  const start = formatTimeValue(ev.start_time)
+  const end = ev.pickup_time ? formatTimeValue(ev.pickup_time) : null
+  lines.push(
+    end ? `${datePart} · De: ${start} Hasta: ${end}` : `${datePart} · A las: ${start}`
+  )
+
+  const locationName = ev.location_name?.trim() ?? ''
+  const locationAddress = ev.location_address?.trim() ?? ''
+  const mapsUrl = ev.google_maps_url?.trim() ?? ''
+  const locationText = [locationName, locationAddress].filter(Boolean).join(', ')
+  if (locationText || mapsUrl) {
+    lines.push(locationText && mapsUrl ? `${locationText} — ${mapsUrl}` : locationText || mapsUrl)
+  }
+
+  return lines.join('\n')
+}
+
+function formatConfirmedAttendeeExportLine(rsvp: RsvpItem, index: number): string {
+  const name = rsvp.child_name.trim()
+  const food = (rsvp.food_preference ?? '').trim()
+  const allergy = normalizeRsvpAllergyNotesForStorage(rsvp.allergy_notes)
+
+  if (food && allergy) {
+    return `${index + 1}. ${name} | ${food} (${allergy})`
+  }
+  if (food) {
+    return `${index + 1}. ${name} | ${food}`
+  }
+  if (allergy) {
+    return `${index + 1}. ${name} (${allergy})`
+  }
+  return `${index + 1}. ${name}`
+}
+
 type AllergyExportRow = { childName: string; foodSelected: string; note: string }
 
 function buildComidaYAlergiasExportText(
@@ -145,8 +182,7 @@ function buildComidaYAlergiasExportText(
   counts: { label: string; count: number }[],
   allergies: AllergyExportRow[]
 ) {
-  const header = `${ev.title}\n${formatExportEventDate(ev.event_date)} - ${formatTimeValue(ev.start_time)}`
-  const parts: string[] = [header]
+  const parts: string[] = [buildEventExportHeader(ev)]
   if (ev.enable_food_options && counts.length > 0) {
     parts.push('', '🍽️ RESUMEN DE COMIDA', ...counts.map((item) => `${item.label}: ${item.count}`))
   }
@@ -164,18 +200,17 @@ function buildComidaYAlergiasExportText(
 }
 
 function buildConfirmedAttendeesExportText(ev: EventDetails, rsvpList: RsvpItem[]) {
-  const confirmed = rsvpList.filter((r) => r.attendance_status === 'confirmed')
-  const header = `${ev.title}\n${formatExportEventDate(ev.event_date)} - ${formatTimeValue(ev.start_time)}`
-  const rows = confirmed.map((rsvp, index) => {
-    const phone = (rsvp.guest_parent_phone ?? '').trim()
-    const phonePart = phone ? ` | ${phone}` : ''
-    const food = (rsvp.food_preference ?? '').trim()
-    const foodPart = food ? ` | ${food}` : ''
-    const allergy = normalizeRsvpAllergyNotesForStorage(rsvp.allergy_notes)
-    const allergyPart = allergy ? ` | ⚠️ ${allergy}` : ''
-    return `${index + 1}. ${rsvp.child_name.trim()} | Adulto: ${rsvp.guest_parent_name}${phonePart}${foodPart}${allergyPart}`
-  })
-  return [header, '', `✅ CONFIRMADOS (${confirmed.length})`, ...rows].join('\n')
+  const confirmed = rsvpList
+    .filter((r) => r.attendance_status === 'confirmed')
+    .sort(compareRsvpsForDisplay)
+  const rows = confirmed.map((rsvp, index) => formatConfirmedAttendeeExportLine(rsvp, index))
+  return [buildEventExportHeader(ev), '', `✅ CONFIRMADOS (${confirmed.length})`, ...rows].join('\n')
+}
+
+function compareRsvpsForDisplay(a: RsvpItem, b: RsvpItem) {
+  if (a.is_family && !b.is_family) return -1
+  if (!a.is_family && b.is_family) return 1
+  return a.child_name.trim().localeCompare(b.child_name.trim(), 'es', { sensitivity: 'base' })
 }
 
 function rsvpStatusMeta(status: RsvpItem['attendance_status']) {
@@ -559,7 +594,6 @@ export default function EventControlCenterPage() {
           'id, child_name, guest_parent_name, guest_parent_phone, guest_parent_email, attendance_status, food_preference, allergy_notes, extra_notes, is_family'
         )
         .eq('event_id', eventRow.id)
-        .order('created_at', { ascending: false })
 
       let labels: string[] = []
       if (eventRow.enable_food_options) {
@@ -621,11 +655,7 @@ export default function EventControlCenterPage() {
       activeFilters.length === 0
         ? rsvps
         : rsvps.filter((r) => activeFilters.includes(r.attendance_status ?? 'pending'))
-    return [...list].sort((a, b) => {
-      if (a.is_family && !b.is_family) return -1
-      if (!a.is_family && b.is_family) return 1
-      return 0
-    })
+    return [...list].sort(compareRsvpsForDisplay)
   }, [rsvps, activeFilters])
 
   const showDemoLucía = activeFilters.length === 0 || activeFilters.includes('confirmed')
@@ -648,7 +678,8 @@ export default function EventControlCenterPage() {
 
   const allergyEntries = useMemo(
     () =>
-      rsvps
+      [...rsvps]
+        .sort(compareRsvpsForDisplay)
         .filter((rsvp) => hasMeaningfulRsvpAllergyNotes(rsvp.allergy_notes))
         .map((rsvp) => ({
           childName: rsvp.child_name.trim(),
@@ -856,16 +887,6 @@ export default function EventControlCenterPage() {
     await shareOrCopyExport(text, event.title, 'Invitados confirmados copiados ✨')
   }
 
-  const addGuestButton = (
-    <button
-      type="button"
-      onClick={() => setShowAddGuestModal(true)}
-      className={`mt-3 w-full rounded-lg px-4 py-3 text-sm font-semibold transition ${primaryButtonClass}`}
-    >
-      + Añadir invitado manualmente
-    </button>
-  )
-
   const responsesSectionHeader = (
     <div className="mt-3 flex items-center justify-between gap-2">
       <h2 className="text-base font-semibold text-gray-900">Respuestas</h2>
@@ -956,7 +977,7 @@ export default function EventControlCenterPage() {
         </div>
       ) : null}
 
-      <div className="mx-auto w-full max-w-7xl px-6 pb-12 pt-10">
+      <div className="mx-auto w-full max-w-7xl px-6 pb-28 pt-10">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[360px_minmax(0,1fr)] md:gap-6">
           <aside className="space-y-4">
             <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xl md:sticky md:top-6 md:self-start">
@@ -1145,7 +1166,6 @@ export default function EventControlCenterPage() {
               {rsvps.length === 0 ? (
                 <>
                   {responsesSectionHeader}
-                  {addGuestButton}
                   <p className="mb-2 mt-3 text-left text-xs text-gray-400">Así se verán las respuestas</p>
                   {viewMode === 'cards' ? (
                     <>
@@ -1291,7 +1311,6 @@ export default function EventControlCenterPage() {
               ) : (
                 <>
                   {responsesSectionHeader}
-                  {addGuestButton}
                   {viewMode === 'cards' ? (
                     filteredRsvps.length === 0 ? (
                       <p className="mt-3 text-center text-sm text-gray-600">No hay respuestas con estos filtros.</p>
@@ -1515,6 +1534,21 @@ export default function EventControlCenterPage() {
               </section>
             ) : null}
           </div>
+        </div>
+      </div>
+
+      <div
+        data-sticky-action-bar
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur-sm"
+      >
+        <div className="mx-auto w-full max-w-7xl px-6 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            onClick={() => setShowAddGuestModal(true)}
+            className={`w-full rounded-lg px-4 py-3 text-sm font-semibold transition ${primaryButtonClass}`}
+          >
+            + Añadir respuesta manualmente
+          </button>
         </div>
       </div>
 

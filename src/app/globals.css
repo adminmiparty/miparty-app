@@ -123,3 +123,11 @@ body {
     font-family: var(--font-display), Georgia, "Times New Roman", serif;
   }
 }
+
+.bug-report-fab {
+  bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+
+body:has([data-sticky-action-bar]) .bug-report-fab {
+  bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
+}
