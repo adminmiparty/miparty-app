@@ -329,7 +329,7 @@ export default function OrganizerAddGuestModal({
                   onClick={() => setAttendance('confirmed')}
                   className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
                     attendance === 'confirmed'
-                      ? 'border-gray-900 bg-gray-900 text-white'
+                      ? `border-transparent ${primaryButtonClass}`
                       : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
                   }`}
                 >
@@ -340,7 +340,7 @@ export default function OrganizerAddGuestModal({
                   onClick={() => setAttendance('declined')}
                   className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
                     attendance === 'declined'
-                      ? 'border-gray-900 bg-gray-900 text-white'
+                      ? `border-transparent ${primaryButtonClass}`
                       : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
                   }`}
                 >

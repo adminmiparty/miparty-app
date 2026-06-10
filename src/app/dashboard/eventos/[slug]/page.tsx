@@ -138,6 +138,13 @@ function formatExportEventDate(isoDate: string) {
   return `${d} ${monthName} ${y}`
 }
 
+const MIPARTY_EXPORT_FOOTER =
+  '🎉 _Este mensaje ha sido generado gracias a miparty.net — Más eventos, menos caos_'
+
+function appendMipartyExportFooter(text: string): string {
+  return `${text}\n\n${MIPARTY_EXPORT_FOOTER}`
+}
+
 function buildEventExportHeader(ev: EventDetails): string {
   const lines = [ev.title]
   const datePart = formatExportEventDate(ev.event_date)
@@ -196,7 +203,7 @@ function buildComidaYAlergiasExportText(
       })
     )
   }
-  return parts.join('\n')
+  return appendMipartyExportFooter(parts.join('\n'))
 }
 
 function buildConfirmedAttendeesExportText(ev: EventDetails, rsvpList: RsvpItem[]) {
@@ -204,7 +211,9 @@ function buildConfirmedAttendeesExportText(ev: EventDetails, rsvpList: RsvpItem[
     .filter((r) => r.attendance_status === 'confirmed')
     .sort(compareRsvpsForDisplay)
   const rows = confirmed.map((rsvp, index) => formatConfirmedAttendeeExportLine(rsvp, index))
-  return [buildEventExportHeader(ev), '', `✅ CONFIRMADOS (${confirmed.length})`, ...rows].join('\n')
+  return appendMipartyExportFooter(
+    [buildEventExportHeader(ev), '', `✅ CONFIRMADOS (${confirmed.length})`, ...rows].join('\n')
+  )
 }
 
 function compareRsvpsForDisplay(a: RsvpItem, b: RsvpItem) {
