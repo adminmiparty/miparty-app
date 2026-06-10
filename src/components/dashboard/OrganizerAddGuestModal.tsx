@@ -278,7 +278,7 @@ export default function OrganizerAddGuestModal({
     setSaving(false)
 
     if (insertError || !data) {
-      setError(insertError?.message ?? 'No se pudo añadir el invitado.')
+      setError(insertError?.message ?? 'No se pudo añadir la respuesta.')
       return
     }
 
@@ -303,7 +303,7 @@ export default function OrganizerAddGuestModal({
         <div className="flex shrink-0 items-start justify-between border-b border-gray-100 px-5 py-4">
           <div className="pr-8">
             <h2 id="add-guest-modal-title" className="text-lg font-bold text-gray-900">
-              Añadir invitado
+              Añadir respuesta
             </h2>
             <p className="mt-0.5 text-sm text-gray-500">
               Registra una respuesta sin enviar el enlace de invitación.
@@ -521,7 +521,7 @@ export default function OrganizerAddGuestModal({
               disabled={saving || loadingProfiles}
               className={`w-full rounded-lg px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${primaryButtonClass}`}
             >
-              {saving ? 'Guardando…' : 'Añadir invitado'}
+              {saving ? 'Guardando…' : 'Añadir respuesta'}
             </button>
           </div>
         </form>

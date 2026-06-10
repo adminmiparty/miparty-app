@@ -98,10 +98,11 @@ export default function BugReportWidget() {
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-gray-900 px-3 py-2 text-xs font-medium text-white shadow-lg transition hover:bg-gray-700"
+          aria-label="Reportar problema"
+          title="Reportar problema"
+          className="bug-report-fab fixed right-3 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-500 shadow-md backdrop-blur-sm transition hover:bg-gray-50 hover:text-gray-800"
         >
-          <Bug className="h-3 w-3" aria-hidden />
-          Reportar problema
+          <Bug className="h-4 w-4" aria-hidden />
         </button>
       ) : null}
 
